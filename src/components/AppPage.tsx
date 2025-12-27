@@ -502,8 +502,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
           throw new Error(errorData.error || 'Failed to start agent scraping');
         }
 
-        const scrapeResult = await scrapeResponse.json();
-        console.log('Scraping started:', scrapeResult);
+        await scrapeResponse.json();
 
         // Now call process-campaign to generate emails
         const processCampaignResponse = await fetch(`${supabaseUrl}/functions/v1/process-campaign`, {
@@ -523,10 +522,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
           throw new Error(errorData.error || 'Failed to process campaign');
         }
 
-        const processCampaignResult = await processCampaignResponse.json();
-        console.log('Campaign processing started:', processCampaignResult);
-
-        alert(`Campaign activated! Scraped ${scrapeResult.contacts_inserted} contacts and generated ${processCampaignResult.emails_generated} emails.`);
+        await processCampaignResponse.json();
       }
 
       setCampaigns(prev =>
