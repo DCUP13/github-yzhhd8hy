@@ -464,12 +464,6 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
     }
 
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Update campaign status
       const { error } = await supabase
         .from('campaigns')
         .update({
@@ -479,51 +473,6 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         .eq('id', campaignId);
 
       if (error) throw error;
-
-      // If activating, trigger the scrape-agents edge function
-      if (isActive) {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-        const scrapeResponse = await fetch(`${supabaseUrl}/functions/v1/scrape-agents`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-          },
-          body: JSON.stringify({
-            campaign_id: campaignId,
-            user_id: user.data.user.id,
-          }),
-        });
-
-        if (!scrapeResponse.ok) {
-          const errorData = await scrapeResponse.json();
-          throw new Error(errorData.error || 'Failed to start agent scraping');
-        }
-
-        await scrapeResponse.json();
-
-        // Now call process-campaign to generate emails
-        const processCampaignResponse = await fetch(`${supabaseUrl}/functions/v1/process-campaign`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-          },
-          body: JSON.stringify({
-            campaign_id: campaignId,
-            user_id: user.data.user.id,
-          }),
-        });
-
-        if (!processCampaignResponse.ok) {
-          const errorData = await processCampaignResponse.json();
-          throw new Error(errorData.error || 'Failed to process campaign');
-        }
-
-        await processCampaignResponse.json();
-      }
 
       setCampaigns(prev =>
         prev.map(c =>
@@ -535,17 +484,6 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
     } catch (error) {
       console.error('Error updating campaign status:', error);
       alert(`Failed to update campaign status: ${error.message}`);
-
-      // Revert the campaign status if activation failed
-      if (isActive) {
-        await supabase
-          .from('campaigns')
-          .update({
-            is_active: false,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', campaignId);
-      }
     }
   };
 
