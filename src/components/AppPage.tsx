@@ -464,9 +464,15 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
     }
 
     try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Update campaign status
       const { error } = await supabase
         .from('campaigns')
-        .update({ 
+        .update({
           is_active: isActive,
           updated_at: new Date().toISOString()
         })
@@ -474,16 +480,76 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
 
       if (error) throw error;
 
-      setCampaigns(prev => 
-        prev.map(c => 
-          c.id === campaignId 
+      // If activating, trigger the scrape-agents edge function
+      if (isActive) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        const scrapeResponse = await fetch(`${supabaseUrl}/functions/v1/scrape-agents`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            campaign_id: campaignId,
+            user_id: user.data.user.id,
+          }),
+        });
+
+        if (!scrapeResponse.ok) {
+          const errorData = await scrapeResponse.json();
+          throw new Error(errorData.error || 'Failed to start agent scraping');
+        }
+
+        const scrapeResult = await scrapeResponse.json();
+        console.log('Scraping started:', scrapeResult);
+
+        // Now call process-campaign to generate emails
+        const processCampaignResponse = await fetch(`${supabaseUrl}/functions/v1/process-campaign`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            campaign_id: campaignId,
+            user_id: user.data.user.id,
+          }),
+        });
+
+        if (!processCampaignResponse.ok) {
+          const errorData = await processCampaignResponse.json();
+          throw new Error(errorData.error || 'Failed to process campaign');
+        }
+
+        const processCampaignResult = await processCampaignResponse.json();
+        console.log('Campaign processing started:', processCampaignResult);
+
+        alert(`Campaign activated! Scraped ${scrapeResult.contacts_inserted} contacts and generated ${processCampaignResult.emails_generated} emails.`);
+      }
+
+      setCampaigns(prev =>
+        prev.map(c =>
+          c.id === campaignId
             ? { ...c, isActive, lastModified: new Date().toISOString() }
             : c
         )
       );
     } catch (error) {
       console.error('Error updating campaign status:', error);
-      alert('Failed to update campaign status. Please try again.');
+      alert(`Failed to update campaign status: ${error.message}`);
+
+      // Revert the campaign status if activation failed
+      if (isActive) {
+        await supabase
+          .from('campaigns')
+          .update({
+            is_active: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', campaignId);
+      }
     }
   };
 
