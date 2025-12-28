@@ -66,6 +66,16 @@ Deno.serve(async (req: Request) => {
       throw new Error("Campaign is not active");
     }
 
+    // Check if test mode is enabled
+    const { data: settings, error: settingsError } = await supabase
+      .from("general_settings")
+      .select("test_mode_enabled")
+      .eq("user_id", user_id)
+      .maybeSingle();
+
+    const testModeEnabled = settings?.test_mode_enabled ?? false;
+    console.log(`Test mode: ${testModeEnabled ? 'ENABLED - emails will go to drafts' : 'DISABLED - emails will go to outbox'}`);
+
     // Step 1: Scrape agents if no contacts exist
     const { data: existingContacts } = await supabase
       .from("contacts")
@@ -238,15 +248,24 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Step 6: Insert emails into outbox
+    // Step 6: Insert emails into outbox or drafts based on test mode
     if (emailsToInsert.length > 0) {
+      const tableName = testModeEnabled ? "email_drafts" : "email_outbox";
+
+      // Remove status field for drafts (they don't have status column)
+      const dataToInsert = testModeEnabled
+        ? emailsToInsert.map(({ status, ...rest }) => rest)
+        : emailsToInsert;
+
       const { error: insertError } = await supabase
-        .from("email_outbox")
-        .insert(emailsToInsert);
+        .from(tableName)
+        .insert(dataToInsert);
 
       if (insertError) {
         throw new Error(`Failed to insert emails: ${insertError.message}`);
       }
+
+      console.log(`Inserted ${emailsToInsert.length} emails into ${tableName}`);
     }
 
     return new Response(
@@ -254,6 +273,8 @@ Deno.serve(async (req: Request) => {
         success: true,
         processed: contacts.length,
         emails_created: emailsToInsert.length,
+        test_mode: testModeEnabled,
+        destination: testModeEnabled ? 'drafts' : 'outbox',
       }),
       {
         headers: {

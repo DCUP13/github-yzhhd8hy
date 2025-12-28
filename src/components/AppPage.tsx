@@ -110,6 +110,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
   const [selectedState, setSelectedState] = useState<string>('');
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [testModeEnabled, setTestModeEnabled] = useState(false);
 
   const availableEmails: EmailEntry[] = [
     ...sesEmails.map(email => ({ address: email.address, smtpProvider: 'amazon' as const })),
@@ -118,6 +119,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
 
   useEffect(() => {
     fetchCampaigns();
+    fetchTestModeSetting();
   }, []);
 
   useEffect(() => {
@@ -215,6 +217,54 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
       alert('Failed to load campaigns. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchTestModeSetting = async () => {
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) return;
+
+      const { data, error } = await supabase
+        .from('general_settings')
+        .select('test_mode_enabled')
+        .eq('user_id', user.data.user.id)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching test mode setting:', error);
+        return;
+      }
+
+      setTestModeEnabled(data?.test_mode_enabled ?? false);
+    } catch (error) {
+      console.error('Error fetching test mode setting:', error);
+    }
+  };
+
+  const handleToggleTestMode = async (enabled: boolean) => {
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        throw new Error('User not authenticated');
+      }
+
+      const { error: upsertError } = await supabase
+        .from('general_settings')
+        .upsert({
+          user_id: user.data.user.id,
+          test_mode_enabled: enabled,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (upsertError) throw upsertError;
+
+      setTestModeEnabled(enabled);
+    } catch (error) {
+      console.error('Error updating test mode:', error);
+      alert('Failed to update test mode setting. Please try again.');
     }
   };
 
@@ -544,13 +594,34 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                 <Layout className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Campaigns</h1>
               </div>
-              <button
-                onClick={handleCreateCampaign}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Campaign
-              </button>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Test Mode
+                  </span>
+                  <div className="relative inline-block w-11 align-middle select-none">
+                    <input
+                      type="checkbox"
+                      checked={testModeEnabled}
+                      onChange={(e) => handleToggleTestMode(e.target.checked)}
+                      className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                    />
+                    <div className={`toggle-label block overflow-hidden h-6 rounded-full ${
+                      testModeEnabled ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}></div>
+                  </div>
+                  <span className={`text-xs ${testModeEnabled ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {testModeEnabled ? 'Emails go to Drafts' : 'Normal Sending'}
+                  </span>
+                </div>
+                <button
+                  onClick={handleCreateCampaign}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Campaign
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
