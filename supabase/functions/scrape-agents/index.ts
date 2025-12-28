@@ -78,10 +78,10 @@ Deno.serve(async (req: Request) => {
     const allAgents: AgentProfessional[] = [];
     let page = 1;
 
-    // Fetch agents from all pages
+    // Fetch agents from all pages using new API endpoint
     while (page <= (max_pages || 5)) {
       try {
-        const url = `https://${api_host}/findAgentV2?location=${encodeURIComponent(location)}&page=${page}`;
+        const url = `https://${api_host}/agent/search?location=${encodeURIComponent(location)}&page=${page}`;
         const response = await fetch(url, {
           headers: {
             "x-rapidapi-key": api_key,
@@ -99,6 +99,9 @@ Deno.serve(async (req: Request) => {
         }
 
         const data = await response.json();
+
+        // NOTE: JSON parsing will be updated after receiving response structure
+        // Keeping current structure as placeholder
         const professionals = data.professionals || [];
 
         if (professionals.length === 0) {

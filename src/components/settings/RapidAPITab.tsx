@@ -112,11 +112,10 @@ export function RapidAPITab() {
               To use this feature, you need to sign up for the Zillow API on RapidAPI. Follow these steps:
             </p>
             <ol className="mt-2 ml-4 text-sm text-blue-700 dark:text-blue-400 list-decimal space-y-1">
-              <li>Visit <a href="https://rapidapi.com/apimaker/api/zillow-com1" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600 dark:hover:text-blue-300">Zillow API on RapidAPI</a></li>
+              <li>Visit <a href="https://rapidapi.com/oneapiproject/api/zllw-working-api" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600 dark:hover:text-blue-300">Zillow API on RapidAPI</a></li>
               <li>Subscribe to get your API key</li>
-              <li>Navigate to the /findAgentV2 endpoint</li>
               <li>Copy your API key and host from the code examples</li>
-              <li>Enter them in the fields below</li>
+              <li>Enter them in the fields below (Host should be: zllw-working-api.p.rapidapi.com)</li>
             </ol>
           </div>
         </div>

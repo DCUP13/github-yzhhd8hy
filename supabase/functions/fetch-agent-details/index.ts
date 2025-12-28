@@ -53,7 +53,7 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Fetching details for agent: ${screen_name}`);
 
-    const url = `https://${api_host}/agentDetails?username=${encodeURIComponent(screen_name)}`;
+    const url = `https://${api_host}/agent/details?username=${encodeURIComponent(screen_name)}`;
     const response = await fetch(url, {
       headers: {
         "x-rapidapi-key": api_key,
@@ -67,6 +67,8 @@ Deno.serve(async (req: Request) => {
 
     const data = await response.json();
 
+    // NOTE: JSON parsing will be updated after receiving response structure
+    // Keeping current validation as placeholder
     if (!data.displayUser) {
       throw new Error("Invalid response structure from API");
     }
