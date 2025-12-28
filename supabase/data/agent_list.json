@@ -1,0 +1,440 @@
+{
+    "source": "9vrc_cch",
+    "agents": [
+        {
+            "name": "James Krueger",
+            "link": "https://www.zillow.com/profile/JamesKrueger",
+            "username": "JamesKrueger",
+            "encodedZuid": "X1-ZUz3fc6ch3xp8p_10irz",
+            "imageUrl": "https://photos.zillowstatic.com/fp/d8629bd048ad262c0ebc3065fc03a431-h_l.jpg",
+            "isTopAgent": true,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$60K - $3.1M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "243",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "2009",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "2727"
+            }
+        },
+        {
+            "name": "Alfonso Parodi",
+            "link": "https://www.zillow.com/profile/tparodi",
+            "username": "tparodi",
+            "encodedZuid": "X1-ZUydhl1y0gev49_2avjk",
+            "imageUrl": "https://photos.zillowstatic.com/fp/098bc1689f5847bb2dbea4629a7903a8-h_l.jpg",
+            "isTopAgent": false,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$55K - $1.1M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "84",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "2217",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "991"
+            }
+        },
+        {
+            "name": "Tom Cervone",
+            "link": "https://www.zillow.com/profile/Tom-Cervone",
+            "username": "Tom-Cervone",
+            "encodedZuid": "X1-ZUzabm46rbiv49_9abc3",
+            "imageUrl": "https://photos.zillowstatic.com/fp/5da7813a129789db3ddac71a42bd71b2-h_l.jpg",
+            "isTopAgent": true,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$39K - $2.2M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "133",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "1143",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "558"
+            }
+        },
+        {
+            "name": "Zillow Houston Realtor Team",
+            "link": "https://www.zillow.com/profile/Houston-team",
+            "username": "Houston-team",
+            "encodedZuid": "X1-ZU10btlf9s1phc9_2t4xp",
+            "imageUrl": "https://photos.zillowstatic.com/fp/e6bba942162c4d6bde5b005214b3c9a1-h_l.jpg",
+            "isTopAgent": true,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$75K - $2.4M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "59",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "684",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "350"
+            }
+        },
+        {
+            "name": "Trinh Nguyen",
+            "link": "https://www.zillow.com/profile/TheTrinhNguyen",
+            "username": "TheTrinhNguyen",
+            "encodedZuid": "X1-ZUzvg20f6gjwuh_5rw5l",
+            "imageUrl": "https://photos.zillowstatic.com/fp/e6852deee33df8d36335ac4535867438-h_l.jpg",
+            "isTopAgent": false,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$110K - $1.9M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "8",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "702",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "313"
+            }
+        },
+        {
+            "name": "Erin McKie",
+            "link": "https://www.zillow.com/profile/erin484",
+            "username": "erin484",
+            "encodedZuid": "X1-ZUx8yemfta80zt_9y704",
+            "imageUrl": "https://photos.zillowstatic.com/fp/988a97bbbc2dc0543386c1c75f3b62a5-h_l.jpg",
+            "isTopAgent": true,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$269K - $2.4M",
+                    "label": "price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "18",
+                    "label": "sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "219",
+                    "label": "sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "224"
+            }
+        },
+        {
+            "name": "Monica Foster",
+            "link": "https://www.zillow.com/profile/RealtyByMonica",
+            "username": "RealtyByMonica",
+            "encodedZuid": "X1-ZUz87ibursn5s9_29gz3",
+            "imageUrl": "https://photos.zillowstatic.com/fp/f29cc77b17113d9210d9605e14aeaf30-h_l.jpg",
+            "isTopAgent": true,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$13K - $2.2M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "305",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "565",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "1048"
+            }
+        },
+        {
+            "name": "Creston Inderrieden",
+            "link": "https://www.zillow.com/profile/crestonindy",
+            "username": "crestonindy",
+            "encodedZuid": "X1-ZUyu9w57ngygp5_3jtqo",
+            "imageUrl": "https://photos.zillowstatic.com/fp/402715b9ea1a9717547a97aa60a9931f-h_l.jpg",
+            "isTopAgent": false,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": null,
+                    "label": "No recent price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": null,
+                    "label": "No team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "587",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "180"
+            }
+        },
+        {
+            "name": "Mark Dimas",
+            "link": "https://www.zillow.com/profile/mark-dimas-team",
+            "username": "mark-dimas-team",
+            "encodedZuid": "X1-ZUyu7kf7zux2ix_1oeg0",
+            "imageUrl": "https://photos.zillowstatic.com/fp/4c1f13d70498fec257df125a5a02d1b2-h_l.jpg",
+            "isTopAgent": true,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$16K - $70M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "158",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "1233",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "440"
+            }
+        },
+        {
+            "name": "Chris Boyles",
+            "link": "https://www.zillow.com/profile/Chris-Boyles",
+            "username": "Chris-Boyles",
+            "encodedZuid": "X1-ZUzfom331s86x5_97i75",
+            "imageUrl": "https://photos.zillowstatic.com/fp/012d8ac36d0e596dbb3c2e4e0f0495ae-h_l.jpg",
+            "isTopAgent": false,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$27K - $1.9M",
+                    "label": "price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "2",
+                    "label": "sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "373",
+                    "label": "sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "194"
+            }
+        },
+        {
+            "name": "Christy Buck Team",
+            "link": "https://www.zillow.com/profile/ChristyBuck",
+            "username": "ChristyBuck",
+            "encodedZuid": "X1-ZUy3x5ja7vc64p_77v72",
+            "imageUrl": "https://photos.zillowstatic.com/fp/9f14b6cedce7ec9ead6f1ceaf82caf9d-h_l.jpg",
+            "isTopAgent": false,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$14K - $1.7M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "140",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "356",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "810"
+            }
+        },
+        {
+            "name": "Jimmy Simien",
+            "link": "https://www.zillow.com/profile/The-Simien-Team",
+            "username": "The-Simien-Team",
+            "encodedZuid": "X1-ZUyxenw4j32eix_963mo",
+            "imageUrl": "https://photos.zillowstatic.com/fp/f80299033355417da3ba7a0b5099fbbf-h_l.jpg",
+            "isTopAgent": true,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$70K - $1.9M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "190",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "625",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "390"
+            }
+        },
+        {
+            "name": "Smart City Realty",
+            "link": "https://www.zillow.com/profile/SmartCityRealty",
+            "username": "SmartCityRealty",
+            "encodedZuid": "X1-ZUrwgd87spcj61_4ye7o",
+            "imageUrl": "https://photos.zillowstatic.com/fp/0507acb883f877edaa5efc6d3cadeb30-h_l.jpg",
+            "isTopAgent": true,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$11K - $21M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "121",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "73",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "729"
+            }
+        },
+        {
+            "name": "Jose Rayo",
+            "link": "https://www.zillow.com/profile/VIVE-Realty",
+            "username": "VIVE-Realty",
+            "encodedZuid": "X1-ZUzlqzhw5qik95_634pd",
+            "imageUrl": "https://photos.zillowstatic.com/fp/8e24a52eaf036f6ec10da1512425466f-h_l.jpg",
+            "isTopAgent": false,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$40K - $1.4M",
+                    "label": "team price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "14",
+                    "label": "team sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "607",
+                    "label": "team sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "202"
+            }
+        },
+        {
+            "name": "Stephanie Liu",
+            "link": "https://www.zillow.com/profile/stephanieliurealtor",
+            "username": "stephanieliurealtor",
+            "encodedZuid": "X1-ZUv6rjtmn6uqrt_2avjk",
+            "imageUrl": "https://photos.zillowstatic.com/fp/f69e817cf50f5014c798d066b36716f9-h_l.jpg",
+            "isTopAgent": false,
+            "profileData": [
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "$260K - $1.2M",
+                    "label": "price range"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "4",
+                    "label": "sales last 12 months"
+                },
+                {
+                    "__typename": "AgentDirectoryFinderProfileCardData",
+                    "data": "38",
+                    "label": "sales in Houston"
+                }
+            ],
+            "reviewInformation": {
+                "rating": 5,
+                "totalReviews": "151"
+            }
+        }
+    ]
+}

@@ -1,0 +1,856 @@
+{
+    "source": "9vrc_cch",
+    "message": "pxy1t",
+    "agent_details": {
+        "screenName": "The Naas Group",
+        "phoneNumbers": {
+            "cell": "(812) 459-6227",
+            "business": "(812) 459-6227"
+        },
+        "email": "deannenaas@fcte.com",
+        "businessName": "F.C. Tucker Emge REALTORS",
+        "businessAddress": {
+            "address1": "7820 Eagle Crest Blvd.",
+            "address2": null,
+            "city": "Evansville",
+            "state": "IN",
+            "postalCode": "47715"
+        },
+        "inCanada": false,
+        "isTopAgent": true,
+        "isPremierAgent": null,
+        "profileTypes": [
+            "consumer",
+            "agent"
+        ],
+        "profilePhotoSrc": "https://photos.zillowstatic.com/fp/ec0ecd83d16fba0f34240c486285a8f4-h_l.jpg",
+        "ratings": {
+            "average": 5,
+            "count": 71,
+            "__typename": "ReviewRatings"
+        },
+        "agentLicenses": [
+            {
+                "text": "RB14028567",
+                "state": "IN",
+                "status": "active",
+                "original_status": "active",
+                "license_type": "agent",
+                "expiration": "2026-06-30"
+            }
+        ],
+        "agentSalesStats": {
+            "countAllTime": 1679,
+            "countLastYear": 107,
+            "priceRangeThreeYearMin": 15500,
+            "priceRangeThreeYearMax": 1590000,
+            "averageValueThreeYear": 246472,
+            "stats_include_team": true
+        },
+        "forSaleListings": {
+            "listings": [
+                {
+                    "zpid": 217939192,
+                    "home_type": "singleFamily",
+                    "address": {
+                        "line1": "3030 Capstone Ct",
+                        "line2": "Newburgh, IN 47630",
+                        "city": "Newburgh",
+                        "stateOrProvince": "IN",
+                        "postalCode": "47630"
+                    },
+                    "bedrooms": 3,
+                    "bathrooms": 2,
+                    "openHouses": "",
+                    "hasOpenHouse": false,
+                    "primary_photo_url": "https://photos.zillowstatic.com/fp/fa34e209368ed25cff1a75d6a6be1070-a_a.jpg",
+                    "price": 279900,
+                    "price_currency": "usd",
+                    "status": "fsba",
+                    "latitude": 37.990593,
+                    "longitude": -87.3562,
+                    "brokerage_name": "F.C. TUCKER EMGE",
+                    "home_marketing_status": "active",
+                    "home_marketing_type": "forSale",
+                    "has_vr_model": false,
+                    "listing_url": "/homedetails/3030-Capstone-Ct-Newburgh-IN-47630/217939192_zpid/"
+                },
+                {
+                    "zpid": 252313261,
+                    "home_type": "singleFamily",
+                    "address": {
+                        "line1": "7515 Lauren Dr",
+                        "line2": "Evansville, IN 47725",
+                        "city": "Evansville",
+                        "stateOrProvince": "IN",
+                        "postalCode": "47725"
+                    },
+                    "bedrooms": 5,
+                    "bathrooms": 4,
+                    "openHouses": "",
+                    "hasOpenHouse": false,
+                    "primary_photo_url": "https://photos.zillowstatic.com/fp/fa96a53ca76f12f1de6eca04edcb2cd8-a_a.jpg",
+                    "price": 824900,
+                    "price_currency": "usd",
+                    "status": "fsba",
+                    "latitude": 38.046383,
+                    "longitude": -87.50799,
+                    "brokerage_name": "F.C. TUCKER EMGE",
+                    "home_marketing_status": "active",
+                    "home_marketing_type": "forSale",
+                    "has_vr_model": false,
+                    "listing_url": "/homedetails/7515-Lauren-Dr-Evansville-IN-47725/252313261_zpid/"
+                },
+                {
+                    "zpid": 458544105,
+                    "home_type": "land",
+                    "address": {
+                        "line1": "7525 Lauren Dr",
+                        "line2": "Evansville, IN 47725",
+                        "city": "Evansville",
+                        "stateOrProvince": "IN",
+                        "postalCode": "47725"
+                    },
+                    "bedrooms": null,
+                    "bathrooms": null,
+                    "openHouses": "",
+                    "hasOpenHouse": false,
+                    "primary_photo_url": "https://photos.zillowstatic.com/fp/5de32dd40159733336f79f2e1abc115e-a_a.jpg",
+                    "price": 299900,
+                    "price_currency": "usd",
+                    "status": "fsba",
+                    "latitude": 38.046745,
+                    "longitude": -87.50666,
+                    "brokerage_name": "F.C. TUCKER EMGE",
+                    "home_marketing_status": "active",
+                    "home_marketing_type": "forSale",
+                    "has_vr_model": false,
+                    "listing_url": "/homedetails/7525-Lauren-Dr-Evansville-IN-47725/458544105_zpid/"
+                },
+                {
+                    "zpid": 200503212,
+                    "home_type": "singleFamily",
+                    "address": {
+                        "line1": "3243 Ralston Dr",
+                        "line2": "Evansville, IN 47715",
+                        "city": "Evansville",
+                        "stateOrProvince": "IN",
+                        "postalCode": "47715"
+                    },
+                    "bedrooms": 3,
+                    "bathrooms": 2,
+                    "openHouses": "",
+                    "hasOpenHouse": false,
+                    "primary_photo_url": "https://photos.zillowstatic.com/fp/ca5827b93e147f406cb3569dea2fd18c-a_a.jpg",
+                    "price": 369900,
+                    "price_currency": "usd",
+                    "status": "fsba",
+                    "latitude": 38.00782,
+                    "longitude": -87.45264,
+                    "brokerage_name": "F.C. TUCKER EMGE",
+                    "home_marketing_status": "active",
+                    "home_marketing_type": "forSale",
+                    "has_vr_model": false,
+                    "listing_url": "/homedetails/3243-Ralston-Dr-Evansville-IN-47715/200503212_zpid/"
+                },
+                {
+                    "zpid": 94602862,
+                    "home_type": "singleFamily",
+                    "address": {
+                        "line1": "2837 Acorn Ct",
+                        "line2": "Evansville, IN 47711",
+                        "city": "Evansville",
+                        "stateOrProvince": "IN",
+                        "postalCode": "47711"
+                    },
+                    "bedrooms": 4,
+                    "bathrooms": 3,
+                    "openHouses": "",
+                    "hasOpenHouse": false,
+                    "primary_photo_url": "https://photos.zillowstatic.com/fp/af5e143e58be31b5d88ceaba428c2269-a_a.jpg",
+                    "price": 489900,
+                    "price_currency": "usd",
+                    "status": "fsba",
+                    "latitude": 38.03191,
+                    "longitude": -87.51438,
+                    "brokerage_name": "F.C. TUCKER EMGE",
+                    "home_marketing_status": "active",
+                    "home_marketing_type": "forSale",
+                    "has_vr_model": false,
+                    "listing_url": "/homedetails/2837-Acorn-Ct-Evansville-IN-47711/94602862_zpid/"
+                }
+            ],
+            "listing_count": 10
+        },
+        "forRentListings": {
+            "listings": [],
+            "listing_count": 0
+        },
+        "pastSales": {
+            "total": 1679,
+            "past_sales": [
+                {
+                    "represented": "Buyer",
+                    "representedList": [
+                        "Buyer"
+                    ],
+                    "sold_date": "12/23/2025",
+                    "price": "$375,000",
+                    "zpid": 77096814,
+                    "image_url": "https://photos.zillowstatic.com/fp/f64502c055efd2abbf872cdba44011ce-p_b.jpg",
+                    "medium_image_url": "https://photos.zillowstatic.com/fp/f64502c055efd2abbf872cdba44011ce-p_d.jpg",
+                    "image_alt": "500 Audubon Dr, Evansville, IN, 47715",
+                    "home_details_url": "/homedetails/500-Audubon-Dr-Evansville-IN-47715/77096814_zpid/",
+                    "street_address": "500 Audubon Dr",
+                    "city_state_zipcode": "Evansville, IN, 47715",
+                    "latitude": 37.971207,
+                    "longitude": -87.46443,
+                    "bathrooms": 3,
+                    "bedrooms": 4,
+                    "city": "Evansville",
+                    "state": "IN",
+                    "livingAreaValue": 2924,
+                    "livingAreaUnitsShort": "sqft",
+                    "mlsLogoSrc": null
+                },
+                {
+                    "represented": "Seller",
+                    "representedList": [
+                        "Seller"
+                    ],
+                    "sold_date": "12/12/2025",
+                    "price": "$64,900",
+                    "zpid": 77105466,
+                    "image_url": "https://photos.zillowstatic.com/fp/3b476a9980645f98b84d693f0d21140c-p_b.jpg",
+                    "medium_image_url": "https://photos.zillowstatic.com/fp/3b476a9980645f98b84d693f0d21140c-p_d.jpg",
+                    "image_alt": "1728 E Franklin St, Evansville, IN, 47711",
+                    "home_details_url": "/homedetails/1728-E-Franklin-St-Evansville-IN-47711/77105466_zpid/",
+                    "street_address": "1728 E Franklin St",
+                    "city_state_zipcode": "Evansville, IN, 47711",
+                    "latitude": 37.980442,
+                    "longitude": -87.5326,
+                    "bathrooms": 1,
+                    "bedrooms": 2,
+                    "city": "Evansville",
+                    "state": "IN",
+                    "livingAreaValue": 812,
+                    "livingAreaUnitsShort": "sqft",
+                    "mlsLogoSrc": null
+                },
+                {
+                    "represented": "Buyer",
+                    "representedList": [
+                        "Buyer"
+                    ],
+                    "sold_date": "12/10/2025",
+                    "price": "$235,500",
+                    "zpid": 85667109,
+                    "image_url": "https://photos.zillowstatic.com/fp/1872728ecbf6f33edd3fffb075134b32-p_b.jpg",
+                    "medium_image_url": "https://photos.zillowstatic.com/fp/1872728ecbf6f33edd3fffb075134b32-p_d.jpg",
+                    "image_alt": "433 Coronado Dr, Mount Vernon, IN, 47620",
+                    "home_details_url": "/homedetails/433-Coronado-Dr-Mount-Vernon-IN-47620/85667109_zpid/",
+                    "street_address": "433 Coronado Dr",
+                    "city_state_zipcode": "Mount Vernon, IN, 47620",
+                    "latitude": 37.94645,
+                    "longitude": -87.90573,
+                    "bathrooms": 3,
+                    "bedrooms": 3,
+                    "city": "Mount Vernon",
+                    "state": "IN",
+                    "livingAreaValue": 2354,
+                    "livingAreaUnitsShort": "sqft",
+                    "mlsLogoSrc": null
+                },
+                {
+                    "represented": "Buyer",
+                    "representedList": [
+                        "Buyer"
+                    ],
+                    "sold_date": "12/5/2025",
+                    "price": "$160,000",
+                    "zpid": 77109960,
+                    "image_url": "https://photos.zillowstatic.com/fp/a85b29f10c98b3544c0646a2bf2722f1-p_b.jpg",
+                    "medium_image_url": "https://photos.zillowstatic.com/fp/a85b29f10c98b3544c0646a2bf2722f1-p_d.jpg",
+                    "image_alt": "1909 Southeast Blvd, Evansville, IN, 47714",
+                    "home_details_url": "/homedetails/1909-Southeast-Blvd-Evansville-IN-47714/77109960_zpid/",
+                    "street_address": "1909 Southeast Blvd",
+                    "city_state_zipcode": "Evansville, IN, 47714",
+                    "latitude": 37.963284,
+                    "longitude": -87.531944,
+                    "bathrooms": 2,
+                    "bedrooms": 3,
+                    "city": "Evansville",
+                    "state": "IN",
+                    "livingAreaValue": 1508,
+                    "livingAreaUnitsShort": "sqft",
+                    "mlsLogoSrc": null
+                },
+                {
+                    "represented": "Buyer",
+                    "representedList": [
+                        "Buyer"
+                    ],
+                    "sold_date": "12/4/2025",
+                    "price": "$340,000",
+                    "zpid": 85752456,
+                    "image_url": "https://photos.zillowstatic.com/fp/cad40daf440ad6eb7fc9c8aebc0389fd-p_b.jpg",
+                    "medium_image_url": "https://photos.zillowstatic.com/fp/cad40daf440ad6eb7fc9c8aebc0389fd-p_d.jpg",
+                    "image_alt": "4455 E Lincoln Dr, Newburgh, IN, 47630",
+                    "home_details_url": "/homedetails/4455-E-Lincoln-Dr-Newburgh-IN-47630/85752456_zpid/",
+                    "street_address": "4455 E Lincoln Dr",
+                    "city_state_zipcode": "Newburgh, IN, 47630",
+                    "latitude": 37.970173,
+                    "longitude": -87.43893,
+                    "bathrooms": 2,
+                    "bedrooms": 4,
+                    "city": "Newburgh",
+                    "state": "IN",
+                    "livingAreaValue": 2003,
+                    "livingAreaUnitsShort": "sqft",
+                    "mlsLogoSrc": null
+                }
+            ]
+        },
+        "descriptions": {
+            "aboutMe": "<p>We will promise professional, informative, loyal and dedicated service to our buyers and sellers. We will provide accurate and up-to-date information, skilled analysis and sound real estate advice. We will ensure that the best interests of our clients always come first in each and every transaction, as we are dedicated to the development of long-term client relationships. We will continually explore new ideas and technology to make the process of buying and selling real estate more cost effective and less complicated.&#160;</p>\n<p><a href=\"http://www.ahouse4you.com/\" target=\"_self\">Click here to search all of the Multiple Listing Service.</a></p>\n",
+            "yearsInIndustry": 36,
+            "specialties": [
+                "Buyer's Agent",
+                "Listing Agent",
+                "Relocation",
+                "New Construction"
+            ],
+            "languages": [],
+            "websiteUrl": "http://www.thenaasgroup.com",
+            "linkedInUrl": [],
+            "instagramUrl": []
+        },
+        "shownSales": [
+            {
+                "zpid": "77096814",
+                "closingPrice": "$375,000",
+                "cityState": "Evansville, IN",
+                "fullAddressText": "500 Audubon Dr, Evansville, IN 47715",
+                "attributes": [
+                    {
+                        "value": "4",
+                        "label": "bd",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "3",
+                        "label": "ba",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "2,924",
+                        "label": "sqft",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    }
+                ],
+                "propertyUrl": "/homedetails/500-Audubon-Dr-Evansville-IN-47715/77096814_zpid/",
+                "property": {
+                    "desktopWebHdpImageLink": "https://photos.zillowstatic.com/fp/f64502c055efd2abbf872cdba44011ce-p_h.jpg",
+                    "attributionInfo": {
+                        "providerLogo": null,
+                        "__typename": "AttributionInfo"
+                    },
+                    "__typename": "Property"
+                },
+                "saleCardData": {
+                    "representedList": [
+                        "Buyer"
+                    ],
+                    "soldDuration": "6 days ago",
+                    "soldText": "Sold",
+                    "__typename": "AgentProfileDisplaySaleCardData"
+                },
+                "__typename": "AgentProfileDisplayShownSale"
+            },
+            {
+                "zpid": "77105466",
+                "closingPrice": "$64,900",
+                "cityState": "Evansville, IN",
+                "fullAddressText": "1728 E Franklin St, Evansville, IN 47711",
+                "attributes": [
+                    {
+                        "value": "2",
+                        "label": "bd",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "1",
+                        "label": "ba",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "812",
+                        "label": "sqft",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    }
+                ],
+                "propertyUrl": "/homedetails/1728-E-Franklin-St-Evansville-IN-47711/77105466_zpid/",
+                "property": {
+                    "desktopWebHdpImageLink": "https://photos.zillowstatic.com/fp/3b476a9980645f98b84d693f0d21140c-p_h.jpg",
+                    "attributionInfo": {
+                        "providerLogo": null,
+                        "__typename": "AttributionInfo"
+                    },
+                    "__typename": "Property"
+                },
+                "saleCardData": {
+                    "representedList": [
+                        "Seller"
+                    ],
+                    "soldDuration": "17 days ago",
+                    "soldText": "Sold",
+                    "__typename": "AgentProfileDisplaySaleCardData"
+                },
+                "__typename": "AgentProfileDisplayShownSale"
+            },
+            {
+                "zpid": "85667109",
+                "closingPrice": "$235,500",
+                "cityState": "Mount Vernon, IN",
+                "fullAddressText": "433 Coronado Dr, Mount Vernon, IN 47620",
+                "attributes": [
+                    {
+                        "value": "3",
+                        "label": "bd",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "3",
+                        "label": "ba",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "2,354",
+                        "label": "sqft",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    }
+                ],
+                "propertyUrl": "/homedetails/433-Coronado-Dr-Mount-Vernon-IN-47620/85667109_zpid/",
+                "property": {
+                    "desktopWebHdpImageLink": "https://photos.zillowstatic.com/fp/1872728ecbf6f33edd3fffb075134b32-p_h.jpg",
+                    "attributionInfo": {
+                        "providerLogo": null,
+                        "__typename": "AttributionInfo"
+                    },
+                    "__typename": "Property"
+                },
+                "saleCardData": {
+                    "representedList": [
+                        "Buyer"
+                    ],
+                    "soldDuration": "19 days ago",
+                    "soldText": "Sold",
+                    "__typename": "AgentProfileDisplaySaleCardData"
+                },
+                "__typename": "AgentProfileDisplayShownSale"
+            },
+            {
+                "zpid": "77109960",
+                "closingPrice": "$160,000",
+                "cityState": "Evansville, IN",
+                "fullAddressText": "1909 Southeast Blvd, Evansville, IN 47714",
+                "attributes": [
+                    {
+                        "value": "3",
+                        "label": "bd",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "2",
+                        "label": "ba",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "1,508",
+                        "label": "sqft",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    }
+                ],
+                "propertyUrl": "/homedetails/1909-Southeast-Blvd-Evansville-IN-47714/77109960_zpid/",
+                "property": {
+                    "desktopWebHdpImageLink": "https://photos.zillowstatic.com/fp/a85b29f10c98b3544c0646a2bf2722f1-p_h.jpg",
+                    "attributionInfo": {
+                        "providerLogo": null,
+                        "__typename": "AttributionInfo"
+                    },
+                    "__typename": "Property"
+                },
+                "saleCardData": {
+                    "representedList": [
+                        "Buyer"
+                    ],
+                    "soldDuration": "24 days ago",
+                    "soldText": "Sold",
+                    "__typename": "AgentProfileDisplaySaleCardData"
+                },
+                "__typename": "AgentProfileDisplayShownSale"
+            },
+            {
+                "zpid": "85752456",
+                "closingPrice": "$340,000",
+                "cityState": "Newburgh, IN",
+                "fullAddressText": "4455 E Lincoln Dr, Newburgh, IN 47630",
+                "attributes": [
+                    {
+                        "value": "4",
+                        "label": "bd",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "2",
+                        "label": "ba",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    },
+                    {
+                        "value": "2,003",
+                        "label": "sqft",
+                        "__typename": "AgentProfileDisplaySaleAttribute"
+                    }
+                ],
+                "propertyUrl": "/homedetails/4455-E-Lincoln-Dr-Newburgh-IN-47630/85752456_zpid/",
+                "property": {
+                    "desktopWebHdpImageLink": "https://photos.zillowstatic.com/fp/cad40daf440ad6eb7fc9c8aebc0389fd-p_h.jpg",
+                    "attributionInfo": {
+                        "providerLogo": null,
+                        "__typename": "AttributionInfo"
+                    },
+                    "__typename": "Property"
+                },
+                "saleCardData": {
+                    "representedList": [
+                        "Buyer"
+                    ],
+                    "soldDuration": "25 days ago",
+                    "soldText": "Sold",
+                    "__typename": "AgentProfileDisplaySaleCardData"
+                },
+                "__typename": "AgentProfileDisplayShownSale"
+            }
+        ],
+        "salesLastTwelveMonths": {
+            "value": "107",
+            "longTitle": "Sales last 12 months",
+            "__typename": "AgentProfileDisplaySalesStatsEntry"
+        },
+        "totalSales": {
+            "value": "1,679",
+            "longTitle": "Total sales",
+            "__typename": "AgentProfileDisplaySalesStatsEntry"
+        },
+        "priceRange": {
+            "value": "$15K-$1.5M",
+            "longTitle": "Price range",
+            "__typename": "AgentProfileDisplaySalesStatsEntry"
+        },
+        "averagePrice": {
+            "value": "$246K",
+            "longTitle": "Average price",
+            "__typename": "AgentProfileDisplaySalesStatsEntry"
+        },
+        "mlsIDs": [
+            {
+                "mls_ouid": "M00000256",
+                "mls_agent_id": "SW98945"
+            }
+        ],
+        "preferredLenders": {
+            "lenders": []
+        },
+        "professionalInformation": [
+            {
+                "term": "Broker address",
+                "lines": [
+                    "F.C. Tucker Emge REALTORS",
+                    "7820 Eagle Crest Blvd.",
+                    "Evansville, IN 47715"
+                ]
+            },
+            {
+                "term": "Cell phone",
+                "description": "(812) 459-6227"
+            },
+            {
+                "term": "Websites",
+                "links": [
+                    {
+                        "text": "Website",
+                        "url": "http://www.thenaasgroup.com"
+                    },
+                    {
+                        "text": "Facebook",
+                        "url": "https://www.facebook.com/thenaasgroup"
+                    }
+                ]
+            },
+            {
+                "term": "Screenname",
+                "description": "The Naas Group"
+            },
+            {
+                "term": "Member since",
+                "description": "04/09/2009"
+            },
+            {
+                "term": "Real Estate Licenses",
+                "lines": [
+                    "RB14028567 (IN)"
+                ]
+            },
+            {
+                "term": "Other Licenses",
+                "lines": [
+                    "RB14028567 (State License)"
+                ]
+            }
+        ],
+        "reviews": [
+            {
+                "reviewComment": "Really enjoyed working with AJ. And our grandkids really enjoyed him. Lots of realtors don\u2019t like kids. You took a liking to our two grandkids, treated them with respect and kindness. And I promise you finding a house to satisfy us was not easy. Even after having to back out of one he still stayed with us. Did a great job always willing to help.\nAnd I say he\u2019s a super nice guy yeah he is\u2026.",
+                "reviewId": 8959287,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "ajnaas",
+                    "firstName": "Andrew  'A.J.'",
+                    "lastName": "Naas",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU11fy1fmpbjlzd_10irz"
+                },
+                "reviewer": {
+                    "screenName": "davidhaney11",
+                    "firstName": "David",
+                    "lastName": "Haney",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUx9om2m1xujux_32yx0"
+                },
+                "rating": 5,
+                "createDate": "2025-11-12T11:21:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2025 in Evansville, IN."
+            },
+            {
+                "reviewComment": "AJ was a wonderful realtor to work with. Very responsive, will give advice when asked, and looks out for your best interest. I have listed a house with AJ and bought one with him and both experiences were fantastic. ",
+                "reviewId": 8884496,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "ajnaas",
+                    "firstName": "Andrew  'A.J.'",
+                    "lastName": "Naas",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU11fy1fmpbjlzd_10irz"
+                },
+                "reviewer": {
+                    "screenName": "sethharness35",
+                    "firstName": null,
+                    "lastName": null,
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU13aekbkof8q2x_3z9zv"
+                },
+                "rating": 5,
+                "createDate": "2025-09-10T11:13:00",
+                "rebuttal": null,
+                "workDescription": "Bought and sold a Single Family home in 2025 in Evansville, IN."
+            },
+            {
+                "reviewComment": "AJ went above and beyond.  He truly cares about his clients ensuring they are taking the right steps, and making the right moves.  He guided us through the entire process.  AJ was quick to respond to all our questions, no matter the time.   He stayed by our side through it all, and couldn\u2019t have asked for a better realtor.  ",
+                "reviewId": 8884371,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "ajnaas",
+                    "firstName": "Andrew  'A.J.'",
+                    "lastName": "Naas",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU11fy1fmpbjlzd_10irz"
+                },
+                "reviewer": {
+                    "screenName": "senseicutrell",
+                    "firstName": null,
+                    "lastName": null,
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUswpc23kn02rt_9ej1i"
+                },
+                "rating": 5,
+                "createDate": "2025-09-10T10:01:00",
+                "rebuttal": null,
+                "workDescription": "Bought and sold a Condo home in 2025 in Newburgh, IN."
+            },
+            {
+                "reviewComment": "Deanne was fantastic. She knew the area well and provided outstanding recommendations at every step of the process. She joked that she had bought or sold every house in the county, but with her expertise and connections I believe it! ",
+                "reviewId": 8763373,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "The Naas Group",
+                    "firstName": "Deanne",
+                    "lastName": "Naas",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUz5snlgn05o21_70ucp"
+                },
+                "reviewer": {
+                    "screenName": "ezra en 08",
+                    "firstName": null,
+                    "lastName": null,
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUq3s5gui8q3nt_6r0de"
+                },
+                "rating": 5,
+                "createDate": "2025-06-06T11:19:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2025 in Evansville, IN."
+            },
+            {
+                "reviewComment": "AJ was AWESOME!!  We can\u2019t say enough good things about him.  He was so patient while we took him house to house and rejected one after another.  Then that 1 house we were looking for came up and we jumped on it and AJ walked us thru the entire process!  We would highly recommend him to anybody we know who is either selling or buying a house!",
+                "reviewId": 8574963,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "ajnaas",
+                    "firstName": "Andrew  'A.J.'",
+                    "lastName": "Naas",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU11fy1fmpbjlzd_10irz"
+                },
+                "reviewer": {
+                    "screenName": "tracyleighracine",
+                    "firstName": null,
+                    "lastName": null,
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU17mzjb1qah821_5rw5l"
+                },
+                "rating": 5,
+                "createDate": "2024-12-30T15:37:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2024 in Cullen/hoosier, Evansville, IN."
+            }
+        ],
+        "serviceAreas": [
+            {
+                "regionId": 688,
+                "text": "Posey County, IN",
+                "url": "/posey-county-in/"
+            },
+            {
+                "regionId": 1037,
+                "text": "Gibson County, IN",
+                "url": "/gibson-county-in/"
+            },
+            {
+                "regionId": 2070,
+                "text": "Warrick County, IN",
+                "url": "/warrick-county-in/"
+            },
+            {
+                "regionId": 3146,
+                "text": "Vanderburgh County, IN",
+                "url": "/vanderburgh-county-in/"
+            },
+            {
+                "regionId": 31471,
+                "text": "Evansville, IN",
+                "url": "/evansville-in/"
+            },
+            {
+                "regionId": 53562,
+                "text": "Newburgh, IN",
+                "url": "/newburgh-in/"
+            }
+        ]
+    }
+}
