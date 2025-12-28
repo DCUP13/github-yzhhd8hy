@@ -24,6 +24,9 @@ interface Campaign {
   emd: string;
   optionPeriod: string;
   titleCompany: string;
+  sendTimeStart: string;
+  sendTimeEnd: string;
+  sendDelayMinutes: number;
   templates: {
     template: Template;
     type: 'body' | 'attachment';
@@ -192,6 +195,9 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         emd: campaign.emd || '',
         optionPeriod: campaign.option_period || '',
         titleCompany: campaign.title_company || '',
+        sendTimeStart: campaign.send_time_start || '09:00:00',
+        sendTimeEnd: campaign.send_time_end || '17:00:00',
+        sendDelayMinutes: campaign.send_delay_minutes || 5,
         templates: campaign.campaign_templates.map((ct: any) => ({
           template: ct.templates,
           type: ct.template_type
@@ -227,6 +233,9 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
       emd: '',
       optionPeriod: '',
       titleCompany: '',
+      sendTimeStart: '09:00',
+      sendTimeEnd: '17:00',
+      sendDelayMinutes: 5,
       templates: [],
       emails: [],
       lastModified: new Date().toISOString()
@@ -265,6 +274,9 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
             emd: currentCampaign.emd,
             option_period: currentCampaign.optionPeriod,
             title_company: currentCampaign.titleCompany,
+            send_time_start: currentCampaign.sendTimeStart,
+            send_time_end: currentCampaign.sendTimeEnd,
+            send_delay_minutes: currentCampaign.sendDelayMinutes,
             updated_at: now
           })
           .select()
@@ -287,6 +299,9 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
             emd: currentCampaign.emd,
             option_period: currentCampaign.optionPeriod,
             title_company: currentCampaign.titleCompany,
+            send_time_start: currentCampaign.sendTimeStart,
+            send_time_end: currentCampaign.sendTimeEnd,
+            send_delay_minutes: currentCampaign.sendDelayMinutes,
             updated_at: now
           })
           .eq('id', campaignId);
@@ -1027,6 +1042,77 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       placeholder="Enter title company name"
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Email Sending Schedule</h2>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <Clock className="w-4 h-4 inline mr-1" />
+                        Start Time
+                      </label>
+                      <input
+                        type="time"
+                        value={currentCampaign.sendTimeStart}
+                        onChange={(e) => handleUpdateCampaign({ sendTimeStart: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <Clock className="w-4 h-4 inline mr-1" />
+                        End Time
+                      </label>
+                      <input
+                        type="time"
+                        value={currentCampaign.sendTimeEnd}
+                        onChange={(e) => handleUpdateCampaign({ sendTimeEnd: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Delay Between Emails (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={currentCampaign.sendDelayMinutes}
+                      onChange={(e) => handleUpdateCampaign({ sendDelayMinutes: parseInt(e.target.value) || 5 })}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      Time to wait between sending each email
+                    </p>
+                  </div>
+
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <h3 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
+                      Daily Capacity
+                    </h3>
+                    <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                      {(() => {
+                        const [startHour, startMin] = currentCampaign.sendTimeStart.split(':').map(Number);
+                        const [endHour, endMin] = currentCampaign.sendTimeEnd.split(':').map(Number);
+                        const startMinutes = startHour * 60 + startMin;
+                        const endMinutes = endHour * 60 + endMin;
+                        const totalMinutes = endMinutes - startMinutes;
+                        const emailsPerDay = Math.floor(totalMinutes / currentCampaign.sendDelayMinutes);
+                        return emailsPerDay;
+                      })()}
+                      {' '}emails/day
+                    </div>
+                    <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                      Based on {currentCampaign.sendTimeStart} - {currentCampaign.sendTimeEnd} window with {currentCampaign.sendDelayMinutes} minute delay
+                    </p>
                   </div>
                 </div>
               </div>

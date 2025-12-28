@@ -213,6 +213,7 @@ Deno.serve(async (req: Request) => {
 
         emailsToInsert.push({
           user_id,
+          campaign_id,
           to_email: contact.email,
           from_email: fromEmail,
           subject: replacePlaceholders(subject, variables),

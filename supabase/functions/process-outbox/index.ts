@@ -39,10 +39,17 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Processing outbox for user: ${user_id}`);
 
-    // Get pending emails from outbox
+    // Get pending emails from outbox with campaign information
     const { data: pendingEmails, error: emailsError } = await supabase
       .from("email_outbox")
-      .select("*")
+      .select(`
+        *,
+        campaigns (
+          send_time_start,
+          send_time_end,
+          send_delay_minutes
+        )
+      `)
       .eq("user_id", user_id)
       .eq("status", "pending")
       .order("created_at", { ascending: true })
@@ -70,11 +77,52 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Found ${pendingEmails.length} pending emails`);
 
+    // Check if we're within the time window for campaign emails
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
+
+    // Filter emails that are either not part of a campaign OR within their campaign's time window
+    const emailsToProcess = pendingEmails.filter((email: any) => {
+      if (!email.campaign_id || !email.campaigns) {
+        // Non-campaign emails can be sent anytime
+        return true;
+      }
+
+      const startTime = email.campaigns.send_time_start || '00:00:00';
+      const endTime = email.campaigns.send_time_end || '23:59:59';
+
+      if (currentTime >= startTime && currentTime <= endTime) {
+        return true;
+      }
+
+      console.log(`Email ${email.id} is outside time window (${startTime} - ${endTime}), current time: ${currentTime}`);
+      return false;
+    });
+
+    if (emailsToProcess.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "No emails within allowed time window",
+          processed: 0,
+          skipped: pendingEmails.length,
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
+    console.log(`Processing ${emailsToProcess.length} emails (${pendingEmails.length - emailsToProcess.length} skipped due to time window)`);
+
     // Process each email by calling send-email edge function
     let successCount = 0;
     let failureCount = 0;
 
-    for (const email of pendingEmails) {
+    for (const email of emailsToProcess) {
       try {
         // Mark as sending
         await supabase
@@ -113,6 +161,7 @@ Deno.serve(async (req: Request) => {
               body: email.body,
               attachments: email.attachments,
               reply_to_id: email.reply_to_id,
+              campaign_id: email.campaign_id,
             });
 
           await supabase
@@ -136,8 +185,9 @@ Deno.serve(async (req: Request) => {
           console.error(`Failed to send email ${email.id}:`, sendResult.error);
         }
 
-        // Rate limiting - wait 1 second between emails
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        // Rate limiting - use campaign's delay or default to 1 second
+        const delayMs = (email.campaigns?.send_delay_minutes || 0) * 60 * 1000 || 1000;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
 
       } catch (error) {
         console.error(`Error processing email ${email.id}:`, error);
@@ -158,9 +208,10 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: true,
-        processed: pendingEmails.length,
+        processed: emailsToProcess.length,
         successful: successCount,
         failed: failureCount,
+        skipped: pendingEmails.length - emailsToProcess.length,
       }),
       {
         headers: {
