@@ -90,6 +90,10 @@ Deno.serve(async (req: Request) => {
         });
 
         if (!response.ok) {
+          if (response.status === 429) {
+            console.error(`Rate limit exceeded on page ${page}. Stopping scrape.`);
+            throw new Error(`Rate limit exceeded. Please check your RapidAPI quota and try again later. Successfully fetched ${allAgents.length} agents before rate limit.`);
+          }
           console.error(`Failed to fetch page ${page}: ${response.status}`);
           break;
         }
@@ -106,13 +110,13 @@ Deno.serve(async (req: Request) => {
         console.log(`Fetched ${professionals.length} agents from page ${page}`);
         page++;
 
-        // Rate limiting - wait 1 second between requests
+        // Rate limiting - wait 2 seconds between requests to avoid 429 errors
         if (page <= max_pages) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       } catch (error) {
         console.error(`Error fetching page ${page}:`, error);
-        break;
+        throw error;
       }
     }
 
