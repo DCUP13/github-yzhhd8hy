@@ -26,7 +26,7 @@ interface Campaign {
   titleCompany: string;
   sendTimeStart: string;
   sendTimeEnd: string;
-  sendDelayMinutes: number;
+  sendDelayMinutes: number | null;
   templates: {
     template: Template;
     type: 'body' | 'attachment';
@@ -197,7 +197,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         titleCompany: campaign.title_company || '',
         sendTimeStart: campaign.send_time_start || '09:00:00',
         sendTimeEnd: campaign.send_time_end || '17:00:00',
-        sendDelayMinutes: campaign.send_delay_minutes || 5,
+        sendDelayMinutes: campaign.send_delay_minutes ?? null,
         templates: campaign.campaign_templates.map((ct: any) => ({
           template: ct.templates,
           type: ct.template_type
@@ -235,7 +235,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
       titleCompany: '',
       sendTimeStart: '09:00',
       sendTimeEnd: '17:00',
-      sendDelayMinutes: 5,
+      sendDelayMinutes: null,
       templates: [],
       emails: [],
       lastModified: new Date().toISOString()
@@ -1085,8 +1085,9 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       type="number"
                       min="1"
                       max="60"
-                      value={currentCampaign.sendDelayMinutes}
-                      onChange={(e) => handleUpdateCampaign({ sendDelayMinutes: parseInt(e.target.value) || 5 })}
+                      value={currentCampaign.sendDelayMinutes ?? ''}
+                      onChange={(e) => handleUpdateCampaign({ sendDelayMinutes: e.target.value ? parseInt(e.target.value) : null })}
+                      placeholder="Enter delay in minutes"
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                     <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -1100,18 +1101,23 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     </h3>
                     <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">
                       {(() => {
+                        if (!currentCampaign.sendDelayMinutes) {
+                          return 'Set delay to calculate';
+                        }
                         const [startHour, startMin] = currentCampaign.sendTimeStart.split(':').map(Number);
                         const [endHour, endMin] = currentCampaign.sendTimeEnd.split(':').map(Number);
                         const startMinutes = startHour * 60 + startMin;
                         const endMinutes = endHour * 60 + endMin;
                         const totalMinutes = endMinutes - startMinutes;
                         const emailsPerDay = Math.floor(totalMinutes / currentCampaign.sendDelayMinutes);
-                        return emailsPerDay;
+                        return `${emailsPerDay} emails/day`;
                       })()}
-                      {' '}emails/day
                     </div>
                     <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                      Based on {currentCampaign.sendTimeStart} - {currentCampaign.sendTimeEnd} window with {currentCampaign.sendDelayMinutes} minute delay
+                      {currentCampaign.sendDelayMinutes
+                        ? `Based on ${currentCampaign.sendTimeStart} - ${currentCampaign.sendTimeEnd} window with ${currentCampaign.sendDelayMinutes} minute delay`
+                        : 'Enter a delay value to see daily capacity'
+                      }
                     </p>
                   </div>
                 </div>
