@@ -12,14 +12,22 @@ interface FetchAgentsRequest {
   user_id: string;
 }
 
-interface AgentProfessional {
-  encodedZuid?: string;
-  screenName?: string;
-  businessName?: string;
-  profileUrl?: string;
-  email?: string;
+interface AgentFromSearch {
   name?: string;
-  phoneNumber?: { areaCode?: string; prefix?: string; number?: string };
+  link?: string;
+  username?: string;
+  encodedZuid?: string;
+  imageUrl?: string;
+  isTopAgent?: boolean;
+  profileData?: Array<{
+    __typename?: string;
+    data?: string;
+    label?: string;
+  }>;
+  reviewInformation?: {
+    rating?: number;
+    totalReviews?: string;
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -75,7 +83,7 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Fetching agents for ${location}, max ${max_pages} pages`);
 
-    const allAgents: AgentProfessional[] = [];
+    const allAgents: AgentFromSearch[] = [];
     let page = 1;
 
     // Fetch agents from all pages using new API endpoint
@@ -100,17 +108,16 @@ Deno.serve(async (req: Request) => {
 
         const data = await response.json();
 
-        // NOTE: JSON parsing will be updated after receiving response structure
-        // Keeping current structure as placeholder
-        const professionals = data.professionals || [];
+        // Parse new API response structure
+        const agents = data.agents || [];
 
-        if (professionals.length === 0) {
+        if (agents.length === 0) {
           console.log(`No more agents found on page ${page}`);
           break;
         }
 
-        allAgents.push(...professionals);
-        console.log(`Fetched ${professionals.length} agents from page ${page}`);
+        allAgents.push(...agents);
+        console.log(`Fetched ${agents.length} agents from page ${page}`);
         page++;
 
         // Rate limiting - wait 2 seconds between requests to avoid 429 errors
@@ -126,22 +133,19 @@ Deno.serve(async (req: Request) => {
     console.log(`Total agents fetched: ${allAgents.length}`);
 
     // Insert contacts into database
+    // Note: Email and phone are not in search results, will be fetched via details endpoint
     const contactsToInsert = allAgents
-      .filter((agent) => agent.email) // Only agents with email
+      .filter((agent) => agent.username) // Only agents with username
       .map((agent) => {
-        const phoneNumber = agent.phoneNumber
-          ? `${agent.phoneNumber.areaCode || ""}${agent.phoneNumber.prefix || ""}${agent.phoneNumber.number || ""}`
-          : "";
-
         return {
           user_id,
           campaign_id,
-          email: agent.email || "",
+          email: "", // Will be populated when fetching agent details
           name: agent.name || "",
-          screen_name: agent.screenName || "",
-          phone: phoneNumber,
-          business_name: agent.businessName || "",
-          profile_url: agent.profileUrl || "",
+          screen_name: agent.username || "",
+          phone: "", // Will be populated when fetching agent details
+          business_name: "", // Will be populated when fetching agent details
+          profile_url: agent.link || "",
           status: "pending",
           agent_data: agent,
         };

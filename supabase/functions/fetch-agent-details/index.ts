@@ -67,20 +67,40 @@ Deno.serve(async (req: Request) => {
 
     const data = await response.json();
 
-    // NOTE: JSON parsing will be updated after receiving response structure
-    // Keeping current validation as placeholder
-    if (!data.displayUser) {
+    // Parse new API response structure
+    if (!data.agent_details) {
       throw new Error("Invalid response structure from API");
     }
 
+    const agentDetails = data.agent_details;
+
     // Update contact with detailed information if contact_id is provided
     if (contact_id) {
+      const updateData: any = {
+        agent_data: data,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Extract email if available
+      if (agentDetails.email) {
+        updateData.email = agentDetails.email;
+      }
+
+      // Extract phone if available
+      if (agentDetails.phoneNumbers?.cell) {
+        updateData.phone = agentDetails.phoneNumbers.cell;
+      } else if (agentDetails.phoneNumbers?.business) {
+        updateData.phone = agentDetails.phoneNumbers.business;
+      }
+
+      // Extract business name if available
+      if (agentDetails.businessName) {
+        updateData.business_name = agentDetails.businessName;
+      }
+
       const { error: updateError } = await supabase
         .from("contacts")
-        .update({
-          agent_data: data,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("id", contact_id)
         .eq("user_id", user_id);
 
