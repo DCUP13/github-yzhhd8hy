@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Mail, Paperclip, Search, RefreshCw, Clock, User, ArrowLeft, Reply, Send, Inbox, Inbox as Outbox, Plus, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Mail, Paperclip, Search, RefreshCw, Clock, User, ArrowLeft, Reply, Send, Inbox, Inbox as Outbox, Plus, FileText, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ReplyDialog } from './ReplyDialog';
 import { ComposeEmailDialog } from './ComposeEmailDialog';
@@ -83,6 +83,9 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [isProcessingEmails, setIsProcessingEmails] = useState(false);
   const [showComposeDialog, setShowComposeDialog] = useState(false);
   const [isReplyAll, setIsReplyAll] = useState(false);
+  const [showDraftsDropdown, setShowDraftsDropdown] = useState(false);
+  const [isProcessingDrafts, setIsProcessingDrafts] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchAllEmails();
@@ -99,6 +102,19 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       fetchDraftEmails();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDraftsDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const fetchAllEmails = async () => {
     try {
@@ -294,6 +310,93 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     }
   };
 
+  const handleMoveAllDraftsToOutbox = async () => {
+    if (draftEmails.length === 0) {
+      alert('No drafts to move to outbox');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to move all ${draftEmails.length} drafts to the outbox? They will be queued for sending.`)) {
+      return;
+    }
+
+    setIsProcessingDrafts(true);
+    setShowDraftsDropdown(false);
+
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        throw new Error('User not authenticated');
+      }
+
+      const outboxEmails = draftEmails.map(draft => ({
+        user_id: user.data.user.id,
+        campaign_id: draft.campaign_id,
+        to_email: draft.to_email,
+        from_email: draft.from_email,
+        subject: draft.subject,
+        body: draft.body,
+        attachments: draft.attachments,
+        status: 'pending' as const,
+      }));
+
+      const { error: insertError } = await supabase
+        .from('email_outbox')
+        .insert(outboxEmails);
+
+      if (insertError) throw insertError;
+
+      const draftIds = draftEmails.map(draft => draft.id);
+      const { error: deleteError } = await supabase
+        .from('email_drafts')
+        .delete()
+        .in('id', draftIds);
+
+      if (deleteError) throw deleteError;
+
+      await fetchAllEmails();
+      alert(`Successfully moved ${draftEmails.length} drafts to outbox`);
+    } catch (error) {
+      console.error('Error moving drafts to outbox:', error);
+      alert(`Failed to move drafts to outbox: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsProcessingDrafts(false);
+    }
+  };
+
+  const handleDeleteAllDrafts = async () => {
+    if (draftEmails.length === 0) {
+      alert('No drafts to delete');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete all ${draftEmails.length} drafts? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsProcessingDrafts(true);
+    setShowDraftsDropdown(false);
+
+    try {
+      const draftIds = draftEmails.map(draft => draft.id);
+      const { error } = await supabase
+        .from('email_drafts')
+        .delete()
+        .in('id', draftIds);
+
+      if (error) throw error;
+
+      await fetchDraftEmails();
+      setSelectedEmail(null);
+      alert(`Successfully deleted ${draftEmails.length} drafts`);
+    } catch (error) {
+      console.error('Error deleting all drafts:', error);
+      alert(`Failed to delete drafts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsProcessingDrafts(false);
+    }
+  };
+
   const getFilteredEmails = () => {
     if (activeTab === 'inbox') {
       return emails.filter(email => {
@@ -461,8 +564,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     onClick={handleProcessOutbox}
                     disabled={isProcessingEmails}
                     className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
-                      isProcessingEmails 
-                        ? 'bg-indigo-400 cursor-wait' 
+                      isProcessingEmails
+                        ? 'bg-indigo-400 cursor-wait'
                         : 'bg-indigo-600 hover:bg-indigo-700'
                     }`}
                   >
@@ -478,6 +581,51 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                       </>
                     )}
                   </button>
+                )}
+                {activeTab === 'drafts' && (
+                  <div className="relative" ref={dropdownRef}>
+                    <button
+                      onClick={() => setShowDraftsDropdown(!showDraftsDropdown)}
+                      disabled={isProcessingDrafts}
+                      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
+                        isProcessingDrafts
+                          ? 'bg-indigo-400 cursor-wait'
+                          : 'bg-indigo-600 hover:bg-indigo-700'
+                      }`}
+                    >
+                      {isProcessingDrafts ? (
+                        <>
+                          <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          Actions
+                          <ChevronDown className="w-4 h-4 ml-2" />
+                        </>
+                      )}
+                    </button>
+                    {showDraftsDropdown && !isProcessingDrafts && (
+                      <div className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-10">
+                        <div className="py-1">
+                          <button
+                            onClick={handleMoveAllDraftsToOutbox}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <Send className="w-4 h-4 mr-2" />
+                            Move to Outbox
+                          </button>
+                          <button
+                            onClick={handleDeleteAllDrafts}
+                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          >
+                            <Mail className="w-4 h-4 mr-2" />
+                            Delete All
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
