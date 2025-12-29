@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Paperclip, Search, RefreshCw, Clock, User, ArrowLeft, Reply, Send, Inbox, Inbox as Outbox, Plus } from 'lucide-react';
+import { Mail, Paperclip, Search, RefreshCw, Clock, User, ArrowLeft, Reply, Send, Inbox, Inbox as Outbox, Plus, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ReplyDialog } from './ReplyDialog';
 import { ComposeEmailDialog } from './ComposeEmailDialog';
@@ -42,7 +42,19 @@ interface SentEmail {
   created_at: string;
 }
 
-type TabType = 'inbox' | 'outbox' | 'sent';
+interface DraftEmail {
+  id: string;
+  to_email: string;
+  from_email: string;
+  subject: string;
+  body: string;
+  campaign_id?: string;
+  attachments: any;
+  created_at: string;
+  updated_at: string;
+}
+
+type TabType = 'inbox' | 'outbox' | 'sent' | 'drafts';
 
 const formatReceiverList = (receiver: string | string[]): string => {
   if (Array.isArray(receiver)) {
@@ -62,6 +74,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [emails, setEmails] = useState<Email[]>([]);
   const [outboxEmails, setOutboxEmails] = useState<OutboxEmail[]>([]);
   const [sentEmails, setSentEmails] = useState<SentEmail[]>([]);
+  const [draftEmails, setDraftEmails] = useState<DraftEmail[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('inbox');
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +95,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       fetchOutboxEmails();
     } else if (activeTab === 'sent') {
       fetchSentEmails();
+    } else if (activeTab === 'drafts') {
+      fetchDraftEmails();
     }
   }, [activeTab]);
 
@@ -90,7 +105,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       await Promise.all([
         fetchInboxEmails(),
         fetchOutboxEmails(),
-        fetchSentEmails()
+        fetchSentEmails(),
+        fetchDraftEmails()
       ]);
     } catch (error) {
       console.error('Error fetching emails:', error);
@@ -124,6 +140,15 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       .order('sent_at', { ascending: false });
     if (error) throw error;
     setSentEmails(data || []);
+  };
+
+  const fetchDraftEmails = async () => {
+    const { data, error } = await supabase
+      .from('email_drafts')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    setDraftEmails(data || []);
   };
 
   const handleSendReply = async (replyData: {
@@ -215,11 +240,11 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
 
   const handleDeleteEmail = async (emailId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent row click from selecting email
-    
+
     try {
       setIsLoading(true);
       let error;
-      
+
       if (activeTab === 'inbox') {
         ({ error } = await supabase
           .from('emails')
@@ -235,6 +260,11 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
           .from('email_sent')
           .delete()
           .eq('id', emailId));
+      } else if (activeTab === 'drafts') {
+        ({ error } = await supabase
+          .from('email_drafts')
+          .delete()
+          .eq('id', emailId));
       }
 
       if (error) throw error;
@@ -244,8 +274,10 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
         await fetchInboxEmails();
       } else if (activeTab === 'outbox') {
         await fetchOutboxEmails();
-      } else {
+      } else if (activeTab === 'sent') {
         await fetchSentEmails();
+      } else {
+        await fetchDraftEmails();
       }
 
       // If the deleted email was selected, clear the selection
@@ -276,8 +308,14 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
         email.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         email.from_email?.toLowerCase().includes(searchQuery.toLowerCase())
       );
-    } else {
+    } else if (activeTab === 'sent') {
       return sentEmails.filter(email =>
+        email.to_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        email.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        email.from_email?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    } else {
+      return draftEmails.filter(email =>
         email.to_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         email.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         email.from_email?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -496,6 +534,22 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                       Sent ({sentEmails.length})
                     </div>
                   </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('drafts');
+                      setSelectedEmail(null);
+                    }}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'drafts'
+                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Drafts ({draftEmails.length})
+                    </div>
+                  </button>
                 </nav>
               </div>
             </div>
@@ -521,8 +575,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     {filteredEmails.length === 0 ? `No ${activeTab} emails yet` : 'No emails found'}
                   </h3>
                   <p className="text-gray-500 dark:text-gray-400">
-                    {filteredEmails.length === 0 
-                      ? `${activeTab === 'inbox' ? 'Received emails' : activeTab === 'outbox' ? 'Outgoing emails' : 'Sent emails'} will appear here`
+                    {filteredEmails.length === 0
+                      ? `${activeTab === 'inbox' ? 'Received emails' : activeTab === 'outbox' ? 'Outgoing emails' : activeTab === 'sent' ? 'Sent emails' : 'Draft emails'} will appear here`
                       : 'Try adjusting your search criteria'
                     }
                   </p>
@@ -541,17 +595,19 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                             <div className="flex items-center gap-2">
                               <User className="w-4 h-4 text-gray-400" />
                               <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                {activeTab === 'inbox' ? (email as Email).sender : 
+                                {activeTab === 'inbox' ? (email as Email).sender :
                                  activeTab === 'outbox' ? (email as OutboxEmail).from_email :
-                                 (email as SentEmail).from_email}
+                                 activeTab === 'sent' ? (email as SentEmail).from_email :
+                                 (email as DraftEmail).from_email}
                               </span>
                             </div>
                             <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                               <span>to</span>
                               <span>
-                                {activeTab === 'inbox' ? formatReceiverList((email as Email).receiver) : 
+                                {activeTab === 'inbox' ? formatReceiverList((email as Email).receiver) :
                                  activeTab === 'outbox' ? (email as OutboxEmail).to_email :
-                                 (email as SentEmail).to_email}
+                                 activeTab === 'sent' ? (email as SentEmail).to_email :
+                                 (email as DraftEmail).to_email}
                               </span>
                             </div>
                             {activeTab === 'outbox' && (
@@ -562,6 +618,13 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                                   'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
                                 }`}>
                                   {(email as OutboxEmail).status}
+                                </span>
+                              </div>
+                            )}
+                            {activeTab === 'drafts' && (
+                              <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                  draft
                                 </span>
                               </div>
                             )}
