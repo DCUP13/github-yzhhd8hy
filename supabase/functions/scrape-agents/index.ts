@@ -152,14 +152,19 @@ Deno.serve(async (req: Request) => {
       });
 
     if (contactsToInsert.length > 0) {
-      const { error: insertError } = await supabase
+      const { data: insertedContacts, error: insertError } = await supabase
         .from("contacts")
-        .insert(contactsToInsert);
+        .upsert(contactsToInsert, {
+          onConflict: "user_id,campaign_id,screen_name",
+          ignoreDuplicates: true,
+        });
 
       if (insertError) {
         console.error("Error inserting contacts:", insertError);
         throw insertError;
       }
+
+      console.log(`Inserted/updated contacts. Skipped duplicates if any.`);
     }
 
     return new Response(
