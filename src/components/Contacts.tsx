@@ -1,19 +1,42 @@
-import React, { useState } from 'react';
-import { Users, UserPlus, Check, X, Search, UserCheck, Clock, Mail, Upload } from 'lucide-react';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  avatar: string;
-}
+import React, { useState, useEffect } from 'react';
+import { Users, Search, Building2, Mail, Phone, MapPin, Home, ChevronRight, X, Award, User } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface Contact {
   id: string;
   name: string;
   email: string;
-  status: 'friend' | 'pending' | 'requested';
-  avatar: string;
+  screen_name: string;
+  phone: string;
+  phone_cell: string;
+  phone_brokerage: string;
+  phone_business: string;
+  business_name: string;
+  profile_url: string;
+  is_team_lead: boolean;
+  status: string;
+  created_at: string;
+}
+
+interface Listing {
+  id: string;
+  zpid: number;
+  home_type: string;
+  address_line1: string;
+  address_line2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  bedrooms: number;
+  bathrooms: number;
+  price: number;
+  price_currency: string;
+  status: string;
+  brokerage_name: string;
+  listing_url: string;
+  primary_photo_url: string;
+  living_area_value: number;
+  living_area_units: string;
 }
 
 interface ContactsProps {
@@ -23,150 +46,99 @@ interface ContactsProps {
 
 export function Contacts({ onSignOut, currentView }: ContactsProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteError, setInviteError] = useState('');
-  const [contacts, setContacts] = useState<Contact[]>([
-    {
-      id: '1',
-      name: 'Alice Johnson',
-      email: 'alice@example.com',
-      status: 'friend',
-      avatar: `https://source.unsplash.com/100x100/?portrait&1`,
-    },
-    {
-      id: '2',
-      name: 'Bob Smith',
-      email: 'bob@example.com',
-      status: 'pending',
-      avatar: `https://source.unsplash.com/100x100/?portrait&2`,
-    },
-    {
-      id: '3',
-      name: 'Carol White',
-      email: 'carol@example.com',
-      status: 'requested',
-      avatar: `https://source.unsplash.com/100x100/?portrait&3`,
-    },
-  ]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [contactListings, setContactListings] = useState<Listing[]>([]);
+  const [loadingListings, setLoadingListings] = useState(false);
 
-  // Simulated app users data
-  const [appUsers] = useState<User[]>([
-    {
-      id: '4',
-      name: 'David Brown',
-      email: 'david@example.com',
-      avatar: `https://source.unsplash.com/100x100/?portrait&4`,
-    },
-    {
-      id: '5',
-      name: 'Emma Wilson',
-      email: 'emma@example.com',
-      avatar: `https://source.unsplash.com/100x100/?portrait&5`,
-    },
-    {
-      id: '6',
-      name: 'Frank Miller',
-      email: 'frank@example.com',
-      avatar: `https://source.unsplash.com/100x100/?portrait&6`,
-    },
-  ]);
+  useEffect(() => {
+    fetchContacts();
+  }, []);
 
-  const handleAcceptRequest = (contactId: string) => {
-    setContacts(contacts.map(contact => 
-      contact.id === contactId 
-        ? { ...contact, status: 'friend' as const }
-        : contact
-    ));
-  };
+  const fetchContacts = async () => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
 
-  const handleRejectRequest = (contactId: string) => {
-    setContacts(contacts.filter(contact => contact.id !== contactId));
-  };
+      if (!user) {
+        console.error('No user found');
+        return;
+      }
 
-  const handleCancelRequest = (contactId: string) => {
-    setContacts(contacts.filter(contact => contact.id !== contactId));
-  };
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
-  const handleRemoveFriend = (contactId: string) => {
-    setContacts(contacts.filter(contact => contact.id !== contactId));
-  };
+      if (error) throw error;
 
-  const handleSendRequest = (user: User) => {
-    if (!contacts.some(contact => contact.id === user.id)) {
-      setContacts([...contacts, {
-        ...user,
-        status: 'requested'
-      }]);
+      setContacts(data || []);
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const validateEmail = (email: string) => {
-    return email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+  const fetchContactListings = async (contactId: string) => {
+    try {
+      setLoadingListings(true);
+      const { data, error } = await supabase
+        .from('listings')
+        .select('*')
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setContactListings(data || []);
+    } catch (error) {
+      console.error('Error fetching listings:', error);
+    } finally {
+      setLoadingListings(false);
+    }
   };
 
-  const handleSendInvite = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateEmail(inviteEmail)) {
-      setInviteError('Please enter a valid email address');
-      return;
-    }
-
-    // Here you would send the invite email
-    console.log('Sending invite to:', inviteEmail);
-    setInviteEmail('');
-    setInviteError('');
+  const handleContactClick = async (contact: Contact) => {
+    setSelectedContact(contact);
+    await fetchContactListings(contact.id);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const emails = event.target?.result?.toString().split('\n')
-          .map(email => email.trim())
-          .filter(email => validateEmail(email));
-        
-        if (emails) {
-          // Here you would send the invite emails
-          console.log('Sending invites to:', emails);
-        }
-      };
-      reader.readAsText(file);
-    }
+  const handleCloseDetails = () => {
+    setSelectedContact(null);
+    setContactListings([]);
   };
 
   const filteredContacts = contacts.filter(contact =>
     contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    contact.email.toLowerCase().includes(searchQuery.toLowerCase())
+    contact.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    contact.business_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredUsers = appUsers.filter(user =>
-    (user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())) &&
-    !contacts.some(contact => contact.id === user.id)
-  );
+  const teamLeads = filteredContacts.filter(contact => contact.is_team_lead);
+  const teamMembers = filteredContacts.filter(contact => !contact.is_team_lead);
 
-  const pendingRequests = filteredContacts.filter(contact => contact.status === 'pending');
-  const sentRequests = filteredContacts.filter(contact => contact.status === 'requested');
-  const friends = filteredContacts.filter(contact => contact.status === 'friend');
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(price);
+  };
 
   return (
-    <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
-      <div className="max-w-4xl mx-auto">
+    <div className="p-8 bg-gray-50 dark:bg-gray-900 min-h-screen">
+      <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Contacts</h1>
+            <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Scraped Contacts</h1>
           </div>
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <Mail className="w-4 h-4 mr-2" />
-            Invite Friends
-          </button>
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {contacts.length} total contacts
+          </div>
         </div>
 
         <div className="mb-8">
@@ -174,218 +146,267 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search users or contacts..."
+              placeholder="Search by name, email, or business..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             />
           </div>
         </div>
 
-        {searchQuery && filteredUsers.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Search Results
-            </h2>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredUsers.map((user) => (
-                <div key={user.id} className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={user.avatar}
-                      alt={user.name}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-white">{user.name}</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleSendRequest(user)}
-                    className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Add Friend
-                  </button>
-                </div>
-              ))}
-            </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
-        )}
-
-        {pendingRequests.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Pending Requests
-            </h2>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm divide-y divide-gray-200 dark:divide-gray-700">
-              {pendingRequests.map((contact) => (
-                <div key={contact.id} className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={contact.avatar}
-                      alt={contact.name}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-white">{contact.name}</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{contact.email}</p>
+        ) : (
+          <div className="space-y-8">
+            {teamLeads.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-yellow-600" />
+                  Team Leads ({teamLeads.length})
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {teamLeads.map((contact) => (
+                    <div
+                      key={contact.id}
+                      onClick={() => handleContactClick(contact)}
+                      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                            {contact.name || 'Unknown'}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                            <Building2 className="w-4 h-4" />
+                            {contact.business_name || 'No business'}
+                          </p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <div className="space-y-1">
+                        {contact.email && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                            <Mail className="w-3 h-3" />
+                            {contact.email}
+                          </p>
+                        )}
+                        {(contact.phone || contact.phone_cell) && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {contact.phone_cell || contact.phone}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleAcceptRequest(contact.id)}
-                      className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-full"
-                    >
-                      <Check className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleRejectRequest(contact.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {sentRequests.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Sent Requests
-            </h2>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm divide-y divide-gray-200 dark:divide-gray-700">
-              {sentRequests.map((contact) => (
-                <div key={contact.id} className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={contact.avatar}
-                      alt={contact.name}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-white">{contact.name}</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{contact.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-gray-400" />
-                    <button
-                      onClick={() => handleCancelRequest(contact.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Friends ({friends.length})
-          </h2>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm divide-y divide-gray-200 dark:divide-gray-700">
-            {friends.length === 0 ? (
-              <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                No friends added yet
               </div>
-            ) : (
-              friends.map((contact) => (
-                <div key={contact.id} className="flex items-center justify-between p-4 group">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={contact.avatar}
-                      alt={contact.name}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-white">{contact.name}</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{contact.email}</p>
+            )}
+
+            {teamMembers.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <User className="w-5 h-5 text-gray-600" />
+                  Team Members ({teamMembers.length})
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {teamMembers.map((contact) => (
+                    <div
+                      key={contact.id}
+                      onClick={() => handleContactClick(contact)}
+                      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                            {contact.name || 'Unknown'}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                            <Building2 className="w-4 h-4" />
+                            {contact.business_name || 'No business'}
+                          </p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <div className="space-y-1">
+                        {contact.email && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                            <Mail className="w-3 h-3" />
+                            {contact.email}
+                          </p>
+                        )}
+                        {(contact.phone || contact.phone_cell) && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {contact.phone_cell || contact.phone}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveFriend(contact.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  ))}
                 </div>
-              ))
+              </div>
+            )}
+
+            {filteredContacts.length === 0 && !loading && (
+              <div className="text-center py-12">
+                <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">No contacts found</p>
+              </div>
             )}
           </div>
-        </div>
+        )}
       </div>
 
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-              Invite Friends
-            </h2>
-            <div className="space-y-6">
-              <form onSubmit={handleSendInvite} className="space-y-4">
-                <div>
-                  <label htmlFor="inviteEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    id="inviteEmail"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="friend@example.com"
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  {inviteError && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{inviteError}</p>
-                  )}
-                </div>
-                <button
-                  type="submit"
-                  className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Send Invite
-                </button>
-              </form>
+      {selectedContact && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {selectedContact.is_team_lead && (
+                  <Award className="w-6 h-6 text-yellow-600" />
+                )}
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {selectedContact.name}
+                </h2>
+              </div>
+              <button
+                onClick={handleCloseDetails}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
+              >
+                <X className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+              </button>
+            </div>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">Or</span>
+            <div className="p-6 space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Contact Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-start gap-3">
+                    <Building2 className="w-5 h-5 text-gray-400 mt-1" />
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Business Name</p>
+                      <p className="text-gray-900 dark:text-white">{selectedContact.business_name || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Mail className="w-5 h-5 text-gray-400 mt-1" />
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
+                      <a
+                        href={`mailto:${selectedContact.email}`}
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        {selectedContact.email || 'N/A'}
+                      </a>
+                    </div>
+                  </div>
+                  {selectedContact.phone_cell && (
+                    <div className="flex items-start gap-3">
+                      <Phone className="w-5 h-5 text-gray-400 mt-1" />
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Cell Phone</p>
+                        <a
+                          href={`tel:${selectedContact.phone_cell}`}
+                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {selectedContact.phone_cell}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                  {selectedContact.phone_brokerage && (
+                    <div className="flex items-start gap-3">
+                      <Phone className="w-5 h-5 text-gray-400 mt-1" />
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Brokerage Phone</p>
+                        <a
+                          href={`tel:${selectedContact.phone_brokerage}`}
+                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {selectedContact.phone_brokerage}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                  {selectedContact.phone_business && (
+                    <div className="flex items-start gap-3">
+                      <Phone className="w-5 h-5 text-gray-400 mt-1" />
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Business Phone</p>
+                        <a
+                          href={`tel:${selectedContact.phone_business}`}
+                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {selectedContact.phone_business}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-3">
+                    <User className="w-5 h-5 text-gray-400 mt-1" />
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Role</p>
+                      <p className="text-gray-900 dark:text-white">
+                        {selectedContact.is_team_lead ? 'Team Lead' : 'Team Member'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div>
-                <label className="w-full flex flex-col items-center px-4 py-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors">
-                  <Upload className="w-8 h-8 text-gray-400 dark:text-gray-500 mb-2" />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Upload List of Emails</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">(.txt or .csv)</span>
-                  <input
-                    type="file"
-                    accept=".txt,.csv"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
-                >
-                  Close
-                </button>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Home className="w-5 h-5" />
+                  Listings ({contactListings.length})
+                </h3>
+                {loadingListings ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : contactListings.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {contactListings.map((listing) => (
+                      <div key={listing.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                        {listing.primary_photo_url && (
+                          <img
+                            src={listing.primary_photo_url}
+                            alt={listing.address_line1}
+                            className="w-full h-40 object-cover rounded-lg mb-3"
+                          />
+                        )}
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-gray-900 dark:text-white">
+                            {formatPrice(listing.price)}
+                          </h4>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                            <MapPin className="w-4 h-4" />
+                            {listing.address_line1}, {listing.city}, {listing.state} {listing.postal_code}
+                          </p>
+                          <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                            <span>{listing.bedrooms} bed</span>
+                            <span>{listing.bathrooms} bath</span>
+                            {listing.living_area_value && (
+                              <span>{listing.living_area_value.toLocaleString()} {listing.living_area_units}</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                            {listing.home_type} • {listing.status}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Home className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-600 dark:text-gray-400">No listings found</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
