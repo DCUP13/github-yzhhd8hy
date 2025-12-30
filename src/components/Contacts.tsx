@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Building2, Mail, Phone, MapPin, Home, ChevronRight, X, Award, User } from 'lucide-react';
+import { Users, Search, Building2, Mail, Phone, MapPin, Home, ChevronRight, X, Award, User, Trash2, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface Contact {
@@ -51,10 +51,29 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [contactListings, setContactListings] = useState<Listing[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchContacts();
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.bulk-actions-dropdown')) {
+        setShowBulkActions(false);
+      }
+    };
+
+    if (showBulkActions) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showBulkActions]);
 
   const fetchContacts = async () => {
     try {
@@ -111,6 +130,73 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
     setContactListings([]);
   };
 
+  const handleDeleteContact = async (contactId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!window.confirm('Are you sure you want to delete this contact? This will also delete all associated listings.')) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('id', contactId);
+
+      if (error) throw error;
+
+      setContacts(contacts.filter(c => c.id !== contactId));
+
+      if (selectedContact?.id === contactId) {
+        setSelectedContact(null);
+        setContactListings([]);
+      }
+    } catch (error) {
+      console.error('Error deleting contact:', error);
+      alert('Failed to delete contact. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (!window.confirm(`Are you sure you want to delete all ${contacts.length} contacts? This action cannot be undone and will also delete all associated listings.`)) {
+      return;
+    }
+
+    if (!window.confirm('This is your final warning. This will permanently delete ALL contacts. Are you absolutely sure?')) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setContacts([]);
+      setSelectedContact(null);
+      setContactListings([]);
+      setShowBulkActions(false);
+      alert('All contacts have been deleted successfully.');
+    } catch (error) {
+      console.error('Error deleting all contacts:', error);
+      alert('Failed to delete all contacts. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const filteredContacts = contacts.filter(contact =>
     contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     contact.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -136,8 +222,36 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
             <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Scraped Contacts</h1>
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {contacts.length} total contacts
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {contacts.length} total contacts
+            </div>
+            {contacts.length > 0 && (
+              <div className="relative bulk-actions-dropdown">
+                <button
+                  onClick={() => setShowBulkActions(!showBulkActions)}
+                  disabled={deleting}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Bulk Actions
+                  <ChevronDown className="w-4 h-4 ml-2" />
+                </button>
+                {showBulkActions && (
+                  <div className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-10">
+                    <div className="py-1">
+                      <button
+                        onClick={handleDeleteAll}
+                        disabled={deleting}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete All Contacts
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -171,7 +285,7 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
                     <div
                       key={contact.id}
                       onClick={() => handleContactClick(contact)}
-                      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow cursor-pointer"
+                      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow cursor-pointer relative group"
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
@@ -183,7 +297,17 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
                             {contact.business_name || 'No business'}
                           </p>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => handleDeleteContact(contact.id, e)}
+                            disabled={deleting}
+                            className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete contact"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          <ChevronRight className="w-5 h-5 text-gray-400" />
+                        </div>
                       </div>
                       <div className="space-y-1">
                         {contact.email && (
@@ -216,7 +340,7 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
                     <div
                       key={contact.id}
                       onClick={() => handleContactClick(contact)}
-                      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow cursor-pointer"
+                      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow cursor-pointer relative group"
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
@@ -228,7 +352,17 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
                             {contact.business_name || 'No business'}
                           </p>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => handleDeleteContact(contact.id, e)}
+                            disabled={deleting}
+                            className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete contact"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          <ChevronRight className="w-5 h-5 text-gray-400" />
+                        </div>
                       </div>
                       <div className="space-y-1">
                         {contact.email && (
