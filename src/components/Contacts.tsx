@@ -58,22 +58,6 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
     fetchContacts();
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.bulk-actions-dropdown')) {
-        setShowBulkActions(false);
-      }
-    };
-
-    if (showBulkActions) {
-      document.addEventListener('click', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [showBulkActions]);
 
   const fetchContacts = async () => {
     try {
@@ -227,9 +211,12 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
               {contacts.length} total contacts
             </div>
             {contacts.length > 0 && (
-              <div className="relative bulk-actions-dropdown">
+              <div className="relative">
                 <button
-                  onClick={() => setShowBulkActions(!showBulkActions)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowBulkActions(!showBulkActions);
+                  }}
                   disabled={deleting}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -237,18 +224,28 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
                   <ChevronDown className="w-4 h-4 ml-2" />
                 </button>
                 {showBulkActions && (
-                  <div className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-10">
-                    <div className="py-1">
-                      <button
-                        onClick={handleDeleteAll}
-                        disabled={deleting}
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete All Contacts
-                      </button>
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowBulkActions(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-56 rounded-lg shadow-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 z-20">
+                      <div className="py-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowBulkActions(false);
+                            handleDeleteAll();
+                          }}
+                          disabled={deleting}
+                          className="w-full text-left px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete All Contacts
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             )}
