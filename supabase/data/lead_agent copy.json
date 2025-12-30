@@ -1,0 +1,1651 @@
+{
+    "about": null,
+    "agentLicenses": [
+        {
+            "text": "573025",
+            "state": "TX",
+            "status": "disabled",
+            "original_status": "disabled",
+            "license_type": "agent",
+            "expiration": "2027-02-28"
+        },
+        {
+            "text": "9002192 ",
+            "state": "TX",
+            "status": "expired",
+            "original_status": "active",
+            "license_type": "agent",
+            "expiration": "2025-03-31"
+        }
+    ],
+    "agentSalesStats": {
+        "countAllTime": 3660,
+        "countLastYear": 243,
+        "priceRangeThreeYearMin": 60000,
+        "priceRangeThreeYearMax": 3100000,
+        "averageValueThreeYear": 497617,
+        "stats_include_team": true
+    },
+    "displayUser": {
+        "encodedZuid": "X1-ZUz3fc6ch3xp8p_10irz",
+        "screenName": "JamesKrueger",
+        "inCanada": false,
+        "name": "James Krueger",
+        "flag": 1769476,
+        "profileTypeIds": [
+            1,
+            2,
+            4,
+            8,
+            12,
+            15,
+            16
+        ],
+        "profileTypes": [
+            "consumer",
+            "agent",
+            "apiDeveloper",
+            "broker",
+            "showcaseBuyer",
+            "peeps",
+            "renter"
+        ],
+        "businessAddress": {
+            "address1": "2000 Ella Blvd",
+            "address2": null,
+            "city": "Houston",
+            "state": "TX",
+            "postalCode": "77008"
+        },
+        "businessName": "Corcoran Prestige Realty",
+        "isTopAgent": true,
+        "profileImageId": 16094502771,
+        "profilePhotoSrc": "https://photos.zillowstatic.com/fp/d8629bd048ad262c0ebc3065fc03a431-h_l.jpg",
+        "ratings": {
+            "average": 5,
+            "count": 2728,
+            "__typename": "ReviewRatings"
+        },
+        "phoneNumbers": {
+            "cell": "(346) 980-4783",
+            "brokerage": "(346) 980-4783",
+            "business": "(713) 364-4003"
+        },
+        "email": "hello@corcoranprestige.com"
+    },
+    "forRentListings": {
+        "listings": [
+            {
+                "zpid": 28257462,
+                "home_type": "singleFamily",
+                "address": {
+                    "line1": "7010 Foxmar Ln",
+                    "line2": "Humble, TX 77338",
+                    "city": "Humble",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77338"
+                },
+                "bedrooms": 2,
+                "bathrooms": 2,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/eb33328e464a0b23636ca7ca9ffc5eaa-a_a.jpg",
+                "price": 1750,
+                "price_currency": "usd",
+                "status": "forRent",
+                "latitude": 30.010609,
+                "longitude": -95.318756,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forRent",
+                "has_vr_model": false,
+                "listing_url": "/homedetails/7010-Foxmar-Ln-Humble-TX-77338/28257462_zpid/"
+            },
+            {
+                "zpid": 459226238,
+                "home_type": "multiFamily",
+                "address": {
+                    "line1": "9708 Stedman St UNIT B",
+                    "line2": "Houston, TX 77029",
+                    "city": "Houston",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77029"
+                },
+                "bedrooms": 2,
+                "bathrooms": 3,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/1dea1e58dc1e9531879dca5074a966cc-a_a.jpg",
+                "price": 1600,
+                "price_currency": "usd",
+                "status": "forRent",
+                "latitude": 29.751741,
+                "longitude": -95.25688,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forRent",
+                "has_vr_model": false,
+                "listing_url": "/homedetails/9708-Stedman-St-UNIT-B-Houston-TX-77029/459226238_zpid/"
+            },
+            {
+                "zpid": 459223575,
+                "home_type": "singleFamily",
+                "address": {
+                    "line1": "5615 Barremore St #B",
+                    "line2": "Houston, TX 77023",
+                    "city": "Houston",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77023"
+                },
+                "bedrooms": 1,
+                "bathrooms": 1,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/f524ae78c0b08e0dd8ac8fb7db775fb0-a_a.jpg",
+                "price": 1295,
+                "price_currency": "usd",
+                "status": "forRent",
+                "latitude": 29.722683,
+                "longitude": -95.318596,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forRent",
+                "has_vr_model": false,
+                "listing_url": "/homedetails/5615-Barremore-St-B-Houston-TX-77023/459223575_zpid/"
+            },
+            {
+                "zpid": 459156821,
+                "home_type": "multiFamily",
+                "address": {
+                    "line1": "9708 Stedman St #A",
+                    "line2": "Houston, TX 77029",
+                    "city": "Houston",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77029"
+                },
+                "bedrooms": 2,
+                "bathrooms": 3,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/0a6c245037c43353eb279af76e1bb82c-a_a.jpg",
+                "price": 1600,
+                "price_currency": "usd",
+                "status": "forRent",
+                "latitude": 29.751741,
+                "longitude": -95.25688,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forRent",
+                "has_vr_model": false,
+                "listing_url": "/homedetails/9708-Stedman-St-A-Houston-TX-77029/459156821_zpid/"
+            },
+            {
+                "zpid": 337102598,
+                "home_type": "singleFamily",
+                "address": {
+                    "line1": "15011 Red Buckeye Dr",
+                    "line2": "Cypress, TX 77433",
+                    "city": "Cypress",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77433"
+                },
+                "bedrooms": 5,
+                "bathrooms": 3,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/a1d6e3dfd06efaf9806bb5ec26750ab8-a_a.jpg",
+                "price": 3250,
+                "price_currency": "usd",
+                "status": "forRent",
+                "latitude": 29.922916,
+                "longitude": -95.7395,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forRent",
+                "has_vr_model": false,
+                "listing_url": "/homedetails/15011-Red-Buckeye-Dr-Cypress-TX-77433/337102598_zpid/"
+            }
+        ],
+        "listing_count": 10
+    },
+    "forSaleListings": {
+        "listings": [
+            {
+                "zpid": 440643159,
+                "home_type": "singleFamily",
+                "address": {
+                    "line1": "32318 Dusted Bronze Dr",
+                    "line2": "Brookshire, TX 77423",
+                    "city": "Brookshire",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77423"
+                },
+                "bedrooms": 4,
+                "bathrooms": 3,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/69d14d66b7ecae4f05490b42130a6396-a_a.jpg",
+                "price": 400000,
+                "price_currency": "usd",
+                "status": "fsba",
+                "latitude": 29.724041,
+                "longitude": -95.93019,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forSale",
+                "has_vr_model": true,
+                "listing_url": "/homedetails/32318-Dusted-Bronze-Dr-Brookshire-TX-77423/440643159_zpid/"
+            },
+            {
+                "zpid": 2121140703,
+                "home_type": "singleFamily",
+                "address": {
+                    "line1": "1310 Ainsley Way Dr",
+                    "line2": "Pearland, TX 77581",
+                    "city": "Pearland",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77581"
+                },
+                "bedrooms": 4,
+                "bathrooms": 3,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/6cdcd1d849be837acc9b7b23bedbd099-a_a.jpg",
+                "price": 349900,
+                "price_currency": "usd",
+                "status": "fsba",
+                "latitude": 29.541525,
+                "longitude": -95.22649,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forSale",
+                "has_vr_model": false,
+                "listing_url": "/homedetails/1310-Ainsley-Way-Dr-Pearland-TX-77581/2121140703_zpid/"
+            },
+            {
+                "zpid": 28331034,
+                "home_type": "singleFamily",
+                "address": {
+                    "line1": "8239 Twin Tree Ln",
+                    "line2": "Houston, TX 77071",
+                    "city": "Houston",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77071"
+                },
+                "bedrooms": 3,
+                "bathrooms": 2,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/b2f62abae4cf6b4da42ffed33b5f1baa-a_a.jpg",
+                "price": 214995,
+                "price_currency": "usd",
+                "status": "fsba",
+                "latitude": 29.639126,
+                "longitude": -95.52443,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forSale",
+                "has_vr_model": true,
+                "listing_url": "/homedetails/8239-Twin-Tree-Ln-Houston-TX-77071/28331034_zpid/"
+            },
+            {
+                "zpid": 27671467,
+                "home_type": "singleFamily",
+                "address": {
+                    "line1": "3322 1st Ave S",
+                    "line2": "Texas City, TX 77590",
+                    "city": "Texas City",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77590"
+                },
+                "bedrooms": 3,
+                "bathrooms": 1,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/0cfb12b90de67390c424a25d4150af10-a_a.jpg",
+                "price": 215000,
+                "price_currency": "usd",
+                "status": "fsba",
+                "latitude": 29.382849,
+                "longitude": -94.94575,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forSale",
+                "has_vr_model": false,
+                "listing_url": "/homedetails/3322-1st-Ave-S-Texas-City-TX-77590/27671467_zpid/"
+            },
+            {
+                "zpid": 28284086,
+                "home_type": "singleFamily",
+                "address": {
+                    "line1": "20102 Hickory Wind Dr",
+                    "line2": "Humble, TX 77346",
+                    "city": "Humble",
+                    "stateOrProvince": "TX",
+                    "postalCode": "77346"
+                },
+                "bedrooms": 4,
+                "bathrooms": 3,
+                "openHouses": "",
+                "hasOpenHouse": false,
+                "primary_photo_url": "https://photos.zillowstatic.com/fp/c17675c2e7d5912586501cf7b8a11d5d-a_a.jpg",
+                "price": 415000,
+                "price_currency": "usd",
+                "status": "fsba",
+                "latitude": 30.010286,
+                "longitude": -95.163246,
+                "brokerage_name": "Corcoran Prestige Realty",
+                "home_marketing_status": "active",
+                "home_marketing_type": "forSale",
+                "has_vr_model": false,
+                "listing_url": "/homedetails/20102-Hickory-Wind-Dr-Humble-TX-77346/28284086_zpid/"
+            }
+        ],
+        "listing_count": 45
+    },
+    "getToKnowMe": {
+        "title": "Broker / Owner",
+        "description": "<p>At Corcoran Prestige Realty, we&#8217;ve built more than a company&#8212;we&#8217;ve cultivated a family dedicated to raising each other up. Our commitment goes far beyond transactions; it&#8217;s about making a meaningful difference in the lives of those we serve. We have embraced a culture where every interaction is an opportunity to support, uplift, and positively impact those around us. Since 2011, our team has been more than just professionals; we are a group of individuals who care deeply about the people we work with and the neighborhoods we serve. Whether we&#8217;re helping you find your dream home or navigate the complexities of the market, our goal is simple: to be genuinely helpful, every step of the way. We&#8217;re not just building a business, we&#8217;re building a community where kindness, support, and dedication lead the way.</p>\n",
+        "yearsInIndustry": 18,
+        "videoUrl": null,
+        "specialties": [
+            "Buyer's Agent",
+            "Listing Agent",
+            "Relocation",
+            "Property Management"
+        ],
+        "languages": [],
+        "websiteUrl": "https://corcoranprestige.com/",
+        "facebookUrl": "https://www.facebook.com/PrestigeCorcoran",
+        "linkedInUrl": "http://www.linkedin.com/in/jamesgkrueger",
+        "instagramUrl": "https://www.instagram.com/corcoranprestige/"
+    },
+    "lastYearPastSalesTotal": null,
+    "map": {
+        "mapCentroid": {
+            "latitude": "29.806593",
+            "longitude": "-95.392486"
+        },
+        "mapApiKey": "AIzaSyD4w61UyrLSs5ozaHmCCrhvnyPrJdNkZQ0"
+    },
+    "mlsIDs": [
+        {
+            "mls_ouid": "M00000599",
+            "mls_agent_id": "jkrueg"
+        }
+    ],
+    "otherLicenses": [
+        {
+            "licenseTypeID": 1,
+            "licenseCode": "573025",
+            "licenseDesc": "Real Estate Sales"
+        }
+    ],
+    "pastSales": {
+        "total": 3660,
+        "past_sales": [
+            {
+                "represented": "Seller",
+                "representedList": [
+                    "Seller"
+                ],
+                "sold_date": "12/24/2025",
+                "price": "--",
+                "zpid": 28488532,
+                "image_url": "https://photos.zillowstatic.com/fp/4a30d07a29c9eaf6d7519045caf67ae1-p_b.jpg",
+                "medium_image_url": "https://photos.zillowstatic.com/fp/4a30d07a29c9eaf6d7519045caf67ae1-p_d.jpg",
+                "image_alt": "2023 Gentryside Dr APT 108, Houston, TX, 77077",
+                "home_details_url": "/homedetails/2023-Gentryside-Dr-APT-108-Houston-TX-77077/28488532_zpid/",
+                "street_address": "2023 Gentryside Dr APT 108",
+                "city_state_zipcode": "Houston, TX, 77077",
+                "latitude": 29.744144,
+                "longitude": -95.61799,
+                "bathrooms": 2,
+                "bedrooms": 3,
+                "city": "Houston",
+                "state": "TX",
+                "livingAreaValue": 1081,
+                "livingAreaUnitsShort": "sqft",
+                "mlsLogoSrc": null
+            },
+            {
+                "represented": "Buyer",
+                "representedList": [
+                    "Buyer"
+                ],
+                "sold_date": "12/19/2025",
+                "price": "--",
+                "zpid": 455706241,
+                "image_url": "https://maps.googleapis.com/maps/api/staticmap?mobile=false&sensor=true&maptype=satellite&size=101x76&zoom=17&center=29.723966598510742,-95.64823150634766&key=AIzaSyBWYJWCA8FNMQvSe_k3LKfDGJaEgdKwsco&&signature=OPQotPeYZ0ucz55cGrlKhfVIFrM=",
+                "medium_image_url": "https://maps.googleapis.com/maps/api/staticmap?mobile=false&sensor=true&maptype=satellite&size=400x300&zoom=17&center=29.723966598510742,-95.64823150634766&key=AIzaSyBWYJWCA8FNMQvSe_k3LKfDGJaEgdKwsco&&signature=N44AnbdJQqdmcUJ-JWfRARVbwyQ=",
+                "image_alt": "14723 Blooming Jasmine Trl, Houston, TX, 77082",
+                "home_details_url": "/homedetails/14723-Blooming-Jasmine-Trl-Houston-TX-77082/455706241_zpid/",
+                "street_address": "14723 Blooming Jasmine Trl",
+                "city_state_zipcode": "Houston, TX, 77082",
+                "latitude": 29.723967,
+                "longitude": -95.64823,
+                "bathrooms": null,
+                "bedrooms": null,
+                "city": "Houston",
+                "state": "TX",
+                "livingAreaValue": null,
+                "livingAreaUnitsShort": null,
+                "mlsLogoSrc": null
+            },
+            {
+                "represented": "Buyer",
+                "representedList": [
+                    "Buyer"
+                ],
+                "sold_date": "12/18/2025",
+                "price": "--",
+                "zpid": 2061147166,
+                "image_url": "https://maps.googleapis.com/maps/api/streetview?location=2002+Village+Orchard+Ln%2C+Brookshire%2C+TX+77423&size=101x76&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=Y65nQMdzeU5592jzYbKQkgPirFM=",
+                "medium_image_url": "https://maps.googleapis.com/maps/api/streetview?location=2002+Village+Orchard+Ln%2C+Brookshire%2C+TX+77423&size=400x300&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=2zF_2m9R8GdR2qFJ_cVpiFYogKg=",
+                "image_alt": "2002 Village Orchard Ln, Brookshire, TX, 77423",
+                "home_details_url": "/homedetails/2002-Village-Orchard-Ln-Brookshire-TX-77423/2061147166_zpid/",
+                "street_address": "2002 Village Orchard Ln",
+                "city_state_zipcode": "Brookshire, TX, 77423",
+                "latitude": 29.762774,
+                "longitude": -95.88338,
+                "bathrooms": 2,
+                "bedrooms": 4,
+                "city": "Brookshire",
+                "state": "TX",
+                "livingAreaValue": 2148,
+                "livingAreaUnitsShort": "sqft",
+                "mlsLogoSrc": null
+            },
+            {
+                "represented": "Seller",
+                "representedList": [
+                    "Seller"
+                ],
+                "sold_date": "12/15/2025",
+                "price": "--",
+                "zpid": 439680902,
+                "image_url": "https://maps.googleapis.com/maps/api/streetview?location=17331+Red+Oak+Dr%2C+Houston%2C+TX+77090&size=101x76&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=giChMeT7byQOKQegbSSvmR8HmzY=",
+                "medium_image_url": "https://maps.googleapis.com/maps/api/streetview?location=17331+Red+Oak+Dr%2C+Houston%2C+TX+77090&size=400x300&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=_2nHk2enQGlpa8mnij1r0FIvJzk=",
+                "image_alt": "17331 Red Oak Dr APT 36, Houston, TX, 77090",
+                "home_details_url": "/homedetails/17331-Red-Oak-Dr-APT-36-Houston-TX-77090/439680902_zpid/",
+                "street_address": "17331 Red Oak Dr APT 36",
+                "city_state_zipcode": "Houston, TX, 77090",
+                "latitude": 30.023172,
+                "longitude": -95.44914,
+                "bathrooms": 1,
+                "bedrooms": 1,
+                "city": "Houston",
+                "state": "TX",
+                "livingAreaValue": 787,
+                "livingAreaUnitsShort": "sqft",
+                "mlsLogoSrc": null
+            },
+            {
+                "represented": "Buyer",
+                "representedList": [
+                    "Buyer"
+                ],
+                "sold_date": "12/12/2025",
+                "price": "--",
+                "zpid": 456835809,
+                "image_url": "https://photos.zillowstatic.com/fp/acf982e0c642f67b921a83d76d177914-p_b.jpg",
+                "medium_image_url": "https://photos.zillowstatic.com/fp/acf982e0c642f67b921a83d76d177914-p_d.jpg",
+                "image_alt": "831 Aspen Bluffs Rd, Crosby, TX, 77532",
+                "home_details_url": "/homedetails/831-Aspen-Bluffs-Rd-Crosby-TX-77532/456835809_zpid/",
+                "street_address": "831 Aspen Bluffs Rd",
+                "city_state_zipcode": "Crosby, TX, 77532",
+                "latitude": 29.892271,
+                "longitude": -95.07535,
+                "bathrooms": 2,
+                "bedrooms": 4,
+                "city": "Crosby",
+                "state": "TX",
+                "livingAreaValue": 2009,
+                "livingAreaUnitsShort": "sqft",
+                "mlsLogoSrc": null
+            }
+        ]
+    },
+    "preferredLenders": {
+        "lenders": []
+    },
+    "professionalInformation": [
+        {
+            "term": "Broker address",
+            "lines": [
+                "Corcoran Prestige Realty",
+                "2000 Ella Blvd",
+                "Houston, TX 77008"
+            ]
+        },
+        {
+            "term": "Cell phone",
+            "description": "(346) 980-4783"
+        },
+        {
+            "term": "Broker phone",
+            "description": "(346) 980-4783"
+        },
+        {
+            "term": "Websites",
+            "links": [
+                {
+                    "text": "Website",
+                    "url": "https://corcoranprestige.com/"
+                },
+                {
+                    "text": "Facebook",
+                    "url": "https://www.facebook.com/PrestigeCorcoran"
+                },
+                {
+                    "text": "Instagram",
+                    "url": "https://www.instagram.com/corcoranprestige/"
+                },
+                {
+                    "text": "LinkedIn",
+                    "url": "http://www.linkedin.com/in/jamesgkrueger"
+                }
+            ]
+        },
+        {
+            "term": "Screenname",
+            "description": "JamesKrueger"
+        },
+        {
+            "term": "Member since",
+            "description": "11/29/2007"
+        },
+        {
+            "term": "Real Estate Licenses",
+            "description": "Not provided"
+        },
+        {
+            "term": "Other Licenses",
+            "lines": [
+                "573025 (Real Estate Sales)"
+            ]
+        }
+    ],
+    "profileDisplay": null,
+    "reviewsData": {
+        "reviews": [
+            {
+                "reviewComment": "We were first time homebuyers with zero knowledge of this whole process. Alexis helped us understand each step we were going through and was so patient and understanding from touring homes (lots of homes) to the application and closing process. She was always available for us when we had questions or wanting to tour more houses, even when she was on vacation! She was super relatable and we felt so comfortable with her despite the uncomfortable unknown of buying a house. I\u2019ve already passed her info along to friends who are even considering buying a home cause she\u2019s that great! We\u2019re so thankful for her! ",
+                "reviewId": 9004259,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "alexiss94",
+                    "firstName": "Alexis",
+                    "lastName": "Stuart",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUqbx9ht1hzzt5_4hje0"
+                },
+                "reviewer": {
+                    "screenName": "carabrillantes95",
+                    "firstName": "Cara",
+                    "lastName": "Brillantes",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU17sldf4pako3t_8l13l"
+                },
+                "rating": 5,
+                "createDate": "2025-12-28T10:09:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2024 in Annalea kingspark, Friendswood, TX."
+            },
+            {
+                "reviewComment": "Paul delivered an exceptional home-buying experience from start to finish. As first-time buyers, we began the process with uncertainty, but his professionalism, expertise, and calm, confident guidance immediately put us at ease. Every interaction was handled with precision, transparency, and genuine care. Paul anticipated our needs, communicated clearly, and ensured no detail was overlooked. What could have felt overwhelming was instead seamless and thoughtfully managed. His commitment to excellence is unmistakable, and we are truly grateful for his guidance. We would confidently recommend Paul to anyone seeking a realtor who offers a polished, high-caliber experience.",
+                "reviewId": 9002662,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "paulmata agent",
+                    "firstName": "Paul",
+                    "lastName": "Mata",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU12s1qdeqevifd_55f21"
+                },
+                "reviewer": {
+                    "screenName": "monicamichellegarcia",
+                    "firstName": "Monica",
+                    "lastName": "Garcia",
+                    "suffix": "",
+                    "showName": true,
+                    "encodedZuid": "X1-ZU18c04eemcmhah_1651v"
+                },
+                "rating": 5,
+                "createDate": "2025-12-24T13:16:00",
+                "rebuttal": null,
+                "workDescription": "Property managed a home."
+            },
+            {
+                "reviewComment": "She's awesome and active respect her career, she helped us to find our home easily, we appreciate her support and the hard work with us she's doing great and she helped us to find the correct choice. ",
+                "reviewId": 8997047,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "mandyc19",
+                    "firstName": "Mandy",
+                    "lastName": "Randhawa",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU1723owsu7aqrt_adn9b"
+                },
+                "reviewer": {
+                    "screenName": "AlwsmelivecomN3oom",
+                    "firstName": null,
+                    "lastName": null,
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUqhaa0fn392q1_ahuyq"
+                },
+                "rating": 5,
+                "createDate": "2025-12-18T10:09:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2025 in Katy, TX."
+            },
+            {
+                "reviewComment": "\nWorking with Alex was A great experience. He was patient, supportive, and always had our best interests in mind. No question ever went unanswered, and they made the entire process feel easy and enjoyable. We are so grateful for his hard work and would absolutely recommend them to family and friends.",
+                "reviewId": 8992470,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "alexj5044",
+                    "firstName": "Alex",
+                    "lastName": "Pinedo",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU16wf1jcbjlszt_9fxlz"
+                },
+                "reviewer": {
+                    "screenName": "isabellaovalle4",
+                    "firstName": "Isabella",
+                    "lastName": "Ovalle",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUv8kr84n1snwp_305s2"
+                },
+                "rating": 5,
+                "createDate": "2025-12-14T18:11:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2025 in Crosby, TX."
+            },
+            {
+                "reviewComment": "Look, if you're navigating the Houston real estate market, Mandy is the person you want in your corner. She\u2019s not just a real estate agent; she's genuinely on your team, making what can be a totally stressful process feel surprisingly smooth. Clients constantly mention how patient Mandy is, ensuring you know exactly what's happening at every stage, so you never feel left in the dark. People describe her as incredibly knowledgeable and super hands-on. She\u2019s apparently got a background in law, which definitely shines through in how she handles negotiations and paperwork, fighting hard for her clients to get the best deal. You get the sense she really cares, taking the time to figure out what you actually want\u2014your budget, your must-haves, everything. That personalized attention makes you feel like you're her number one priority. She\u2019s professional, sharp, quick to respond, and goes above and beyond what you\u2019d expect from a typical agent. The overwhelming theme in her reviews is that she somehow manages to turn buying or selling a house from an anxiety-inducing nightmare into a positive, even exciting, experience. Her positive energy is contagious and keeps the whole process moving forward without the usual headaches.",
+                "reviewId": 8992448,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "mandyc19",
+                    "firstName": "Mandy",
+                    "lastName": "Randhawa",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU1723owsu7aqrt_adn9b"
+                },
+                "reviewer": {
+                    "screenName": "TimOmoniyi",
+                    "firstName": null,
+                    "lastName": null,
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU110vvdeni3zm1_9ljvv"
+                },
+                "rating": 5,
+                "createDate": "2025-12-14T17:45:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Apartment home in 2025 in Greater uptown, Houston, TX."
+            }
+        ],
+        "filters": [
+            {
+                "prompt": "All reviews",
+                "count": 2728,
+                "serviceTypeIds": null
+            },
+            {
+                "serviceTypeIds": [
+                    1
+                ],
+                "count": 1323,
+                "prompt": "Helped me buy"
+            },
+            {
+                "serviceTypeIds": [
+                    2
+                ],
+                "count": 224,
+                "prompt": "Helped me sell"
+            },
+            {
+                "serviceTypeIds": [
+                    3
+                ],
+                "count": 167,
+                "prompt": "Helped me buy and sell"
+            },
+            {
+                "serviceTypeIds": [
+                    7,
+                    6,
+                    4,
+                    5,
+                    999
+                ],
+                "count": 516,
+                "prompt": "We connected, but it did not work out"
+            },
+            {
+                "serviceTypeIds": [
+                    9,
+                    10,
+                    11,
+                    12
+                ],
+                "count": 462,
+                "prompt": "Renting or property management"
+            },
+            {
+                "serviceTypeIds": [
+                    15
+                ],
+                "count": 1,
+                "prompt": "They never responded to my inquiry"
+            }
+        ]
+    },
+    "reviewsParams": null,
+    "serviceAreas": [
+        {
+            "regionId": 1090,
+            "text": "Harris County, TX",
+            "url": "/harris-county-tx/"
+        },
+        {
+            "regionId": 2698,
+            "text": "Fort Bend County, TX",
+            "url": "/fort-bend-county-tx/"
+        },
+        {
+            "regionId": 7204,
+            "text": "Spring, TX",
+            "url": "/spring-tx/"
+        },
+        {
+            "regionId": 18800,
+            "text": "Katy, TX",
+            "url": "/katy-tx/"
+        },
+        {
+            "regionId": 20193,
+            "text": "River Oaks, TX",
+            "url": "/river-oaks-tx/"
+        },
+        {
+            "regionId": 26518,
+            "text": "Piney Point, Houston, TX",
+            "url": "/piney-point-houston-tx/"
+        },
+        {
+            "regionId": 28623,
+            "text": "Hunters Creek Village, Houston, TX",
+            "url": "/hunters-creek-village-houston-tx/"
+        },
+        {
+            "regionId": 30401,
+            "text": "Bellaire, TX",
+            "url": "/bellaire-tx/"
+        },
+        {
+            "regionId": 34308,
+            "text": "Tomball, TX",
+            "url": "/tomball-tx/"
+        },
+        {
+            "regionId": 38119,
+            "text": "Cypress, TX",
+            "url": "/cypress-tx/"
+        },
+        {
+            "regionId": 39051,
+            "text": "Houston, TX",
+            "url": "/houston-tx/"
+        },
+        {
+            "regionId": 41114,
+            "text": "Sugar Land, TX",
+            "url": "/sugar-land-tx/"
+        },
+        {
+            "regionId": 44734,
+            "text": "Conroe, TX",
+            "url": "/conroe-tx/"
+        },
+        {
+            "regionId": 46588,
+            "text": "Montgomery, TX",
+            "url": "/montgomery-tx/"
+        },
+        {
+            "regionId": 47379,
+            "text": "Richmond, TX",
+            "url": "/richmond-tx/"
+        },
+        {
+            "regionId": 47977,
+            "text": "The Woodlands, TX",
+            "url": "/the-woodlands-tx/"
+        },
+        {
+            "regionId": 48439,
+            "text": "West University Place, Houston, TX",
+            "url": "/west-university-place-houston-tx/"
+        },
+        {
+            "regionId": 232121,
+            "text": "Cinco Ranch, TX",
+            "url": "/cinco-ranch-tx/"
+        },
+        {
+            "regionId": 235537,
+            "text": "Meyerland Area, Houston, TX",
+            "url": "/meyerland-area-houston-tx/"
+        },
+        {
+            "regionId": 271305,
+            "text": "Braeswood Place, Houston, TX",
+            "url": "/braeswood-place-houston-tx/"
+        },
+        {
+            "regionId": 271355,
+            "text": "Downtown, Houston, TX",
+            "url": "/downtown-houston-tx/"
+        },
+        {
+            "regionId": 271411,
+            "text": "Greater Uptown, Houston, TX",
+            "url": "/greater-uptown-houston-tx/"
+        },
+        {
+            "regionId": 271467,
+            "text": "Memorial, Houston, TX",
+            "url": "/memorial-houston-tx/"
+        },
+        {
+            "regionId": 271469,
+            "text": "Midtown, Houston, TX",
+            "url": "/midtown-houston-tx/"
+        },
+        {
+            "regionId": 271481,
+            "text": "Montrose, Houston, TX",
+            "url": "/montrose-houston-tx/"
+        },
+        {
+            "regionId": 271582,
+            "text": "Spring Branch Central, Houston, TX",
+            "url": "/spring-branch-central-houston-tx/"
+        },
+        {
+            "regionId": 271585,
+            "text": "Spring Branch West, Houston, TX",
+            "url": "/spring-branch-west-houston-tx/"
+        },
+        {
+            "regionId": 271615,
+            "text": "University Place, Houston, TX",
+            "url": "/university-place-houston-tx/"
+        },
+        {
+            "regionId": 271637,
+            "text": "Westchase, Houston, TX",
+            "url": "/westchase-houston-tx/"
+        },
+        {
+            "regionId": 275158,
+            "text": "Rice Military, Houston, TX",
+            "url": "/rice-military-houston-tx/"
+        },
+        {
+            "regionId": 275188,
+            "text": "River Oaks, Houston, TX",
+            "url": "/river-oaks-houston-tx/"
+        },
+        {
+            "regionId": 276351,
+            "text": "Greater Heights, Houston, TX",
+            "url": "/greater-heights-houston-tx/"
+        },
+        {
+            "regionId": 403528,
+            "text": "Woodlake - Briarmeadow, Houston, TX",
+            "url": "/woodlake-briarmeadow-houston-tx/"
+        },
+        {
+            "regionId": 403530,
+            "text": "Greenway - Upper Kirby Area, Houston, TX",
+            "url": "/greenway-upper-kirby-area-houston-tx/"
+        },
+        {
+            "regionId": 403545,
+            "text": "Oak Forest - Garden Oaks, Houston, TX",
+            "url": "/oak-forest-garden-oaks-houston-tx/"
+        },
+        {
+            "regionId": 403549,
+            "text": "Lazy Brook - Timbergrove, Houston, TX",
+            "url": "/lazy-brook-timbergrove-houston-tx/"
+        },
+        {
+            "regionId": 403553,
+            "text": "Eldridge - West Oaks, Houston, TX",
+            "url": "/eldridge-west-oaks-houston-tx/"
+        },
+        {
+            "regionId": 403556,
+            "text": "Briarforest Area, Houston, TX",
+            "url": "/briarforest-area-houston-tx/"
+        },
+        {
+            "regionId": 403557,
+            "text": "Neartown - Montrose, Houston, TX",
+            "url": "/neartown-montrose-houston-tx/"
+        }
+    ],
+    "teamDisplayInformation": {
+        "teamLeadInfo": {
+            "teamName": "Corcoran Prestige Realty",
+            "children": [
+                {
+                    "name": "Erin McKie",
+                    "screenName": "erin484",
+                    "ratings": {
+                        "count": 224,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/988a97bbbc2dc0543386c1c75f3b62a5-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUx8yemfta80zt_9y704"
+                },
+                {
+                    "name": "Christine Lahori",
+                    "screenName": "Christine1947",
+                    "ratings": {
+                        "count": 192,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/fa34b1b854fe85c6970df6547a54ddc0-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU14ovzdsvwmivd_1ekgp"
+                },
+                {
+                    "name": "Gonzalo Vargas",
+                    "screenName": "gonzalo140",
+                    "ratings": {
+                        "count": 151,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/ae7a010d440638feebd53632ad7565f2-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUxc8t6eq0p9mx_1zmzs"
+                },
+                {
+                    "name": "Sloane Laswell",
+                    "screenName": "Sloane94",
+                    "ratings": {
+                        "count": 103,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/8d0ec68c8eedff579f60e9eb22f38edf-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUvj8iltml7y15_a3ta0"
+                },
+                {
+                    "name": "Isaigha McNeil",
+                    "screenName": "isaigham",
+                    "ratings": {
+                        "count": 100,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/b3509e5928332f53d02d6f282fa4d97f-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUrwq0jercludl_3pg0k"
+                },
+                {
+                    "name": "Alex Pinedo",
+                    "screenName": "alexj5044",
+                    "ratings": {
+                        "count": 59,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/da02cf4c686f99b0a1bd4fbf59e8cc67-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU16wf1jcbjlszt_9fxlz"
+                },
+                {
+                    "name": "Gordana Hamati",
+                    "screenName": "Gordanah",
+                    "ratings": {
+                        "count": 43,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/c5fb3f42a0e7faf914cfa03c0646be4e-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU16b71nb213r49_8w9nd"
+                },
+                {
+                    "name": "Julia Alexander",
+                    "screenName": "juliaacorcoran",
+                    "ratings": {
+                        "count": 33,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/0a32a5cf8090d203cc3451be694bbe00-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUw6ma1acnb85l_9ej1i"
+                },
+                {
+                    "name": "Danya Jabr",
+                    "screenName": "ddjabr",
+                    "ratings": {
+                        "count": 33,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/6b89fdc28c5215a3e9872a4962992e47-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU10pjk5t9luvpl_9iqqx"
+                },
+                {
+                    "name": "Alfredo Sabal",
+                    "screenName": "alfredo58",
+                    "ratings": {
+                        "count": 31,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/bd2c62e84999526cb89effe27e2e1276-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUw8pkb470n85l_9mygc"
+                },
+                {
+                    "name": "Tyshawn Whitt",
+                    "screenName": "Tyshawn Whitt",
+                    "ratings": {
+                        "count": 30,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/3dbfe4100cf3bd68f07dc7444e444fc8-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUrb34k8ewiux5_93ahq"
+                },
+                {
+                    "name": "Cam Doubenmier",
+                    "screenName": "cam11722",
+                    "ratings": {
+                        "count": 29,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/e6d4eab6dba31f3de1d3cf8e933a8614-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU15tnymx4sfuo9_81d4z"
+                },
+                {
+                    "name": "Denise Ostner",
+                    "screenName": "deniseo41",
+                    "ratings": {
+                        "count": 28,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/d5165e7cd4509a240759555ef61c7817-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUrcreh4pm7ymh_3s95i"
+                },
+                {
+                    "name": "Ashlan Leonard",
+                    "screenName": "Ashlan Leonard",
+                    "ratings": {
+                        "count": 26,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/c68f7b9fc8f7d660da4d22dc06eacb19-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU159o3rffcqxop_86zev"
+                },
+                {
+                    "name": "Tyler Green",
+                    "screenName": "tyler8859",
+                    "ratings": {
+                        "count": 26,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/58baff5682a9a94aecbbd4cb8530fdea-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU15y3lbe89lxc9_5gnlt"
+                },
+                {
+                    "name": "Mandy Randhawa",
+                    "screenName": "mandyc19",
+                    "ratings": {
+                        "count": 21,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/d0ebb01f764cf8e9e8c6e5e6443c27ae-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU1723owsu7aqrt_adn9b"
+                },
+                {
+                    "name": "Cassidy Kozminski",
+                    "screenName": "cassidy9650",
+                    "ratings": {
+                        "count": 18,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/9b7f04ec9bc6a3d2042469e78fe30e54-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUsdarp0nwgqa1_282em"
+                },
+                {
+                    "name": "Danielle Frazer",
+                    "screenName": "Daniellef36",
+                    "ratings": {
+                        "count": 18,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/2e8d50d63378e7437c62df4e41ce6231-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUrpixkn3njxu1_3jtqo"
+                },
+                {
+                    "name": "Sandrena Stanford",
+                    "screenName": "sandrenas6",
+                    "ratings": {
+                        "count": 18,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/f129e76f0622fa6905c08a8d6eaa455e-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU16jgjdp2u1hjd_7kibb"
+                },
+                {
+                    "name": "Martin Tijmes",
+                    "screenName": "rowdyrealtormartin",
+                    "ratings": {
+                        "count": 18,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/0f8fb994684f467348ae1e544f1d120b-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUyg4wcqw5t5ah_2jaye"
+                },
+                {
+                    "name": "Mac Nunez",
+                    "screenName": "MacarioTheRealtor",
+                    "ratings": {
+                        "count": 17,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/4c8388ed1ed08cbde5acc1529f9cb09b-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUqoymrozkkqvd_6ttic"
+                },
+                {
+                    "name": "Nick Ferraiuolo",
+                    "screenName": "nickf954",
+                    "ratings": {
+                        "count": 15,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/724cfc7b311fd65ce5b097eaa11942f1-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUrz0of47qiio9_90hcs"
+                },
+                {
+                    "name": "Avery Doubenmier",
+                    "screenName": "averydoub",
+                    "ratings": {
+                        "count": 15,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/0fbb71af865f45ab5c7bebc0076c0b27-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU166qtap4monwp_5gnlt"
+                },
+                {
+                    "name": "Amy Doubenmier",
+                    "screenName": "amysellstxhomes",
+                    "ratings": {
+                        "count": 14,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/d2ae90774bdd5c96094f398594ce1bc8-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU13rupjwya0a2x_aroy1"
+                },
+                {
+                    "name": "Sandrine El Hage",
+                    "screenName": "sandrinee2",
+                    "ratings": {
+                        "count": 13,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/44018efb58b6edb195c74696f6ec444b-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU15z0pnrlnark9_8fetp"
+                },
+                {
+                    "name": "Lucy Woo",
+                    "screenName": "lucyw22",
+                    "ratings": {
+                        "count": 13,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/99dceb06fbd334c0bd6ba21e319cb53f-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUqnhesepvrksp_6r0de"
+                },
+                {
+                    "name": "Chris O'Docharty",
+                    "screenName": "chriso040",
+                    "ratings": {
+                        "count": 10,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/b766f79ac1e1a00385d2beef9a5387d5-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU1774y0tydk0ll_aovt3"
+                },
+                {
+                    "name": "Kenneth Godoy",
+                    "screenName": "kenneth611",
+                    "ratings": {
+                        "count": 10,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/14be984fca49866ed4b493c13f56598f-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUrbz1ywyno9hl_7rj5o"
+                },
+                {
+                    "name": "Diana Garcia",
+                    "screenName": "diana9100",
+                    "ratings": {
+                        "count": 9,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/e53a2c52a3551094af1b4386c04b4341-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU10qg4rfq6w64p_5xifh"
+                },
+                {
+                    "name": "Melissa Borrego",
+                    "screenName": "melissab0204",
+                    "ratings": {
+                        "count": 9,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/ce70af2dc08bc1ede9f03c3925c3fac8-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUrwoankz27i15_1is64"
+                },
+                {
+                    "name": "Louisa Gomez",
+                    "screenName": "Louisa2315",
+                    "ratings": {
+                        "count": 8,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/6f9bb3b9c9d815ea8fe60a60e166cd43-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU14r1zu2rdkykp_a80zf"
+                },
+                {
+                    "name": "Doris Chapa",
+                    "screenName": "dorischapa",
+                    "ratings": {
+                        "count": 8,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/b3e313f84df2fca2858ebf4bafbc5db9-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUs9mrrukoyebt_6a5jq"
+                },
+                {
+                    "name": "Chelsea Tucker",
+                    "screenName": "chelseat93",
+                    "ratings": {
+                        "count": 8,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/89b353e495e6bcb90ba724be6316c253-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUs2ljuff76f49_1d5w8"
+                },
+                {
+                    "name": "Nhi Van",
+                    "screenName": "NhiThiVanRealtor",
+                    "ratings": {
+                        "count": 6,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/aee761d118a967872656beee07954b31-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUq97v4za3omx5_a1052"
+                },
+                {
+                    "name": "Jo Lee Scott",
+                    "screenName": "jolees1",
+                    "ratings": {
+                        "count": 5,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/4b4c41474b2453a431cb65e8b3ee0afe-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUrgx89pf9nsi1_anh8m"
+                },
+                {
+                    "name": "Sulma Segovia",
+                    "screenName": "sulma06",
+                    "ratings": {
+                        "count": 5,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/b0bc01ae7fd0be4091c3068b78ad3c04-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU17etjemrz2kuh_5p30n"
+                },
+                {
+                    "name": "Landen Davis",
+                    "screenName": "landen55",
+                    "ratings": {
+                        "count": 5,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/2ea51a38fc2d4fc220191f2b46a1148e-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUqhl2pym5aeix_728x6"
+                },
+                {
+                    "name": "Alexis Stuart",
+                    "screenName": "alexiss94",
+                    "ratings": {
+                        "count": 3,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/57fb2b8a1ffe8b3b01c458fb2f3060ab-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUqbx9ht1hzzt5_4hje0"
+                },
+                {
+                    "name": "Phoebe Cohen",
+                    "screenName": "phoebec53",
+                    "ratings": {
+                        "count": 3,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/7bfb5c99ba8960b821be17ee0078c5a0-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU17wfjvk03zax5_2f38z"
+                },
+                {
+                    "name": "Melissa Eastvedt",
+                    "screenName": "melissakayehtx",
+                    "ratings": {
+                        "count": 2,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/cc3a19ae7760fef0c967c8f83588c922-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU17tdw5u6uh43t_2kpiv"
+                },
+                {
+                    "name": "Brandt Henderson",
+                    "screenName": "brandt05",
+                    "ratings": {
+                        "count": 2,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/1aedd3caf6d0945c16f0e857c3ec2a29-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUq79bjjklnytl_ako3o"
+                },
+                {
+                    "name": "Rheana McRoy",
+                    "screenName": "Rheana Mc",
+                    "ratings": {
+                        "count": 2,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/44cb8ef232fb916689c064fc857324c3-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUpv0ckze7g3k9_7ucam"
+                },
+                {
+                    "name": "Paul Mata",
+                    "screenName": "paulmata agent",
+                    "ratings": {
+                        "count": 2,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/dbaf89a55ad76162558d461148d44159-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU12s1qdeqevifd_55f21"
+                },
+                {
+                    "name": "Richard Olivas",
+                    "screenName": "Richard David Olivas",
+                    "ratings": {
+                        "count": 1,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/f8b2f19d24120075c9c73bade054472c-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU11up4djuqqpe1_1vfad"
+                },
+                {
+                    "name": "Shyon Haghpeykar",
+                    "screenName": "shyonh4",
+                    "ratings": {
+                        "count": 1,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/b3fa0d2245173c449d763f035000816a-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUqcu147cmiccp_7x5fk"
+                },
+                {
+                    "name": "Claudia Rojas",
+                    "screenName": "claudiar51",
+                    "ratings": {
+                        "count": 1,
+                        "average": 5
+                    },
+                    "profilePhotoUrl": null,
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUqbvm850b3x1l_56tmi"
+                },
+                {
+                    "name": "Brett Hartman",
+                    "screenName": "Brett Hartman",
+                    "ratings": {
+                        "count": 0,
+                        "average": 0
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/9efb47be1a3ffcf5c5a0d509f13b9c86-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUyuoav7rvtjwp_493z6"
+                },
+                {
+                    "name": "Toni Vacker",
+                    "screenName": "toniv38",
+                    "ratings": {
+                        "count": 0,
+                        "average": 0
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/06bb51d275a2712737cebd1b0dfc11ce-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU17dqxnc0xyscp_7hp6d"
+                },
+                {
+                    "name": "Stephen Mweka",
+                    "screenName": "stephenm102",
+                    "ratings": {
+                        "count": 0,
+                        "average": 0
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/97e5dfcf6da6346e596ff7a4c7097088-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUqiloezk8wzrd_7ucam"
+                },
+                {
+                    "name": "Jahdiel Guadalupe",
+                    "screenName": "jahdiel0",
+                    "ratings": {
+                        "count": 0,
+                        "average": 0
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/24c6777f63b15d1db70b2954df0d480b-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUqexx3lbq0s95_14qhe"
+                },
+                {
+                    "name": "Colton Freeman",
+                    "screenName": "coltonf6",
+                    "ratings": {
+                        "count": 0,
+                        "average": 0
+                    },
+                    "profilePhotoUrl": null,
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU17scvl0elq495_1hdln"
+                },
+                {
+                    "name": "Quinn Rigby",
+                    "screenName": "quinnr24",
+                    "ratings": {
+                        "count": 0,
+                        "average": 0
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/53ce71e1d134ef20abfe48102b49cbab-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU17s4twy852a6h_97i75"
+                },
+                {
+                    "name": "Jared Singleton",
+                    "screenName": "jareds250",
+                    "ratings": {
+                        "count": 0,
+                        "average": 0
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/fdd450b71ae0bd40fbbc0d830d7c4710-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU17uc3nfew8rgp_9wsfn"
+                },
+                {
+                    "name": "Nechelle Davis",
+                    "screenName": "Nechelle Davis",
+                    "ratings": {
+                        "count": 0,
+                        "average": 0
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/7d01ccb487b32e7514744d2475f0705d-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZU11j6xy16xp349_2ca41"
+                },
+                {
+                    "name": "Jason Straubinger",
+                    "screenName": "jasons2412",
+                    "ratings": {
+                        "count": 0,
+                        "average": 0
+                    },
+                    "profilePhotoUrl": "https://photos.zillowstatic.com/fp/2b3c3461ae0656d49e91fdd56a8c2f57-h_l.jpg",
+                    "isTopAgent": true,
+                    "encodedZuid": "X1-ZUpvyknee00ljd_5nog6"
+                }
+            ]
+        },
+        "teamMemberInfo": null
+    }
+}

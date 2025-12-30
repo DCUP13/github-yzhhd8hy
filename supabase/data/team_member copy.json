@@ -1,0 +1,528 @@
+{
+    "about": null,
+    "agentLicenses": [
+        {
+            "text": "RB14043013",
+            "state": "IN",
+            "status": "expired",
+            "original_status": "active",
+            "license_type": "agent",
+            "expiration": "2020-06-30"
+        }
+    ],
+    "agentSalesStats": {
+        "countAllTime": 64,
+        "countLastYear": 0,
+        "priceRangeThreeYearMin": 0,
+        "priceRangeThreeYearMax": 0,
+        "averageValueThreeYear": 0,
+        "stats_include_team": false
+    },
+    "displayUser": {
+        "encodedZuid": "X1-ZUzluldbs8z9xl_8clor",
+        "screenName": "chrisschafer9",
+        "inCanada": false,
+        "name": "Chris  Schafer",
+        "flag": 17452992,
+        "profileTypeIds": [
+            1,
+            2
+        ],
+        "profileTypes": [
+            "consumer",
+            "agent"
+        ],
+        "businessAddress": {
+            "address1": "7820 Eagle Crest Boulevard Suite 200",
+            "address2": null,
+            "city": "Evansville",
+            "state": "IN",
+            "postalCode": "47715"
+        },
+        "businessName": "F C Tucker Emge Realtors",
+        "isTopAgent": false,
+        "profileImageId": null,
+        "profilePhotoSrc": "https://photos.zillowstatic.com/fp/ee1334881630f47ccb0721c9ee0845dc-h_l.jpg",
+        "ratings": {
+            "average": 5,
+            "count": 59,
+            "__typename": "ReviewRatings"
+        },
+        "phoneNumbers": {
+            "cell": "(812) 430-9630",
+            "business": "(812) 479-0801"
+        },
+        "email": "chrisschafer@fcte.com"
+    },
+    "forRentListings": {
+        "listings": [],
+        "listing_count": 0
+    },
+    "forSaleListings": {
+        "listings": [],
+        "listing_count": 0
+    },
+    "getToKnowMe": {
+        "description": "<p>Whether you're buying or selling...</p>   \n<p>&nbsp;</p>   \n<p>Top-ranked FC Tucker Real Estate Broker Chris Schafer believes his success comes in large part through the strong dedication to his clients. &nbsp;As a result, he and his team are currently ranked in the top one percent of all real estate agents Southwest Indiana's MLS.</p>   \n<p><strong>Chris's triple-threat approach to Real Estate</strong></p>   \n<p><strong>&nbsp;</strong></p>   \n<p>1.&nbsp;&nbsp;&nbsp; <strong>Knowledge of finances</strong>: The University of Southern Indiana grad began his professional career as a financial advisor with A.G. Edwards &amp; Sons, where he was promoted to vice president of investments and came to learn the intricacies of smart financial planning during his 10-year career.</p>   \n<p>&nbsp;</p>   \n<p>2.&nbsp;&nbsp;&nbsp; <strong>Residential General Contracting</strong>: Chris passed the Residential General Contracting License Exam in 2003 and has keen insight into all the issues to look for in homes, paying particular attention to even the smallest of details. Whether you're buying a home or selling a home there will be issues that come up during inspections. Chris uses his knowledge of construction, along with his relationship with experienced contractors, to give his clients the best opportunity to complete the transaction.</p>   \n<p>&nbsp;</p>   \n<p>3.&nbsp;&nbsp;&nbsp; <strong>Years of experience as a successful real estate agent</strong>: Chris has over a decade of real estate experience. He uses highly-impactful marketing plans for his clients that have a proven track record. His unique marketing strategies include effective web advertising, social media and positioning client homes on Tour Factory with professional quality photos on the MLS. </p>   \n<p>&nbsp;</p>   \n<p>In today's market, when time means money, it's critical to entrust your real estate decisions to a proven leader who cares about his clients.&nbsp;So, talk to Chris today for proven results, at <strong>(812) 430-9630 </strong>or email him at <a href=\"mailto:ChrisSchafer@fctuckeremge.com\" rel=\"nofollow\">ChrisSchafer@fctuckeremge.com</a>.</p>",
+        "videoUrl": null,
+        "specialties": [
+            "Buyer's Agent",
+            "Listing Agent",
+            "Investment Properties",
+            "New Construction"
+        ],
+        "languages": [],
+        "websiteUrl": "http://www.fctuckeremge.com/chris.schafer",
+        "facebookUrl": "http://facebook.com/thechrisschaferteam"
+    },
+    "lastYearPastSalesTotal": null,
+    "map": {
+        "mapCentroid": {
+            "latitude": "38.016972",
+            "longitude": "-87.587342"
+        },
+        "mapApiKey": "AIzaSyD4w61UyrLSs5ozaHmCCrhvnyPrJdNkZQ0"
+    },
+    "mlsIDs": [],
+    "otherLicenses": [
+        {
+            "licenseTypeID": 1,
+            "licenseCode": "RB14043013",
+            "licenseDesc": "Real Estate Sales"
+        }
+    ],
+    "pastSales": {
+        "total": 64,
+        "past_sales": [
+            {
+                "represented": "Seller",
+                "representedList": [
+                    "Seller"
+                ],
+                "sold_date": "6/30/2021",
+                "price": "$189,900",
+                "zpid": 94611427,
+                "image_url": "https://photos.zillowstatic.com/fp/c594e71093e417e6974b99a6bf073585-p_b.jpg",
+                "medium_image_url": "https://photos.zillowstatic.com/fp/c594e71093e417e6974b99a6bf073585-p_d.jpg",
+                "image_alt": "2161 A Washington Ave, Evansville, IN, 47714",
+                "home_details_url": "/homedetails/2161-A-Washington-Ave-Evansville-IN-47714/94611427_zpid/",
+                "street_address": "2161 A Washington Ave",
+                "city_state_zipcode": "Evansville, IN, 47714",
+                "latitude": 37.962414,
+                "longitude": -87.52555,
+                "bathrooms": 1,
+                "bedrooms": 1,
+                "city": "Evansville",
+                "state": "IN",
+                "livingAreaValue": 688,
+                "livingAreaUnitsShort": "sqft",
+                "mlsLogoSrc": null
+            },
+            {
+                "represented": "Buyer",
+                "representedList": [
+                    "Buyer"
+                ],
+                "sold_date": "6/4/2021",
+                "price": "$670,000",
+                "zpid": 94619447,
+                "image_url": "https://maps.googleapis.com/maps/api/streetview?location=2044+Lakes+Edge+Dr%2C+Newburgh%2C+IN+47630&size=101x76&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=WHaxwffaKOwQBI2a0MPlxk5rdUs=",
+                "medium_image_url": "https://maps.googleapis.com/maps/api/streetview?location=2044+Lakes+Edge+Dr%2C+Newburgh%2C+IN+47630&size=400x300&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=_aLDMn8jxGQr1Hw5y8xJW0Kmc-Y=",
+                "image_alt": "2044 Lakes Edge Dr, Newburgh, IN, 47630",
+                "home_details_url": "/homedetails/2044-Lakes-Edge-Dr-Newburgh-IN-47630/94619447_zpid/",
+                "street_address": "2044 Lakes Edge Dr",
+                "city_state_zipcode": "Newburgh, IN, 47630",
+                "latitude": 38.005623,
+                "longitude": -87.36097,
+                "bathrooms": 3.5,
+                "bedrooms": 3,
+                "city": "Newburgh",
+                "state": "IN",
+                "livingAreaValue": 3240,
+                "livingAreaUnitsShort": "sqft",
+                "mlsLogoSrc": null
+            },
+            {
+                "represented": "Seller",
+                "representedList": [
+                    "Seller"
+                ],
+                "sold_date": "4/15/2021",
+                "price": "$511,900",
+                "zpid": 85747953,
+                "image_url": "https://photos.zillowstatic.com/fp/afe8395d79611e75441ecd251ef7db35-p_b.jpg",
+                "medium_image_url": "https://photos.zillowstatic.com/fp/afe8395d79611e75441ecd251ef7db35-p_d.jpg",
+                "image_alt": "5700 Gardner Rd, Chandler, IN, 47610",
+                "home_details_url": "/homedetails/5700-Gardner-Rd-Chandler-IN-47610/85747953_zpid/",
+                "street_address": "5700 Gardner Rd",
+                "city_state_zipcode": "Chandler, IN, 47610",
+                "latitude": 38.02855,
+                "longitude": -87.353546,
+                "bathrooms": 4,
+                "bedrooms": 4,
+                "city": "Chandler",
+                "state": "IN",
+                "livingAreaValue": 2848,
+                "livingAreaUnitsShort": "sqft",
+                "mlsLogoSrc": null
+            },
+            {
+                "represented": "Buyer",
+                "representedList": [
+                    "Buyer"
+                ],
+                "sold_date": "3/22/2021",
+                "price": "$165,000",
+                "zpid": 85752413,
+                "image_url": "https://maps.googleapis.com/maps/api/streetview?location=4100+Greenland+Dr%2C+Newburgh%2C+IN+47630&size=101x76&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=3vK5Vg8DNNFGQR5-er1ga2Goh5c=",
+                "medium_image_url": "https://maps.googleapis.com/maps/api/streetview?location=4100+Greenland+Dr%2C+Newburgh%2C+IN+47630&size=400x300&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=jxYE-19naStY9vwE3SqalUchd2A=",
+                "image_alt": "4100 Greenland Dr, Newburgh, IN, 47630",
+                "home_details_url": "/homedetails/4100-Greenland-Dr-Newburgh-IN-47630/85752413_zpid/",
+                "street_address": "4100 Greenland Dr",
+                "city_state_zipcode": "Newburgh, IN, 47630",
+                "latitude": 37.97419,
+                "longitude": -87.42076,
+                "bathrooms": 2,
+                "bedrooms": 3,
+                "city": "Newburgh",
+                "state": "IN",
+                "livingAreaValue": 1848,
+                "livingAreaUnitsShort": "sqft",
+                "mlsLogoSrc": null
+            },
+            {
+                "represented": "Seller",
+                "representedList": [
+                    "Seller"
+                ],
+                "sold_date": "11/30/2020",
+                "price": "$119,000",
+                "zpid": 94622217,
+                "image_url": "https://maps.googleapis.com/maps/api/streetview?location=5+Riverbend+Ct%2C+Newburgh%2C+IN+47630&size=101x76&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=W25nUY-oMN9NJjeCrGo2_fPQd0E=",
+                "medium_image_url": "https://maps.googleapis.com/maps/api/streetview?location=5+Riverbend+Ct%2C+Newburgh%2C+IN+47630&size=400x300&key=AIzaSyARFMLB1na-BBWf7_R3-5YOQQaHqEJf6RQ&source=outdoor&&signature=Po6dmBbe0p3RM5Wd_fii68WqSgM=",
+                "image_alt": "5 Riverbend Ct, Newburgh, IN, 47630",
+                "home_details_url": "/homedetails/5-Riverbend-Ct-Newburgh-IN-47630/94622217_zpid/",
+                "street_address": "5 Riverbend Ct",
+                "city_state_zipcode": "Newburgh, IN, 47630",
+                "latitude": 37.941044,
+                "longitude": -87.39408,
+                "bathrooms": 10,
+                "bedrooms": 6,
+                "city": "Newburgh",
+                "state": "IN",
+                "livingAreaValue": 14638,
+                "livingAreaUnitsShort": "sqft",
+                "mlsLogoSrc": null
+            }
+        ]
+    },
+    "preferredLenders": {
+        "lenders": []
+    },
+    "professionalInformation": [
+        {
+            "term": "Broker address",
+            "lines": [
+                "F C Tucker Emge Realtors",
+                "7820 Eagle Crest Boulevard Suite 200",
+                "Evansville, IN 47715"
+            ]
+        },
+        {
+            "term": "Cell phone",
+            "description": "(812) 430-9630"
+        },
+        {
+            "term": "Websites",
+            "links": [
+                {
+                    "text": "Website",
+                    "url": "http://www.fctuckeremge.com/chris.schafer"
+                },
+                {
+                    "text": "Facebook",
+                    "url": "http://facebook.com/thechrisschaferteam"
+                }
+            ]
+        },
+        {
+            "term": "Screenname",
+            "description": "chrisschafer9"
+        },
+        {
+            "term": "Member since",
+            "description": "12/27/2011"
+        },
+        {
+            "term": "Real Estate Licenses",
+            "description": "Not provided"
+        },
+        {
+            "term": "Other Licenses",
+            "lines": [
+                "RB14043013 (Real Estate Sales)"
+            ]
+        }
+    ],
+    "profileDisplay": null,
+    "reviewsData": {
+        "reviews": [
+            {
+                "reviewComment": "Chris worked hard for me. I am transitioning from a larger to a smaller home. Chris was always available to guide me in the process of buying a new home. It was diligent and easily accessible to any viewings that I wanted to see. I would highly recommend Chris Schaeffer as your real estate agent.",
+                "reviewId": 7898674,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "chrisschafer9",
+                    "firstName": "Chris ",
+                    "lastName": "Schafer",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUzluldbs8z9xl_8clor"
+                },
+                "reviewer": {
+                    "screenName": "zuser20190319193601733",
+                    "firstName": "Wayne",
+                    "lastName": "Allen",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZU13bct27rvlh55_3fm19"
+                },
+                "rating": 5,
+                "createDate": "2023-06-10T10:20:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2023 in Newburgh, IN."
+            },
+            {
+                "reviewComment": "Our family has relied on Chris for our Real Estate needs for the past 10 years.   Chris has exceptional knowledge of the local Real Estate market.  Always professional and highly skilled at executing the real estate transaction from beginning to completion.  Available and quick to respond to questions and concerns during the buying or selling process.",
+                "reviewId": 7851456,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "chrisschafer9",
+                    "firstName": "Chris ",
+                    "lastName": "Schafer",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUzluldbs8z9xl_8clor"
+                },
+                "reviewer": {
+                    "screenName": "sboston15",
+                    "firstName": null,
+                    "lastName": null,
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUrj45sqg7qbrd_35s1y"
+                },
+                "rating": 5,
+                "createDate": "2023-05-07T12:31:00",
+                "rebuttal": null,
+                "workDescription": "Bought and sold a Single Family home in 2014 in Newburgh, IN."
+            },
+            {
+                "reviewComment": "Chris is the absolute best. He is extremely knowledgeable, and was a very trusted advisor throughout the process. He was patient, listened to understand what I was looking for, and made the process extremely smooth.",
+                "reviewId": 7829065,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "chrisschafer9",
+                    "firstName": "Chris ",
+                    "lastName": "Schafer",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUzluldbs8z9xl_8clor"
+                },
+                "reviewer": {
+                    "screenName": "GBauer17",
+                    "firstName": "Gabe",
+                    "lastName": "Bauer",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUyl1s6594te6h_82rpg"
+                },
+                "rating": 5,
+                "createDate": "2023-04-21T08:05:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2023 in Newburgh, IN."
+            },
+            {
+                "reviewComment": "Chris did an awesome job helping me find the perfect home for me. He took his time and was available anytime I requested to view a home. He was also great at giving out other recommendations when I asked for his opinion. I would refer all my friends to contact Chris. So glad I was referred to him.",
+                "reviewId": 7805519,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "chrisschafer9",
+                    "firstName": "Chris ",
+                    "lastName": "Schafer",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUzluldbs8z9xl_8clor"
+                },
+                "reviewer": {
+                    "screenName": "christymillscrna4",
+                    "firstName": null,
+                    "lastName": null,
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUrlga25pyyuix_4hje0"
+                },
+                "rating": 5,
+                "createDate": "2023-04-03T17:03:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2023 in Newburgh, IN."
+            },
+            {
+                "reviewComment": "I don't have enough room to write how incredible Chris is. He was recommended to me by multiple people, and I can't thank them enough. I am a first-time home buyer from out of state moving back to the area. He was very engaged and wanted to meet a few times via zoom and phone before we wanted to start looking to meet my family and learn our wants, needs and dislikes. He is extremely personable and very easy to talk to. He would frequently send us listings, to see what we liked and did not like. When we found our dream house, he went above, and beyond when we told him this was the one we wanted. This involved many late-night texts and phone calls. He walked me through every step and made it very easy and clear. Not once did I ever feel pressured or uncomfortable. He even recommended I submit a lower bid which ending up winning. I recommended him for my family and for all buyers, new and old. When and if I move again, I know I already have my guy.",
+                "reviewId": 7722488,
+                "subRatings": [
+                    {
+                        "description": "Local knowledge",
+                        "score": 5
+                    },
+                    {
+                        "description": "Process expertise",
+                        "score": 5
+                    },
+                    {
+                        "description": "Responsiveness",
+                        "score": 5
+                    },
+                    {
+                        "description": "Negotiation skills",
+                        "score": 5
+                    }
+                ],
+                "reviewee": {
+                    "screenName": "chrisschafer9",
+                    "firstName": "Chris ",
+                    "lastName": "Schafer",
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUzluldbs8z9xl_8clor"
+                },
+                "reviewer": {
+                    "screenName": "daum dylan",
+                    "firstName": null,
+                    "lastName": null,
+                    "suffix": null,
+                    "showName": true,
+                    "encodedZuid": "X1-ZUrpnp6114oavd_at3ii"
+                },
+                "rating": 5,
+                "createDate": "2023-01-31T14:04:00",
+                "rebuttal": null,
+                "workDescription": "Bought a Single Family home in 2023 in Newburgh, IN."
+            }
+        ],
+        "filters": [
+            {
+                "prompt": "All reviews",
+                "count": 59,
+                "serviceTypeIds": null
+            },
+            {
+                "serviceTypeIds": [
+                    1
+                ],
+                "count": 24,
+                "prompt": "Helped me buy"
+            },
+            {
+                "serviceTypeIds": [
+                    2
+                ],
+                "count": 22,
+                "prompt": "Helped me sell"
+            },
+            {
+                "serviceTypeIds": [
+                    3
+                ],
+                "count": 13,
+                "prompt": "Helped me buy and sell"
+            }
+        ]
+    },
+    "reviewsParams": null,
+    "serviceAreas": [],
+    "teamDisplayInformation": {
+        "teamLeadInfo": null,
+        "teamMemberInfo": {
+            "teamName": "The Realty Collective",
+            "teamLead": {
+                "name": "The Realty Collective",
+                "screenName": "TheRealtyCollective",
+                "ratings": {
+                    "count": 336,
+                    "average": 5
+                },
+                "encodedZuid": "X1-ZU11nm4wcd5ccuh_68qz9"
+            },
+            "hasContactRedirectOptInFunction": false
+        }
+    }
+}
