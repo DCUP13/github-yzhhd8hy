@@ -9,13 +9,14 @@ import { TemplatesPage } from './features/templates/TemplatesPage';
 import { Addresses } from './components/Emails';
 import { EmailsInbox } from './components/EmailsInbox';
 import { Prompts } from './components/Prompts';
+import { Contacts } from './components/Contacts';
 import { EmailProvider } from './contexts/EmailContext';
 import { supabase } from './lib/supabase';
 import type { Template } from './features/templates/types';
 import { AlertCircle } from 'lucide-react';
 import { DashboardProvider } from './contexts/DashboardContext';
 
-type View = 'login' | 'register' | 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts';
+type View = 'login' | 'register' | 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts';
 
 interface ThemeContextType {
   darkMode: boolean;
@@ -211,11 +212,11 @@ export default function App() {
         <EmailProvider>
           <DashboardProvider>
             <div className={darkMode ? 'dark' : ''}>
-              {view === 'dashboard' || view === 'app' || view === 'settings' || view === 'templates' || view === 'emails' || view === 'addresses' || view === 'prompts' ? (
+              {view === 'dashboard' || view === 'app' || view === 'settings' || view === 'templates' || view === 'emails' || view === 'addresses' || view === 'prompts' || view === 'contacts' ? (
                 <div className="flex min-h-screen bg-white dark:bg-gray-900">
                   <div className="fixed inset-y-0 left-0 w-64">
-                    <Sidebar 
-                      onSignOut={handleSignOut} 
+                    <Sidebar
+                      onSignOut={handleSignOut}
                       onHomeClick={() => setView('dashboard')}
                       onAppClick={() => setView('app')}
                       onSettingsClick={() => setView('settings')}
@@ -223,6 +224,7 @@ export default function App() {
                       onEmailsClick={() => setView('emails')}
                       onAddressesClick={() => setView('addresses')}
                       onPromptsClick={() => setView('prompts')}
+                      onContactsClick={() => setView('contacts')}
                     />
                   </div>
                   <div className="flex-1 ml-64">
@@ -246,6 +248,9 @@ export default function App() {
                     )}
                     {view === 'prompts' && (
                       <Prompts onSignOut={handleSignOut} currentView={view} />
+                    )}
+                    {view === 'contacts' && (
+                      <Contacts onSignOut={handleSignOut} currentView={view} />
                     )}
                   </div>
                 </div>
