@@ -176,9 +176,20 @@ Deno.serve(async (req: Request) => {
     console.log(`Total screennames collected: ${allScreenNames.length}`);
 
     // Step 2: Fetch details for each agent using agentDetails endpoint
+    let lastRequestTime = Date.now();
+
     for (const screenName of allScreenNames) {
       try {
+        // Rate limiting: ensure at least 1 second between API calls
+        const timeSinceLastRequest = Date.now() - lastRequestTime;
+        if (timeSinceLastRequest < 1000) {
+          const waitTime = 1000 - timeSinceLastRequest;
+          console.log(`Waiting ${waitTime}ms before next API call`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+        }
+
         console.log(`Fetching details for ${screenName}`);
+        lastRequestTime = Date.now();
 
         const detailsUrl = `https://${api_host}/agentDetails?screenName=${encodeURIComponent(screenName)}`;
         const detailsResponse = await fetch(detailsUrl, {
@@ -298,7 +309,16 @@ Deno.serve(async (req: Request) => {
             if (!member.screenName) continue;
 
             try {
+              // Rate limiting: ensure at least 1 second between API calls
+              const timeSinceLastRequest = Date.now() - lastRequestTime;
+              if (timeSinceLastRequest < 1000) {
+                const waitTime = 1000 - timeSinceLastRequest;
+                console.log(`Waiting ${waitTime}ms before next API call`);
+                await new Promise((resolve) => setTimeout(resolve, waitTime));
+              }
+
               console.log(`Fetching details for team member ${member.screenName}`);
+              lastRequestTime = Date.now();
 
               const memberDetailsUrl = `https://${api_host}/agentDetails?screenName=${encodeURIComponent(member.screenName)}`;
               const memberDetailsResponse = await fetch(memberDetailsUrl, {
@@ -408,17 +428,11 @@ Deno.serve(async (req: Request) => {
 
                 console.log(`Saved ${memberListings.length} listings for team member ${memberDisplayUser.name}`);
               }
-
-              // Rate limiting: 1 request per second
-              await new Promise((resolve) => setTimeout(resolve, 1000));
             } catch (error) {
               console.error(`Error processing team member ${member.screenName}:`, error);
             }
           }
         }
-
-        // Rate limiting: 1 request per second between agents
-        await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (error) {
         console.error(`Error processing agent ${screenName}:`, error);
       }
