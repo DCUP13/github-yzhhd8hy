@@ -163,9 +163,9 @@ Deno.serve(async (req: Request) => {
         console.log(`Fetched ${professionals.length} agents from page ${page}`);
         page++;
 
-        // Rate limiting
+        // Rate limiting: 1 request per second
         if (page <= max_pages) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       } catch (error) {
         console.error(`Error fetching page ${page}:`, error);
@@ -409,16 +409,16 @@ Deno.serve(async (req: Request) => {
                 console.log(`Saved ${memberListings.length} listings for team member ${memberDisplayUser.name}`);
               }
 
-              // Rate limiting
-              await new Promise((resolve) => setTimeout(resolve, 2000));
+              // Rate limiting: 1 request per second
+              await new Promise((resolve) => setTimeout(resolve, 1000));
             } catch (error) {
               console.error(`Error processing team member ${member.screenName}:`, error);
             }
           }
         }
 
-        // Rate limiting between agents
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Rate limiting: 1 request per second between agents
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (error) {
         console.error(`Error processing agent ${screenName}:`, error);
       }
