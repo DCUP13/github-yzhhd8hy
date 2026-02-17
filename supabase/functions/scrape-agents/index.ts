@@ -220,7 +220,7 @@ Deno.serve(async (req: Request) => {
           encoded_zuid: displayUser.encodedZuid || "",
           profile_url: `/profile/${screenName}`,
           is_team_lead: !!agentDetails.teamDisplayInformation?.teamLeadInfo,
-          status: "processed",
+          status: "pending",
           agent_data: agentDetails,
         };
 
@@ -340,7 +340,7 @@ Deno.serve(async (req: Request) => {
                 encoded_zuid: memberDisplayUser.encodedZuid || "",
                 profile_url: `/profile/${member.screenName}`,
                 is_team_lead: false,
-                status: "processed",
+                status: "pending",
                 agent_data: memberDetails,
               };
 
