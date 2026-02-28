@@ -191,7 +191,7 @@ Deno.serve(async (req: Request) => {
         console.log(`Fetching details for ${screenName}`);
         lastRequestTime = Date.now();
 
-        const detailsUrl = `https://${api_host}/agentDetails?screenName=${encodeURIComponent(screenName)}`;
+        const detailsUrl = `https://${api_host}/agentDetails?username=${encodeURIComponent(screenName)}`;
         const detailsResponse = await fetch(detailsUrl, {
           headers: {
             "x-rapidapi-key": api_key,
@@ -210,6 +210,12 @@ Deno.serve(async (req: Request) => {
 
         const agentDetails: AgentDetailsResponse = await detailsResponse.json();
         const displayUser = agentDetails.displayUser;
+
+        console.log(`\n========== TEAM LEAD DATA: ${screenName} ==========`);
+        console.log('displayUser:', JSON.stringify(displayUser, null, 2));
+        console.log('teamDisplayInformation:', JSON.stringify(agentDetails.teamDisplayInformation, null, 2));
+        console.log('forSaleListings count:', agentDetails.forSaleListings?.listing_count || 0);
+        console.log('===========================================\n');
 
         if (!displayUser) {
           console.log(`No displayUser data for ${screenName}`);
@@ -279,8 +285,6 @@ Deno.serve(async (req: Request) => {
               open_houses: listing.openHouses || "",
               has_open_house: listing.hasOpenHouse || false,
               has_vr_model: listing.has_vr_model || false,
-              living_area_value: listing.livingAreaValue,
-              living_area_units: listing.livingAreaUnitsShort || "sqft",
               listing_data: listing,
             };
 
@@ -320,7 +324,7 @@ Deno.serve(async (req: Request) => {
               console.log(`Fetching details for team member ${member.screenName}`);
               lastRequestTime = Date.now();
 
-              const memberDetailsUrl = `https://${api_host}/agentDetails?screenName=${encodeURIComponent(member.screenName)}`;
+              const memberDetailsUrl = `https://${api_host}/agentDetails?username=${encodeURIComponent(member.screenName)}`;
               const memberDetailsResponse = await fetch(memberDetailsUrl, {
                 headers: {
                   "x-rapidapi-key": api_key,
@@ -339,6 +343,12 @@ Deno.serve(async (req: Request) => {
 
               const memberDetails: AgentDetailsResponse = await memberDetailsResponse.json();
               const memberDisplayUser = memberDetails.displayUser;
+
+              console.log(`\n========== TEAM MEMBER DATA: ${member.screenName} ==========`);
+              console.log('displayUser:', JSON.stringify(memberDisplayUser, null, 2));
+              console.log('teamDisplayInformation:', JSON.stringify(memberDetails.teamDisplayInformation, null, 2));
+              console.log('forSaleListings count:', memberDetails.forSaleListings?.listing_count || 0);
+              console.log('===========================================\n');
 
               if (!memberDisplayUser) {
                 console.log(`No displayUser data for team member ${member.screenName}`);
@@ -408,8 +418,6 @@ Deno.serve(async (req: Request) => {
                     open_houses: listing.openHouses || "",
                     has_open_house: listing.hasOpenHouse || false,
                     has_vr_model: listing.has_vr_model || false,
-                    living_area_value: listing.livingAreaValue,
-                    living_area_units: listing.livingAreaUnitsShort || "sqft",
                     listing_data: listing,
                   };
 
