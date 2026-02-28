@@ -370,6 +370,7 @@ Deno.serve(async (req: Request) => {
                 encoded_zuid: memberDisplayUser.encodedZuid || "",
                 profile_url: `/profile/${member.screenName}`,
                 is_team_lead: false,
+                team_lead_id: insertedContact.id,
                 status: "pending",
                 agent_data: memberDetails,
               };

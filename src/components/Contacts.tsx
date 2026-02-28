@@ -14,6 +14,7 @@ interface Contact {
   business_name: string;
   profile_url: string;
   is_team_lead: boolean;
+  team_lead_id: string | null;
   status: string;
   created_at: string;
 }
@@ -51,6 +52,8 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [contactListings, setContactListings] = useState<Listing[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<Contact[]>([]);
+  const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -104,14 +107,40 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
     }
   };
 
+  const fetchTeamMembers = async (teamLeadId: string) => {
+    try {
+      setLoadingTeamMembers(true);
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('team_lead_id', teamLeadId)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      setTeamMembers(data || []);
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+    } finally {
+      setLoadingTeamMembers(false);
+    }
+  };
+
   const handleContactClick = async (contact: Contact) => {
     setSelectedContact(contact);
     await fetchContactListings(contact.id);
+
+    if (contact.is_team_lead) {
+      await fetchTeamMembers(contact.id);
+    } else {
+      setTeamMembers([]);
+    }
   };
 
   const handleCloseDetails = () => {
     setSelectedContact(null);
     setContactListings([]);
+    setTeamMembers([]);
   };
 
   const handleDeleteContact = async (contactId: string, e: React.MouseEvent) => {
@@ -135,6 +164,7 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
       if (selectedContact?.id === contactId) {
         setSelectedContact(null);
         setContactListings([]);
+        setTeamMembers([]);
       }
     } catch (error) {
       console.error('Error deleting contact:', error);
@@ -171,6 +201,7 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
       setContacts([]);
       setSelectedContact(null);
       setContactListings([]);
+      setTeamMembers([]);
       setShowBulkActions(false);
       alert('All contacts have been deleted successfully.');
     } catch (error) {
@@ -188,7 +219,7 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
   );
 
   const teamLeads = filteredContacts.filter(contact => contact.is_team_lead);
-  const teamMembers = filteredContacts.filter(contact => !contact.is_team_lead);
+  const nonLeadContacts = filteredContacts.filter(contact => !contact.is_team_lead);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -326,14 +357,14 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
               </div>
             )}
 
-            {teamMembers.length > 0 && (
+            {nonLeadContacts.length > 0 && (
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                   <User className="w-5 h-5 text-gray-600" />
-                  Team Members ({teamMembers.length})
+                  Team Members ({nonLeadContacts.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {teamMembers.map((contact) => (
+                  {nonLeadContacts.map((contact) => (
                     <div
                       key={contact.id}
                       onClick={() => handleContactClick(contact)}
@@ -489,6 +520,59 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
                   </div>
                 </div>
               </div>
+
+              {selectedContact.is_team_lead && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Team Members ({teamMembers.length})
+                  </h3>
+                  {loadingTeamMembers ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : teamMembers.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {teamMembers.map((member) => (
+                        <div
+                          key={member.id}
+                          onClick={() => handleContactClick(member)}
+                          className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                        >
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                            {member.name || 'Unknown'}
+                          </h4>
+                          <div className="space-y-1">
+                            {member.email && (
+                              <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                <Mail className="w-3 h-3" />
+                                {member.email}
+                              </p>
+                            )}
+                            {(member.phone_cell || member.phone) && (
+                              <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                <Phone className="w-3 h-3" />
+                                {member.phone_cell || member.phone}
+                              </p>
+                            )}
+                            {member.business_name && (
+                              <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                <Building2 className="w-3 h-3" />
+                                {member.business_name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Users className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-600 dark:text-gray-400">No team members found</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
