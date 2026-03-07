@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Building2, Mail, Phone, MapPin, Home, ChevronRight, X, Award, User, Trash2, ChevronDown } from 'lucide-react';
+import { Users, Search, Building2, Mail, Phone, MapPin, Home, ChevronRight, X, Award, User, Trash2, ChevronDown, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface Contact {
@@ -54,6 +54,7 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
   const [loadingListings, setLoadingListings] = useState(false);
   const [teamMembers, setTeamMembers] = useState<Contact[]>([]);
   const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
+  const [navigationStack, setNavigationStack] = useState<Contact[]>([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -126,7 +127,11 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
     }
   };
 
-  const handleContactClick = async (contact: Contact) => {
+  const handleContactClick = async (contact: Contact, fromTeamMemberClick = false) => {
+    if (fromTeamMemberClick && selectedContact) {
+      setNavigationStack([...navigationStack, selectedContact]);
+    }
+
     setSelectedContact(contact);
     await fetchContactListings(contact.id);
 
@@ -137,10 +142,28 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
     }
   };
 
+  const handleBackClick = async () => {
+    if (navigationStack.length === 0) return;
+
+    const previousContact = navigationStack[navigationStack.length - 1];
+    const newStack = navigationStack.slice(0, -1);
+
+    setNavigationStack(newStack);
+    setSelectedContact(previousContact);
+    await fetchContactListings(previousContact.id);
+
+    if (previousContact.is_team_lead) {
+      await fetchTeamMembers(previousContact.id);
+    } else {
+      setTeamMembers([]);
+    }
+  };
+
   const handleCloseDetails = () => {
     setSelectedContact(null);
     setContactListings([]);
     setTeamMembers([]);
+    setNavigationStack([]);
   };
 
   const handleDeleteContact = async (contactId: string, e: React.MouseEvent) => {
@@ -165,6 +188,7 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
         setSelectedContact(null);
         setContactListings([]);
         setTeamMembers([]);
+        setNavigationStack([]);
       }
     } catch (error) {
       console.error('Error deleting contact:', error);
@@ -202,6 +226,7 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
       setSelectedContact(null);
       setContactListings([]);
       setTeamMembers([]);
+      setNavigationStack([]);
       setShowBulkActions(false);
       alert('All contacts have been deleted successfully.');
     } catch (error) {
@@ -427,6 +452,15 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
+                {navigationStack.length > 0 && (
+                  <button
+                    onClick={handleBackClick}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    title="Go back"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                  </button>
+                )}
                 {selectedContact.is_team_lead && (
                   <Award className="w-6 h-6 text-yellow-600" />
                 )}
@@ -536,7 +570,7 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
                       {teamMembers.map((member) => (
                         <div
                           key={member.id}
-                          onClick={() => handleContactClick(member)}
+                          onClick={() => handleContactClick(member, true)}
                           className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                         >
                           <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
