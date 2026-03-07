@@ -132,11 +132,12 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      // Get all contacts for this campaign
+      // Get contacts for this specific campaign
       const { data: contacts, error: contactsError } = await supabase
         .from("contacts")
         .select("*")
-        .eq("user_id", user_id);
+        .eq("user_id", user_id)
+        .eq("campaign_id", campaign.id);
 
       if (contactsError) {
         console.error(`Failed to get contacts for campaign ${campaign.id}:`, contactsError);
