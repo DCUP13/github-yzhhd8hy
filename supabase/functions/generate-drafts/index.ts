@@ -153,6 +153,7 @@ Deno.serve(async (req: Request) => {
       // Generate drafts for each contact
       const draftsToInsert = [];
       let emailIndex = 0;
+      let attachmentIndex = 0;
 
       for (const contact of contacts) {
         try {
@@ -194,12 +195,20 @@ Deno.serve(async (req: Request) => {
             ? subjectLines[Math.floor(Math.random() * subjectLines.length)]
             : 'No Subject';
 
-          // Prepare attachments
-          const attachments = attachmentTemplates.map(at => ({
-            name: at.templates.name,
-            content: replacePlaceholders(at.templates.content, variables),
-            format: at.templates.format,
-          }));
+          // Prepare attachments - cycle through if multiple
+          const attachments = [];
+          if (attachmentTemplates.length > 0) {
+            // If there's only one attachment, use it for all drafts
+            // If there are multiple, cycle through them (round-robin)
+            const selectedAttachmentTemplate = attachmentTemplates[attachmentIndex % attachmentTemplates.length];
+            attachmentIndex++;
+
+            attachments.push({
+              name: selectedAttachmentTemplate.templates.name,
+              content: replacePlaceholders(selectedAttachmentTemplate.templates.content, variables),
+              format: selectedAttachmentTemplate.templates.format,
+            });
+          }
 
           draftsToInsert.push({
             user_id,
@@ -208,7 +217,7 @@ Deno.serve(async (req: Request) => {
             from_email: fromEmail,
             subject: replacePlaceholders(subject, variables),
             body: bodyContent,
-            attachments: attachments.length > 0 ? attachments : [],
+            attachments,
           });
 
         } catch (error) {
