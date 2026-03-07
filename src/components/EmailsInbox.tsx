@@ -441,7 +441,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
         alert(`Successfully generated ${result.drafts_created} draft emails from your contacts and campaigns.`);
         setActiveTab('drafts');
       } else {
-        alert('No drafts were created. Make sure you have active campaigns with templates and contacts.');
+        alert(result.message || 'No drafts were created. Make sure you have campaigns with test mode enabled, templates, and contacts.');
       }
 
     } catch (error) {
