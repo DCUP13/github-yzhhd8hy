@@ -26,6 +26,7 @@ interface OutboxEmail {
   from_email: string;
   subject: string;
   body: string;
+  attachments: any;
   status: 'pending' | 'sending' | 'failed';
   error_message?: string;
   created_at: string;
@@ -38,6 +39,7 @@ interface SentEmail {
   from_email: string;
   subject: string;
   body: string;
+  attachments: any;
   sent_at: string;
   created_at: string;
 }
@@ -165,6 +167,13 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
+    console.log('Fetched draft emails:', data?.map(d => ({
+      id: d.id,
+      to_email: d.to_email,
+      hasAttachments: !!d.attachments,
+      attachmentType: typeof d.attachments,
+      attachmentLength: Array.isArray(d.attachments) ? d.attachments.length : 'not array'
+    })));
     setDraftEmails(data || []);
   };
 
@@ -877,7 +886,9 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                               </div>
                             )}
                             {((activeTab === 'inbox' && hasAttachments((email as Email).attachments)) ||
-                              (activeTab === 'drafts' && hasAttachments((email as DraftEmail).attachments))) && (
+                              (activeTab === 'drafts' && hasAttachments((email as DraftEmail).attachments)) ||
+                              (activeTab === 'outbox' && hasAttachments((email as OutboxEmail).attachments)) ||
+                              (activeTab === 'sent' && hasAttachments((email as SentEmail).attachments))) && (
                               <Paperclip className="w-4 h-4 text-gray-400" />
                             )}
                           </div>
@@ -981,16 +992,26 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 </div>
 
                 {((activeTab === 'inbox' && hasAttachments((selectedEmail as Email).attachments)) ||
-                  (activeTab === 'drafts' && hasAttachments((selectedEmail as DraftEmail).attachments))) && (
+                  (activeTab === 'drafts' && hasAttachments((selectedEmail as DraftEmail).attachments)) ||
+                  (activeTab === 'outbox' && hasAttachments((selectedEmail as OutboxEmail).attachments)) ||
+                  (activeTab === 'sent' && hasAttachments((selectedEmail as SentEmail).attachments))) && (
                   <div className="flex items-center gap-2 text-sm">
                     <Paperclip className="w-4 h-4 text-gray-400" />
                     <span className="text-gray-500 dark:text-gray-400">
                       {activeTab === 'inbox'
                         ? getAttachments((selectedEmail as Email).attachments).length
-                        : getAttachments((selectedEmail as DraftEmail).attachments).length} attachment{
+                        : activeTab === 'drafts'
+                        ? getAttachments((selectedEmail as DraftEmail).attachments).length
+                        : activeTab === 'outbox'
+                        ? getAttachments((selectedEmail as OutboxEmail).attachments).length
+                        : getAttachments((selectedEmail as SentEmail).attachments).length} attachment{
                         (activeTab === 'inbox'
                           ? getAttachments((selectedEmail as Email).attachments).length
-                          : getAttachments((selectedEmail as DraftEmail).attachments).length) !== 1 ? 's' : ''}
+                          : activeTab === 'drafts'
+                          ? getAttachments((selectedEmail as DraftEmail).attachments).length
+                          : activeTab === 'outbox'
+                          ? getAttachments((selectedEmail as OutboxEmail).attachments).length
+                          : getAttachments((selectedEmail as SentEmail).attachments).length) !== 1 ? 's' : ''}
                     </span>
                   </div>
                 )}
@@ -1047,6 +1068,72 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   </h3>
                   <div className="space-y-2">
                     {getAttachments((selectedEmail as DraftEmail).attachments).map((attachment: any, index: number) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">
+                            {attachment.format === 'docx' ? '📝' : attachment.format === 'pdf' ? '📄' : '📎'}
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                              {attachment.name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {attachment.format?.toUpperCase()} • {(attachment.content?.length || 0) > 0 ? 'Content included' : 'Empty'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 italic">
+                          Template attachment
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'outbox' && hasAttachments((selectedEmail as OutboxEmail).attachments) && (
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                    Attachments ({getAttachments((selectedEmail as OutboxEmail).attachments).length})
+                  </h3>
+                  <div className="space-y-2">
+                    {getAttachments((selectedEmail as OutboxEmail).attachments).map((attachment: any, index: number) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">
+                            {attachment.format === 'docx' ? '📝' : attachment.format === 'pdf' ? '📄' : '📎'}
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                              {attachment.name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {attachment.format?.toUpperCase()} • {(attachment.content?.length || 0) > 0 ? 'Content included' : 'Empty'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 italic">
+                          Template attachment
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'sent' && hasAttachments((selectedEmail as SentEmail).attachments) && (
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                    Attachments ({getAttachments((selectedEmail as SentEmail).attachments).length})
+                  </h3>
+                  <div className="space-y-2">
+                    {getAttachments((selectedEmail as SentEmail).attachments).map((attachment: any, index: number) => (
                       <div
                         key={index}
                         className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
