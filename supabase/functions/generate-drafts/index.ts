@@ -50,12 +50,12 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Generating drafts for user: ${user_id}${campaign_id ? `, campaign: ${campaign_id}` : ''}`);
 
-    // Get all active campaigns for the user (or specific campaign if provided)
+    // Get all campaigns with test mode enabled (or specific campaign if provided)
     let campaignQuery = supabase
       .from("campaigns")
       .select("*")
       .eq("user_id", user_id)
-      .eq("is_active", true);
+      .eq("test_mode", true);
 
     if (campaign_id) {
       campaignQuery = campaignQuery.eq("id", campaign_id);
@@ -71,7 +71,7 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           success: true,
-          message: "No active campaigns found",
+          message: "No campaigns with test mode enabled found. Please enable test mode on at least one campaign.",
           drafts_created: 0,
         }),
         {
