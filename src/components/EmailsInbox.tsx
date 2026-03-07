@@ -503,7 +503,31 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   };
 
   const hasAttachments = (attachments: any) => {
-    return attachments && Array.isArray(attachments) && attachments.length > 0;
+    if (!attachments) return false;
+    // Handle both array and string (if stored as JSON string)
+    if (typeof attachments === 'string') {
+      try {
+        const parsed = JSON.parse(attachments);
+        return Array.isArray(parsed) && parsed.length > 0;
+      } catch {
+        return false;
+      }
+    }
+    return Array.isArray(attachments) && attachments.length > 0;
+  };
+
+  const getAttachments = (attachments: any): any[] => {
+    if (!attachments) return [];
+    // Handle both array and string (if stored as JSON string)
+    if (typeof attachments === 'string') {
+      try {
+        const parsed = JSON.parse(attachments);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return Array.isArray(attachments) ? attachments : [];
   };
 
   const getAttachmentIcon = (contentType: string) => {
@@ -852,7 +876,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                                 </span>
                               </div>
                             )}
-                            {activeTab === 'inbox' && hasAttachments((email as Email).attachments) && (
+                            {((activeTab === 'inbox' && hasAttachments((email as Email).attachments)) ||
+                              (activeTab === 'drafts' && hasAttachments((email as DraftEmail).attachments))) && (
                               <Paperclip className="w-4 h-4 text-gray-400" />
                             )}
                           </div>
@@ -955,11 +980,17 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   </div>
                 </div>
 
-                {activeTab === 'inbox' && hasAttachments((selectedEmail as Email).attachments) && (
+                {((activeTab === 'inbox' && hasAttachments((selectedEmail as Email).attachments)) ||
+                  (activeTab === 'drafts' && hasAttachments((selectedEmail as DraftEmail).attachments))) && (
                   <div className="flex items-center gap-2 text-sm">
                     <Paperclip className="w-4 h-4 text-gray-400" />
                     <span className="text-gray-500 dark:text-gray-400">
-                      {(selectedEmail as Email).attachments.length} attachment{(selectedEmail as Email).attachments.length !== 1 ? 's' : ''}
+                      {activeTab === 'inbox'
+                        ? getAttachments((selectedEmail as Email).attachments).length
+                        : getAttachments((selectedEmail as DraftEmail).attachments).length} attachment{
+                        (activeTab === 'inbox'
+                          ? getAttachments((selectedEmail as Email).attachments).length
+                          : getAttachments((selectedEmail as DraftEmail).attachments).length) !== 1 ? 's' : ''}
                     </span>
                   </div>
                 )}
@@ -976,10 +1007,10 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
               {activeTab === 'inbox' && hasAttachments((selectedEmail as Email).attachments) && (
                 <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
-                    Attachments ({(selectedEmail as Email).attachments.length})
+                    Attachments ({getAttachments((selectedEmail as Email).attachments).length})
                   </h3>
                   <div className="space-y-2">
-                    {(selectedEmail as Email).attachments.map((attachment: any, index: number) => (
+                    {getAttachments((selectedEmail as Email).attachments).map((attachment: any, index: number) => (
                       <div
                         key={index}
                         className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
@@ -1003,6 +1034,39 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                         >
                           Download
                         </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'drafts' && hasAttachments((selectedEmail as DraftEmail).attachments) && (
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                    Attachments ({getAttachments((selectedEmail as DraftEmail).attachments).length})
+                  </h3>
+                  <div className="space-y-2">
+                    {getAttachments((selectedEmail as DraftEmail).attachments).map((attachment: any, index: number) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">
+                            {attachment.format === 'docx' ? '📝' : attachment.format === 'pdf' ? '📄' : '📎'}
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                              {attachment.name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {attachment.format?.toUpperCase()} • {(attachment.content?.length || 0) > 0 ? 'Content included' : 'Empty'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 italic">
+                          Template attachment
+                        </span>
                       </div>
                     ))}
                   </div>
