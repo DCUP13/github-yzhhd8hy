@@ -208,7 +208,7 @@ Deno.serve(async (req: Request) => {
             from_email: fromEmail,
             subject: replacePlaceholders(subject, variables),
             body: bodyContent,
-            attachments: attachments.length > 0 ? JSON.stringify(attachments) : '[]',
+            attachments: attachments.length > 0 ? attachments : [],
           });
 
         } catch (error) {
