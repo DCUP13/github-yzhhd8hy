@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Plus, X, MapPin, Mail, FileText, Save, Clock, Server, AlertCircle, Calendar, Phone, User, Building, DollarSign } from 'lucide-react';
+import { LayoutGrid as Layout, Plus, X, MapPin, Mail, FileText, Save, Clock, Server, AlertCircle, Calendar, Phone, User, Building, DollarSign } from 'lucide-react';
 import type { Template } from '../features/templates/types';
 import type { EmailEntry } from './Emails';
 import { TemplatesContext } from '../App';
