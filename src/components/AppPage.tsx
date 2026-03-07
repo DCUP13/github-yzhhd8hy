@@ -249,6 +249,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         throw new Error('User not authenticated');
       }
 
+      // Update general settings
       const { error: upsertError } = await supabase
         .from('general_settings')
         .upsert({
@@ -260,6 +261,14 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         });
 
       if (upsertError) throw upsertError;
+
+      // Update all campaigns' test_mode to match
+      const { error: campaignsError } = await supabase
+        .from('campaigns')
+        .update({ test_mode: enabled })
+        .eq('user_id', user.data.user.id);
+
+      if (campaignsError) throw campaignsError;
 
       setTestModeEnabled(enabled);
     } catch (error) {
