@@ -1,0 +1,260 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.39.7";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
+
+interface GenerateDraftsRequest {
+  user_id: string;
+  campaign_id?: string;
+}
+
+function replacePlaceholders(content: string, variables: Record<string, string>): string {
+  let result = content;
+
+  for (const [placeholder, value] of Object.entries(variables)) {
+    const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
+    result = result.replace(regex, value || '');
+  }
+
+  return result;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders,
+    });
+  }
+
+  try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      {
+        auth: {
+          persistSession: false,
+        },
+      }
+    );
+
+    const { user_id, campaign_id }: GenerateDraftsRequest = await req.json();
+
+    if (!user_id) {
+      throw new Error("Missing user_id");
+    }
+
+    console.log(`Generating drafts for user: ${user_id}${campaign_id ? `, campaign: ${campaign_id}` : ''}`);
+
+    // Get all active campaigns for the user (or specific campaign if provided)
+    let campaignQuery = supabase
+      .from("campaigns")
+      .select("*")
+      .eq("user_id", user_id)
+      .eq("is_active", true);
+
+    if (campaign_id) {
+      campaignQuery = campaignQuery.eq("id", campaign_id);
+    }
+
+    const { data: campaigns, error: campaignsError } = await campaignQuery;
+
+    if (campaignsError) {
+      throw new Error(`Failed to get campaigns: ${campaignsError.message}`);
+    }
+
+    if (!campaigns || campaigns.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "No active campaigns found",
+          drafts_created: 0,
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
+    let totalDraftsCreated = 0;
+
+    // Process each campaign
+    for (const campaign of campaigns) {
+      console.log(`Processing campaign: ${campaign.id}`);
+
+      // Get campaign templates
+      const { data: campaignTemplates, error: templatesError } = await supabase
+        .from("campaign_templates")
+        .select(`
+          id,
+          template_id,
+          template_type,
+          templates (
+            id,
+            name,
+            content,
+            format
+          )
+        `)
+        .eq("campaign_id", campaign.id)
+        .eq("user_id", user_id);
+
+      if (templatesError) {
+        console.error(`Failed to get templates for campaign ${campaign.id}:`, templatesError);
+        continue;
+      }
+
+      // Find body and attachment templates
+      const bodyTemplate = campaignTemplates?.find(ct => ct.template_type === 'body');
+      const attachmentTemplates = campaignTemplates?.filter(ct => ct.template_type === 'attachment') || [];
+
+      if (!bodyTemplate || !bodyTemplate.templates) {
+        console.error(`No body template found for campaign ${campaign.id}`);
+        continue;
+      }
+
+      // Get campaign email addresses
+      const { data: campaignEmails, error: emailsError } = await supabase
+        .from("campaign_emails")
+        .select("email_address, provider")
+        .eq("campaign_id", campaign.id)
+        .eq("user_id", user_id);
+
+      if (emailsError || !campaignEmails || campaignEmails.length === 0) {
+        console.error(`No email addresses configured for campaign ${campaign.id}`);
+        continue;
+      }
+
+      // Get all contacts for this campaign
+      const { data: contacts, error: contactsError } = await supabase
+        .from("contacts")
+        .select("*")
+        .eq("user_id", user_id);
+
+      if (contactsError) {
+        console.error(`Failed to get contacts for campaign ${campaign.id}:`, contactsError);
+        continue;
+      }
+
+      if (!contacts || contacts.length === 0) {
+        console.log(`No contacts found for campaign ${campaign.id}`);
+        continue;
+      }
+
+      console.log(`Generating drafts for ${contacts.length} contacts`);
+
+      // Generate drafts for each contact
+      const draftsToInsert = [];
+      let emailIndex = 0;
+
+      for (const contact of contacts) {
+        try {
+          // Select from email address (round-robin)
+          const fromEmail = campaignEmails[emailIndex % campaignEmails.length].email_address;
+          emailIndex++;
+
+          // Build variables for template replacement
+          const variables: Record<string, string> = {
+            name: contact.name || '',
+            email: contact.email || '',
+            phone: contact.phone || '',
+            phone_cell: contact.phone_cell || '',
+            business_name: contact.business_name || '',
+            sender_name: campaign.sender_name || '',
+            sender_phone: campaign.sender_phone || '',
+            sender_city: campaign.sender_city || '',
+            sender_state: campaign.sender_state || '',
+            city: campaign.city || '',
+            days_till_close: campaign.days_till_close || '',
+            emd: campaign.emd || '',
+            option_period: campaign.option_period || '',
+            title_company: campaign.title_company || '',
+          };
+
+          // Replace variables in body template
+          const bodyContent = replacePlaceholders(
+            bodyTemplate.templates.content,
+            variables
+          );
+
+          // Select random subject line
+          const subjectLines = campaign.subject_lines || [];
+          const subject = subjectLines.length > 0
+            ? subjectLines[Math.floor(Math.random() * subjectLines.length)]
+            : 'No Subject';
+
+          // Prepare attachments
+          const attachments = attachmentTemplates.map(at => ({
+            name: at.templates.name,
+            content: replacePlaceholders(at.templates.content, variables),
+            format: at.templates.format,
+          }));
+
+          draftsToInsert.push({
+            user_id,
+            campaign_id: campaign.id,
+            to_email: contact.email,
+            from_email: fromEmail,
+            subject: replacePlaceholders(subject, variables),
+            body: bodyContent,
+            attachments: attachments.length > 0 ? JSON.stringify(attachments) : '[]',
+          });
+
+        } catch (error) {
+          console.error(`Error generating draft for contact ${contact.id}:`, error);
+        }
+      }
+
+      // Insert drafts
+      if (draftsToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from("email_drafts")
+          .insert(draftsToInsert);
+
+        if (insertError) {
+          console.error(`Failed to insert drafts for campaign ${campaign.id}:`, insertError);
+          continue;
+        }
+
+        totalDraftsCreated += draftsToInsert.length;
+        console.log(`Inserted ${draftsToInsert.length} drafts for campaign ${campaign.id}`);
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        drafts_created: totalDraftsCreated,
+        campaigns_processed: campaigns.length,
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Error in generate-drafts:", error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message,
+      }),
+      {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
+});

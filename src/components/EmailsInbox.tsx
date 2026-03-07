@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, Paperclip, Search, RefreshCw, Clock, User, ArrowLeft, Reply, Send, Inbox, Inbox as Outbox, Plus, FileText, ChevronDown } from 'lucide-react';
+import { Mail, Paperclip, Search, RefreshCw, Clock, User, ArrowLeft, Reply, Send, Inbox, Inbox as Outbox, Plus, FileText, ChevronDown, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ReplyDialog } from './ReplyDialog';
 import { ComposeEmailDialog } from './ComposeEmailDialog';
@@ -85,6 +85,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [isReplyAll, setIsReplyAll] = useState(false);
   const [showDraftsDropdown, setShowDraftsDropdown] = useState(false);
   const [isProcessingDrafts, setIsProcessingDrafts] = useState(false);
+  const [isGeneratingDrafts, setIsGeneratingDrafts] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -397,6 +398,60 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     }
   };
 
+  const handleGenerateDrafts = async () => {
+    setIsGeneratingDrafts(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert('You must be logged in to generate drafts');
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-drafts`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: user.id,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate drafts');
+      }
+
+      const result = await response.json();
+      console.log('Draft generation result:', result);
+
+      await fetchDraftEmails();
+
+      if (result.drafts_created > 0) {
+        alert(`Successfully generated ${result.drafts_created} draft emails from your contacts and campaigns.`);
+        setActiveTab('drafts');
+      } else {
+        alert('No drafts were created. Make sure you have active campaigns with templates and contacts.');
+      }
+
+    } catch (error) {
+      console.error('Error generating drafts:', error);
+      alert(`Failed to generate drafts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsGeneratingDrafts(false);
+    }
+  };
+
   const getFilteredEmails = () => {
     if (activeTab === 'inbox') {
       return emails.filter(email => {
@@ -544,6 +599,27 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Emails</h1>
               </div>
               <div className="flex gap-2">
+                <button
+                  onClick={handleGenerateDrafts}
+                  disabled={isGeneratingDrafts}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
+                    isGeneratingDrafts
+                      ? 'bg-green-400 cursor-wait'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  {isGeneratingDrafts ? (
+                    <>
+                      <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Generate Drafts
+                    </>
+                  )}
+                </button>
                 <button
                   onClick={() => setShowComposeDialog(true)}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"

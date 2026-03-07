@@ -66,14 +66,8 @@ Deno.serve(async (req: Request) => {
       throw new Error("Campaign is not active");
     }
 
-    // Check if test mode is enabled
-    const { data: settings, error: settingsError } = await supabase
-      .from("general_settings")
-      .select("test_mode_enabled")
-      .eq("user_id", user_id)
-      .maybeSingle();
-
-    const testModeEnabled = settings?.test_mode_enabled ?? false;
+    // Check if test mode is enabled for this campaign
+    const testModeEnabled = campaign.test_mode ?? false;
     console.log(`Test mode: ${testModeEnabled ? 'ENABLED - emails will go to drafts' : 'DISABLED - emails will go to outbox'}`);
 
     // Step 1: Scrape agents if no contacts exist
