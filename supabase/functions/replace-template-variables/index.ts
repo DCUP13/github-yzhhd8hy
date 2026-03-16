@@ -11,6 +11,7 @@ interface ReplaceVariablesRequest {
   template_id: string;
   user_id: string;
   variables: Record<string, string>;
+  contact_id?: string;
 }
 
 function replacePlaceholders(content: string, variables: Record<string, string>): string {
@@ -44,7 +45,7 @@ Deno.serve(async (req: Request) => {
       }
     );
 
-    const { template_id, user_id, variables }: ReplaceVariablesRequest = await req.json();
+    const { template_id, user_id, variables, contact_id }: ReplaceVariablesRequest = await req.json();
 
     if (!template_id || !user_id || !variables) {
       throw new Error("Missing required parameters");
@@ -65,8 +66,39 @@ Deno.serve(async (req: Request) => {
     console.log(`Replacing variables in template: ${template.name}`);
     console.log(`Variables:`, variables);
 
+    // Merge listing data if contact_id is provided
+    let allVariables = { ...variables };
+
+    if (contact_id) {
+      const { data: listings } = await supabase
+        .from("listings")
+        .select("*")
+        .eq("contact_id", contact_id)
+        .eq("user_id", user_id)
+        .limit(1);
+
+      const listing = listings && listings.length > 0 ? listings[0] : null;
+
+      if (listing) {
+        allVariables = {
+          ...allVariables,
+          listing_address: listing.address_line1 || '',
+          listing_city: listing.city || '',
+          listing_state: listing.state || '',
+          listing_zip: listing.postal_code || '',
+          listing_price: listing.price ? `$${listing.price.toLocaleString()}` : '',
+          listing_bedrooms: listing.bedrooms?.toString() || '',
+          listing_bathrooms: listing.bathrooms?.toString() || '',
+          listing_sqft: listing.living_area_value?.toString() || '',
+          listing_type: listing.home_type || '',
+          listing_url: listing.listing_url || '',
+          listing_status: listing.status || '',
+        };
+      }
+    }
+
     // Replace all placeholders
-    const replacedContent = replacePlaceholders(template.content, variables);
+    const replacedContent = replacePlaceholders(template.content, allVariables);
 
     return new Response(
       JSON.stringify({

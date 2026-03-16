@@ -262,7 +262,7 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                   <p className="text-xs text-blue-800 dark:text-blue-200 mb-3">
                     Use these placeholders in your templates by wrapping them in double curly braces, like <code className="bg-blue-100 dark:bg-blue-800 px-1 py-0.5 rounded">{'{{name}}'}</code>
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                     <div>
                       <p className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Contact Information:</p>
                       <ul className="space-y-0.5 text-blue-800 dark:text-blue-200">
@@ -289,6 +289,22 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{emd}}'}</code> - Earnest money deposit</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{option_period}}'}</code> - Option period</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{title_company}}'}</code> - Title company</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Listing Data:</p>
+                      <ul className="space-y-0.5 text-blue-800 dark:text-blue-200">
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_address}}'}</code> - Property address</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_city}}'}</code> - Property city</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_state}}'}</code> - Property state</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_zip}}'}</code> - Property zip code</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_price}}'}</code> - Listing price</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_bedrooms}}'}</code> - Number of bedrooms</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_bathrooms}}'}</code> - Number of bathrooms</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_sqft}}'}</code> - Square footage</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_type}}'}</code> - Home type</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_url}}'}</code> - Listing URL</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_status}}'}</code> - Listing status</li>
                       </ul>
                     </div>
                   </div>

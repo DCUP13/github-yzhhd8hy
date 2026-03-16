@@ -179,12 +179,27 @@ Deno.serve(async (req: Request) => {
         const fromEmail = campaignEmails[emailIndex % campaignEmails.length].email_address;
         emailIndex++;
 
+        // Fetch listing data for this contact
+        const { data: listings } = await supabase
+          .from("listings")
+          .select("*")
+          .eq("contact_id", contact.id)
+          .eq("user_id", user_id)
+          .limit(1);
+
+        const listing = listings && listings.length > 0 ? listings[0] : null;
+
         // Build variables for template replacement
         const variables: Record<string, string> = {
           name: contact.name || '',
           email: contact.email || '',
           phone: contact.phone || '',
+          phone_cell: contact.phone_cell || '',
+          phone_brokerage: contact.phone_brokerage || '',
+          phone_business: contact.phone_business || '',
           business_name: contact.business_name || '',
+          screen_name: contact.screen_name || '',
+          profile_url: contact.profile_url || '',
           sender_name: campaign.sender_name || '',
           sender_phone: campaign.sender_phone || '',
           sender_city: campaign.sender_city || '',
@@ -194,6 +209,17 @@ Deno.serve(async (req: Request) => {
           emd: campaign.emd || '',
           option_period: campaign.option_period || '',
           title_company: campaign.title_company || '',
+          listing_address: listing?.address_line1 || '',
+          listing_city: listing?.city || '',
+          listing_state: listing?.state || '',
+          listing_zip: listing?.postal_code || '',
+          listing_price: listing?.price ? `$${listing.price.toLocaleString()}` : '',
+          listing_bedrooms: listing?.bedrooms?.toString() || '',
+          listing_bathrooms: listing?.bathrooms?.toString() || '',
+          listing_sqft: listing?.living_area_value?.toString() || '',
+          listing_type: listing?.home_type || '',
+          listing_url: listing?.listing_url || '',
+          listing_status: listing?.status || '',
         };
 
         // Replace variables in body template
