@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { File, Plus, Upload as UploadIcon } from 'lucide-react';
+import { File, Plus, Upload as UploadIcon, Info } from 'lucide-react';
 import { TemplateList } from './components/TemplateList';
 import { TemplateEditor } from './components/TemplateEditor';
 import type { Template } from './types';
@@ -228,28 +228,74 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
     <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
       <div className="max-w-4xl mx-auto">
         {!currentTemplate && (
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <File className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Templates</h1>
+          <>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <File className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Templates</h1>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => templateFileRef.current?.click()}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <UploadIcon className="w-4 h-4 mr-2" />
+                  Import
+                </button>
+                <button
+                  onClick={handleCreateTemplate}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Template
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => templateFileRef.current?.click()}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <UploadIcon className="w-4 h-4 mr-2" />
-                Import
-              </button>
-              <button
-                onClick={handleCreateTemplate}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Template
-              </button>
+
+            <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    Available Template Placeholders
+                  </h3>
+                  <p className="text-xs text-blue-800 dark:text-blue-200 mb-3">
+                    Use these placeholders in your templates by wrapping them in double curly braces, like <code className="bg-blue-100 dark:bg-blue-800 px-1 py-0.5 rounded">{'{{name}}'}</code>
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Contact Information:</p>
+                      <ul className="space-y-0.5 text-blue-800 dark:text-blue-200">
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{name}}'}</code> - Contact name</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{email}}'}</code> - Email address</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{phone}}'}</code> - Phone number</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{phone_cell}}'}</code> - Cell phone</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{phone_brokerage}}'}</code> - Brokerage phone</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{phone_business}}'}</code> - Business phone</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{business_name}}'}</code> - Business name</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{screen_name}}'}</code> - Screen name</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{profile_url}}'}</code> - Profile URL</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Campaign Details:</p>
+                      <ul className="space-y-0.5 text-blue-800 dark:text-blue-200">
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_name}}'}</code> - Your name</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_phone}}'}</code> - Your phone</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_city}}'}</code> - Your city</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_state}}'}</code> - Your state</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{city}}'}</code> - Target city</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{days_till_close}}'}</code> - Days until close</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{emd}}'}</code> - Earnest money deposit</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{option_period}}'}</code> - Option period</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{title_company}}'}</code> - Title company</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {currentTemplate ? (
