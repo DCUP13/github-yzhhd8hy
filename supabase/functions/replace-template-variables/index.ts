@@ -12,18 +12,97 @@ interface ReplaceVariablesRequest {
   user_id: string;
   variables: Record<string, string>;
   contact_id?: string;
+  use_smart_fallbacks?: boolean;
+  campaign_id?: string;
 }
 
-function replacePlaceholders(content: string, variables: Record<string, string>): string {
-  let result = content;
-  
-  for (const [placeholder, value] of Object.entries(variables)) {
-    // Replace {{placeholder}} format
-    const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
-    result = result.replace(regex, value || '');
+interface PlaceholderConfig {
+  tier: 'critical' | 'important' | 'optional';
+  fallback_text: string;
+}
+
+async function getPlaceholderConfig(
+  supabase: any,
+  userId: string,
+  placeholderKey: string
+): Promise<PlaceholderConfig | null> {
+  const { data: userConfig } = await supabase
+    .from("placeholder_config")
+    .select("tier, fallback_text")
+    .eq("user_id", userId)
+    .eq("placeholder_key", placeholderKey)
+    .maybeSingle();
+
+  if (userConfig) {
+    return userConfig;
   }
-  
+
+  const { data: defaultConfig } = await supabase
+    .from("default_placeholder_config")
+    .select("tier, fallback_text")
+    .eq("placeholder_key", placeholderKey)
+    .maybeSingle();
+
+  return defaultConfig;
+}
+
+function processConditionalSections(content: string, variables: Record<string, string>): string {
+  let result = content;
+
+  const conditionalPattern = /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g;
+
+  result = result.replace(conditionalPattern, (match, placeholderKey, innerContent) => {
+    const value = variables[placeholderKey];
+    if (value && value.trim() !== '') {
+      return innerContent;
+    }
+    return '';
+  });
+
   return result;
+}
+
+async function replacePlaceholders(
+  content: string,
+  variables: Record<string, string>,
+  supabase: any,
+  userId: string,
+  useSmartFallbacks: boolean = true
+): Promise<{ content: string; missingFields: string[] }> {
+  let result = content;
+  const missingFields: string[] = [];
+
+  const placeholderPattern = /\{\{(\w+)\}\}/g;
+  const placeholders = new Set<string>();
+  let match;
+
+  while ((match = placeholderPattern.exec(content)) !== null) {
+    placeholders.add(match[1]);
+  }
+
+  for (const placeholder of placeholders) {
+    const value = variables[placeholder];
+    const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
+
+    if (!value || value.trim() === '') {
+      missingFields.push(placeholder);
+
+      if (useSmartFallbacks) {
+        const config = await getPlaceholderConfig(supabase, userId, placeholder);
+        if (config && config.fallback_text) {
+          result = result.replace(regex, config.fallback_text);
+        } else {
+          result = result.replace(regex, '');
+        }
+      } else {
+        result = result.replace(regex, '');
+      }
+    } else {
+      result = result.replace(regex, value);
+    }
+  }
+
+  return { content: result, missingFields };
 }
 
 Deno.serve(async (req: Request) => {
@@ -45,7 +124,7 @@ Deno.serve(async (req: Request) => {
       }
     );
 
-    const { template_id, user_id, variables, contact_id }: ReplaceVariablesRequest = await req.json();
+    const { template_id, user_id, variables, contact_id, use_smart_fallbacks, campaign_id }: ReplaceVariablesRequest = await req.json();
 
     if (!template_id || !user_id || !variables) {
       throw new Error("Missing required parameters");
@@ -97,8 +176,32 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Replace all placeholders
-    const replacedContent = replacePlaceholders(template.content, allVariables);
+    // Get campaign settings if campaign_id is provided
+    let useSmartFallbacks = use_smart_fallbacks ?? true;
+    if (campaign_id) {
+      const { data: campaign } = await supabase
+        .from("campaigns")
+        .select("use_smart_fallbacks")
+        .eq("id", campaign_id)
+        .eq("user_id", user_id)
+        .maybeSingle();
+
+      if (campaign) {
+        useSmartFallbacks = campaign.use_smart_fallbacks;
+      }
+    }
+
+    // Process conditional sections first
+    let processedContent = processConditionalSections(template.content, allVariables);
+
+    // Replace all placeholders with smart fallbacks
+    const { content: replacedContent, missingFields } = await replacePlaceholders(
+      processedContent,
+      allVariables,
+      supabase,
+      user_id,
+      useSmartFallbacks
+    );
 
     return new Response(
       JSON.stringify({
@@ -106,6 +209,7 @@ Deno.serve(async (req: Request) => {
         content: replacedContent,
         format: template.format,
         name: template.name,
+        missing_fields: missingFields,
       }),
       {
         headers: {
