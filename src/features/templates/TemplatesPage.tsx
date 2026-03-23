@@ -311,6 +311,59 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                 </div>
               </div>
             </div>
+
+            <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2">
+                    Advanced Features: Conditional Sections & Smart Fallbacks
+                  </h3>
+
+                  <div className="space-y-3 text-xs text-green-800 dark:text-green-200">
+                    <div>
+                      <p className="font-semibold mb-1">Conditional Sections</p>
+                      <p className="mb-2">Hide entire sections when data is missing using conditional syntax:</p>
+                      <div className="bg-green-100 dark:bg-green-800 p-2 rounded font-mono text-xs">
+                        {'{{#if listing_price}}'}<br/>
+                        This property is priced at {'{{listing_price}}'}.<br/>
+                        {'{{/if}}'}
+                      </div>
+                      <p className="mt-1 text-xs italic">If listing_price is empty, the entire section disappears.</p>
+                    </div>
+
+                    <div>
+                      <p className="font-semibold mb-1">Smart Fallbacks (Automatic)</p>
+                      <p className="mb-2">When data is missing, the system automatically uses natural fallback text:</p>
+                      <ul className="space-y-1 list-disc list-inside ml-2">
+                        <li><code className="bg-green-100 dark:bg-green-800 px-1 rounded">{'{{first_name}}'}</code> → "there" (if missing)</li>
+                        <li><code className="bg-green-100 dark:bg-green-800 px-1 rounded">{'{{listing_price}}'}</code> → "competitive market price" (if missing)</li>
+                        <li><code className="bg-green-100 dark:bg-green-800 px-1 rounded">{'{{listing_bedrooms}}'}</code> → "multiple bedrooms" (if missing)</li>
+                        <li><code className="bg-green-100 dark:bg-green-800 px-1 rounded">{'{{business_name}}'}</code> → "your company" (if missing)</li>
+                      </ul>
+                      <p className="mt-2 text-xs italic">
+                        Enable/disable smart fallbacks in Campaign Settings → Data Quality Settings
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="font-semibold mb-1">Example Template Using Both Features</p>
+                      <div className="bg-green-100 dark:bg-green-800 p-2 rounded font-mono text-xs">
+                        Hi {'{{first_name}}'},{/* Will show "Hi there," if name is missing */}<br/>
+                        <br/>
+                        {'{{#if listing_address}}'}<br/>
+                        I noticed your listing at {'{{listing_address}}'}.<br/>
+                        {'{{/if}}'}{/* This line only shows if address exists */}<br/>
+                        <br/>
+                        {'{{#if listing_price}}'}<br/>
+                        At {'{{listing_price}}'}, this is a great opportunity.<br/>
+                        {'{{/if}}'}{/* Price section conditionally included */}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </>
         )}
 
