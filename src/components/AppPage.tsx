@@ -5,6 +5,7 @@ import type { EmailEntry } from './Emails';
 import { TemplatesContext } from '../App';
 import { useEmails } from '../contexts/EmailContext';
 import { supabase } from '../lib/supabase';
+import { CampaignDataQuality } from './CampaignDataQuality';
 
 interface EmailWithProvider extends EmailEntry {
   smtpProvider: 'amazon' | 'gmail';
@@ -1219,79 +1220,14 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
               </div>
 
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-                <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Data Quality Settings</h2>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        checked={currentCampaign.useSmartFallbacks}
-                        onChange={(e) => handleUpdateCampaign({ useSmartFallbacks: e.target.checked })}
-                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Use Smart Fallbacks
-                      </span>
-                    </label>
-                    <p className="mt-1 ml-7 text-sm text-gray-500 dark:text-gray-400">
-                      Automatically replace missing data with contextually appropriate fallback text
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        checked={currentCampaign.skipIncompleteContacts}
-                        onChange={(e) => handleUpdateCampaign({ skipIncompleteContacts: e.target.checked })}
-                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Skip Contacts Below Quality Threshold
-                      </span>
-                    </label>
-                    <p className="mt-1 ml-7 text-sm text-gray-500 dark:text-gray-400">
-                      Don't send emails to contacts that don't meet the minimum data quality score
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Minimum Data Quality Score ({currentCampaign.minDataQualityScore}%)
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="5"
-                      value={currentCampaign.minDataQualityScore}
-                      onChange={(e) => handleUpdateCampaign({ minDataQualityScore: parseInt(e.target.value) })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      <span>0% (Allow all)</span>
-                      <span>50% (Balanced)</span>
-                      <span>100% (Perfect data only)</span>
-                    </div>
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                      Contacts are scored based on the completeness of critical, important, and optional data fields
-                    </p>
-                  </div>
-
-                  <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                    <h3 className="text-sm font-medium text-amber-900 dark:text-amber-300 mb-2">
-                      How Data Quality Works
-                    </h3>
-                    <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1 list-disc list-inside">
-                      <li><strong>Critical fields</strong> (name, email): Highest weight - essential for personalization</li>
-                      <li><strong>Important fields</strong> (listing data): Medium weight - valuable but can use fallbacks</li>
-                      <li><strong>Optional fields</strong> (phone, business): Low weight - nice to have but not required</li>
-                      <li>Smart fallbacks replace missing data with natural-sounding alternatives</li>
-                      <li>Contacts below the threshold can be skipped or sent with fallback text</li>
-                    </ul>
-                  </div>
-                </div>
+                <CampaignDataQuality
+                  campaignId={currentCampaign.id}
+                  templates={currentCampaign.templates.filter(t => t.type === 'body').map(t => t.template)}
+                  minDataQualityScore={currentCampaign.minDataQualityScore}
+                  skipIncompleteContacts={currentCampaign.skipIncompleteContacts}
+                  useSmartFallbacks={currentCampaign.useSmartFallbacks}
+                  onUpdateSettings={(settings) => handleUpdateCampaign(settings)}
+                />
               </div>
             </div>
           </div>

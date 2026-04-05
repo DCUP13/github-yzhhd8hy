@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Search, Building2, Mail, Phone, MapPin, Home, ChevronRight, X, Award, User, Trash2, ChevronDown, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { ContactQualityBadge } from './ContactQualityBadge';
 
 interface Contact {
   id: string;
@@ -342,9 +343,12 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                            {contact.name || 'Unknown'}
-                          </h3>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-gray-900 dark:text-white">
+                              {contact.name || 'Unknown'}
+                            </h3>
+                            <ContactQualityBadge contact={contact} />
+                          </div>
                           <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
                             <Building2 className="w-4 h-4" />
                             {contact.business_name || 'No business'}
@@ -397,9 +401,12 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                            {contact.name || 'Unknown'}
-                          </h3>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-gray-900 dark:text-white">
+                              {contact.name || 'Unknown'}
+                            </h3>
+                            <ContactQualityBadge contact={contact} />
+                          </div>
                           <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
                             <Building2 className="w-4 h-4" />
                             {contact.business_name || 'No business'}

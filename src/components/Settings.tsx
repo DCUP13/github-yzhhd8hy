@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Server, Mail } from 'lucide-react';
+import { Server, Mail, BarChart3 } from 'lucide-react';
 import { GeneralTab } from './settings/GeneralTab';
 import { AmazonTab } from './settings/AmazonTab';
 import { GoogleTab } from './settings/GoogleTab';
 import { RapidAPITab } from './settings/RapidAPITab';
+import { DataQualityTab } from './settings/DataQualityTab';
 import type { EmailSettings, GeneralSettings } from './settings/types';
 import { supabase } from '../lib/supabase';
 
@@ -12,7 +13,7 @@ interface SettingsProps {
   currentView: string;
 }
 
-type SettingsTab = 'general' | 'amazon' | 'google' | 'rapid-api';
+type SettingsTab = 'general' | 'amazon' | 'google' | 'rapid-api' | 'data-quality';
 
 export function Settings({ onSignOut, currentView }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -158,6 +159,7 @@ export function Settings({ onSignOut, currentView }: SettingsProps) {
 
   const tabs = [
     { id: 'general', label: 'General', icon: Server },
+    { id: 'data-quality', label: 'Data Quality', icon: BarChart3 },
     { id: 'amazon', label: 'Amazon SES', icon: Server },
     { id: 'google', label: 'Google SMTP', icon: Mail },
     { id: 'rapid-api', label: 'Rapid API', icon: Server }
@@ -203,6 +205,8 @@ export function Settings({ onSignOut, currentView }: SettingsProps) {
                 onToggle={handleToggle}
               />
             )}
+
+            {activeTab === 'data-quality' && <DataQualityTab />}
 
             {activeTab === 'amazon' && (
               <AmazonTab
