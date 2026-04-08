@@ -107,6 +107,14 @@ export default function App() {
       }
     };
 
+    const timeout = setTimeout(() => {
+      if (!authInitialized && mounted) {
+        console.warn('Auth initialization timeout - forcing login view');
+        setView('login');
+        setIsLoading(false);
+      }
+    }, 5000);
+
     initializeAuth();
 
     // Listen for auth changes
@@ -134,6 +142,7 @@ export default function App() {
 
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -207,8 +216,8 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -218,7 +227,7 @@ export default function App() {
       <TemplatesContext.Provider value={{ templates, fetchTemplates }}>
         <EmailProvider>
           <DashboardProvider>
-            <div className={darkMode ? 'dark' : ''}>
+            <>
               {view === 'dashboard' || view === 'app' || view === 'settings' || view === 'templates' || view === 'emails' || view === 'addresses' || view === 'prompts' || view === 'contacts' ? (
                 <div className="flex min-h-screen bg-white dark:bg-gray-900">
                   <div className="fixed inset-y-0 left-0 w-64">
@@ -262,10 +271,10 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 w-full max-w-md">
                     {view === 'login' ? (
-                      <Login 
+                      <Login
                         onRegisterClick={() => setView('register')}
                         onLoginSuccess={handleLogin}
                       />
@@ -275,7 +284,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-            </div>
+            </>
           </DashboardProvider>
         </EmailProvider>
       </TemplatesContext.Provider>
