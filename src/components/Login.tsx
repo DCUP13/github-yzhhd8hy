@@ -39,11 +39,8 @@ export function Login({ onRegisterClick, onLoginSuccess }: LoginProps) {
       }
 
       setStatus('success');
-      setTimeout(() => {
-        setStatus('idle');
-        setFormData({ email: '', password: '' });
-        onLoginSuccess();
-      }, 1000);
+      // Auth state change will handle navigation automatically
+      setFormData({ email: '', password: '' });
     } catch (error) {
       setStatus('error');
       setErrorMessage(error instanceof Error ? error.message : 'Failed to sign in');

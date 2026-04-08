@@ -194,7 +194,7 @@ export default function App() {
   };
 
   const handleLogin = () => {
-    setView('dashboard');
+    // Don't manually change view - let onAuthStateChange handle it
   };
 
   const handleSignOut = async () => {
