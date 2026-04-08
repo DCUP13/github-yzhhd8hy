@@ -74,7 +74,7 @@ export function TemplateList({ templates, onEdit, onDelete, onExport }: Template
             onClick={() => handleSort('name')}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               sortField === 'name'
-                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
           >
@@ -85,7 +85,7 @@ export function TemplateList({ templates, onEdit, onDelete, onExport }: Template
             onClick={() => handleSort('lastModified')}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               sortField === 'lastModified'
-                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
           >
@@ -153,7 +153,7 @@ export function TemplateList({ templates, onEdit, onDelete, onExport }: Template
                         e.stopPropagation();
                         setPreviewTemplate(template);
                       }}
-                      className="p-2 text-gray-400 hover:text-indigo-500 dark:text-gray-500 dark:hover:text-indigo-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                      className="p-2 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                       title="Preview template"
                     >
                       <Eye className="w-5 h-5" />
@@ -164,7 +164,7 @@ export function TemplateList({ templates, onEdit, onDelete, onExport }: Template
                       e.stopPropagation();
                       onExport(template);
                     }}
-                    className="p-2 text-gray-400 hover:text-indigo-500 dark:text-gray-500 dark:hover:text-indigo-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                    className="p-2 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                     title="Download template"
                   >
                     <Download className="w-5 h-5" />
