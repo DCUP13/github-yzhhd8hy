@@ -67,6 +67,7 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
+    let isInitializing = true;
 
     // Timeout fallback to prevent infinite loading
     const timeout = setTimeout(() => {
@@ -101,22 +102,27 @@ export default function App() {
         }
 
         setIsLoading(false);
+        isInitializing = false;
       } catch (error) {
         console.error('Auth initialization failed:', error);
         if (mounted) {
           setView('login');
           setIsLoading(false);
         }
+        isInitializing = false;
       }
     };
 
     initializeAuth();
 
-    // Listen for auth changes
+    // Listen for auth changes (but skip INITIAL_SESSION event)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
+      if (!mounted || isInitializing) return;
+
+      // Ignore INITIAL_SESSION event to prevent double-firing
+      if (event === 'INITIAL_SESSION') return;
 
       try {
         if (event === 'SIGNED_IN' && session) {
