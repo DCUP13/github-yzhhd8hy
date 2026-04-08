@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Plus, Edit, Trash2, Search, Copy, Check, X, Globe, Sparkles, Variable } from 'lucide-react';
+import { MessageSquare, Plus, CreditCard as Edit, Trash2, Search, Copy, Check, X, Globe, Sparkles, Variable } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useEmails } from '../contexts/EmailContext';
 
