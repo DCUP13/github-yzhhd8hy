@@ -49,14 +49,14 @@ export function ExportDialog({ onClose, onExport }: ExportDialogProps) {
             <button
               key={format}
               onClick={() => onExport(format)}
-              className="w-full p-4 text-left bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors group"
+              className="w-full p-4 text-left bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 transition-colors group"
             >
               <div className="flex items-center gap-4">
-                <div className={`${color} group-hover:text-indigo-500 dark:group-hover:text-indigo-400`}>
+                <div className={`${color} group-hover:text-blue-500 dark:group-hover:text-blue-400`}>
                   <Icon className="w-8 h-8" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-indigo-500 dark:group-hover:text-indigo-400">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400">
                     {label}
                   </h4>
                   <p className="text-sm text-gray-500 dark:text-gray-400">

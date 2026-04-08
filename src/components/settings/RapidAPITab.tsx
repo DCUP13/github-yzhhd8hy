@@ -89,7 +89,7 @@ export function RapidAPITab() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-8">
-        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -133,7 +133,7 @@ export function RapidAPITab() {
             max="100"
             value={settings.maxPages}
             onChange={(e) => setSettings(prev => ({ ...prev, maxPages: parseInt(e.target.value, 10) }))}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             required
           />
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -150,7 +150,7 @@ export function RapidAPITab() {
             id="apiKey"
             value={settings.apiKey}
             onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             placeholder="Enter your RapidAPI key"
             required
           />
@@ -165,7 +165,7 @@ export function RapidAPITab() {
             id="apiHost"
             value={settings.apiHost}
             onChange={(e) => setSettings(prev => ({ ...prev, apiHost: e.target.value }))}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             placeholder="Enter the RapidAPI host"
             required
           />
@@ -182,8 +182,8 @@ export function RapidAPITab() {
             disabled={isSaving}
             className={`px-4 py-2 rounded-lg text-sm font-medium text-white ${
               isSaving 
-                ? 'bg-indigo-400 cursor-wait' 
-                : 'bg-indigo-600 hover:bg-indigo-700'
+                ? 'bg-blue-400 cursor-wait' 
+                : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {isSaving ? 'Saving...' : 'Save Settings'}
