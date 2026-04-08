@@ -37,10 +37,7 @@ export const TemplatesContext = createContext<{
 
 export default function App() {
   const [view, setView] = useState<View>('login');
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('darkMode');
-    return saved === 'true';
-  });
+  const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
 
@@ -60,10 +57,8 @@ export default function App() {
         return;
       }
 
-      if (data) {
-        const newDarkMode = data.dark_mode || false;
-        setDarkMode(newDarkMode);
-        localStorage.setItem('darkMode', String(newDarkMode));
+      if (data && data.dark_mode !== null) {
+        setDarkMode(data.dark_mode);
       }
     } catch (error) {
       console.error('Error fetching user settings:', error);
@@ -133,7 +128,6 @@ export default function App() {
         } else if (event === 'SIGNED_OUT') {
           setView('login');
           setDarkMode(false);
-          localStorage.setItem('darkMode', 'false');
         }
       } catch (error) {
         console.error('Auth state change error:', error);
@@ -198,7 +192,6 @@ export default function App() {
 
       if (error) throw error;
       setDarkMode(newDarkMode);
-      localStorage.setItem('darkMode', String(newDarkMode));
     } catch (error) {
       console.error('Error updating dark mode:', error);
       alert('Failed to update dark mode setting. Please try again.');

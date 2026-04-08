@@ -50,7 +50,7 @@ export function Login({ onRegisterClick, onLoginSuccess }: LoginProps) {
   return (
     <>
       <div className="flex items-center gap-3 mb-8">
-        <LogIn className="w-6 h-6 text-indigo-600" />
+        <LogIn className="w-6 h-6 text-blue-600" />
         <h1 className="text-2xl font-bold text-gray-800">Login</h1>
       </div>
 
@@ -71,7 +71,7 @@ export function Login({ onRegisterClick, onLoginSuccess }: LoginProps) {
             type="email"
             value={formData.email}
             onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="you@example.com"
             required
           />
@@ -87,7 +87,7 @@ export function Login({ onRegisterClick, onLoginSuccess }: LoginProps) {
               type={showPassword ? 'text' : 'password'}
               value={formData.password}
               onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="••••••••"
               required
             />
@@ -110,10 +110,10 @@ export function Login({ onRegisterClick, onLoginSuccess }: LoginProps) {
           disabled={status === 'loading' || status === 'success'}
           className={`w-full py-2 px-4 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
             status === 'loading' 
-              ? 'bg-indigo-400 cursor-wait' 
+              ? 'bg-blue-400 cursor-wait' 
               : status === 'success'
               ? 'bg-green-500 cursor-default'
-              : 'bg-indigo-600 hover:bg-indigo-700'
+              : 'bg-blue-600 hover:bg-blue-700'
           } text-white`}
         >
           {status === 'loading' ? (
@@ -138,7 +138,7 @@ export function Login({ onRegisterClick, onLoginSuccess }: LoginProps) {
       <div className="mt-6 text-center">
         <button
           onClick={onRegisterClick}
-          className="inline-flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+          className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
         >
           <UserPlus className="w-4 h-4" />
           Create an account
