@@ -37,7 +37,10 @@ export const TemplatesContext = createContext<{
 
 export default function App() {
   const [view, setView] = useState<View>('login');
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved === 'true';
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
 
@@ -58,7 +61,9 @@ export default function App() {
       }
 
       if (data) {
-        setDarkMode(data.dark_mode || false);
+        const newDarkMode = data.dark_mode || false;
+        setDarkMode(newDarkMode);
+        localStorage.setItem('darkMode', String(newDarkMode));
       }
     } catch (error) {
       console.error('Error fetching user settings:', error);
@@ -69,7 +74,6 @@ export default function App() {
     let mounted = true;
     let authInitialized = false;
 
-    // Check for existing session
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -121,6 +125,7 @@ export default function App() {
         } else if (event === 'SIGNED_OUT') {
           setView('login');
           setDarkMode(false);
+          localStorage.setItem('darkMode', 'false');
         }
       } catch (error) {
         console.error('Auth state change error:', error);
@@ -157,6 +162,14 @@ export default function App() {
     }
   }, [view]);
 
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
   const toggleDarkMode = async () => {
     try {
       const user = await supabase.auth.getUser();
@@ -168,7 +181,7 @@ export default function App() {
 
       const { error } = await supabase
         .from('user_settings')
-        .update({ 
+        .update({
           dark_mode: newDarkMode,
           updated_at: new Date().toISOString()
         })
@@ -176,6 +189,7 @@ export default function App() {
 
       if (error) throw error;
       setDarkMode(newDarkMode);
+      localStorage.setItem('darkMode', String(newDarkMode));
     } catch (error) {
       console.error('Error updating dark mode:', error);
       alert('Failed to update dark mode setting. Please try again.');
