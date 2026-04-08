@@ -66,10 +66,25 @@ export default function App() {
   };
 
   useEffect(() => {
+    let mounted = true;
+
+    // Timeout fallback to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('Auth initialization timeout, defaulting to login view');
+        setView('login');
+        setIsLoading(false);
+      }
+    }, 3000);
+
     // Check for existing session
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
+        clearTimeout(timeout);
 
         if (error) {
           console.error('Session error:', error);
@@ -84,11 +99,14 @@ export default function App() {
         } else {
           setView('login');
         }
+
+        setIsLoading(false);
       } catch (error) {
         console.error('Auth initialization failed:', error);
-        setView('login');
-      } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setView('login');
+          setIsLoading(false);
+        }
       }
     };
 
@@ -98,6 +116,8 @@ export default function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
       try {
         if (event === 'SIGNED_IN' && session) {
           setView('dashboard');
@@ -111,7 +131,11 @@ export default function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchTemplates = async () => {
