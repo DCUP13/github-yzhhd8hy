@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MessageSquare, Plus, Edit, Trash2, Search, Copy, Check, X, Globe } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageSquare, Plus, Edit, Trash2, Search, Copy, Check, X, Globe, Sparkles, Variable } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useEmails } from '../contexts/EmailContext';
 
@@ -28,6 +28,18 @@ const categories = [
   'Other'
 ];
 
+const AVAILABLE_VARIABLES = [
+  { name: 'sender_name', label: 'Sender Name', description: 'Name of the person sending the email' },
+  { name: 'sender_email', label: 'Sender Email', description: 'Email address of the sender' },
+  { name: 'recipient_name', label: 'Recipient Name', description: 'Name of the email recipient' },
+  { name: 'recipient_email', label: 'Recipient Email', description: 'Email address of the recipient' },
+  { name: 'subject', label: 'Subject', description: 'Email subject line' },
+  { name: 'previous_message', label: 'Previous Message', description: 'Content of the previous email in the thread' },
+  { name: 'company_name', label: 'Company Name', description: 'Business or company name' },
+  { name: 'date', label: 'Current Date', description: 'Today\'s date' },
+  { name: 'time', label: 'Current Time', description: 'Current time' }
+];
+
 export function Prompts({ onSignOut, currentView }: PromptsProps) {
   const { sesDomains } = useEmails();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
@@ -38,6 +50,10 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState('');
+  const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -247,6 +263,81 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
     setFormData({ title: '', content: '', category: 'General', domains: [] });
     setEditingPrompt(null);
     setShowCreateModal(false);
+    setAiSuggestion('');
+    setSelectedVariables([]);
+  };
+
+  const handleGenerateWithAI = async () => {
+    if (!formData.title && !formData.category) {
+      alert('Please provide at least a title or category to help generate a prompt');
+      return;
+    }
+
+    setIsGeneratingAI(true);
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-prompt`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          category: formData.category,
+          variables: selectedVariables,
+          context: aiSuggestion
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate prompt');
+      }
+
+      const data = await response.json();
+
+      if (data.prompt) {
+        setFormData(prev => ({ ...prev, content: data.prompt }));
+        setAiSuggestion('');
+      }
+    } catch (error) {
+      console.error('Error generating prompt:', error);
+      alert('Failed to generate prompt with AI. Please try again or write manually.');
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
+  const handleInsertVariable = (variableName: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = formData.content;
+    const variable = `{{${variableName}}}`;
+
+    const newContent = text.substring(0, start) + variable + text.substring(end);
+
+    setFormData(prev => ({ ...prev, content: newContent }));
+
+    setTimeout(() => {
+      textarea.focus();
+      const newPosition = start + variable.length;
+      textarea.setSelectionRange(newPosition, newPosition);
+    }, 0);
+
+    if (!selectedVariables.includes(variableName)) {
+      setSelectedVariables(prev => [...prev, variableName]);
+    }
+  };
+
+  const handleToggleVariable = (variableName: string) => {
+    setSelectedVariables(prev =>
+      prev.includes(variableName)
+        ? prev.filter(v => v !== variableName)
+        : [...prev, variableName]
+    );
   };
 
   if (isLoading) {
@@ -509,13 +600,83 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   <label htmlFor="content" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Prompt Content
                   </label>
+
+                  <div className="mb-3 space-y-3">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                          AI Generation Options
+                        </h4>
+                      </div>
+
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={aiSuggestion}
+                          onChange={(e) => setAiSuggestion(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          placeholder="Describe what you want the prompt to do (optional)..."
+                        />
+
+                        <button
+                          type="button"
+                          onClick={handleGenerateWithAI}
+                          disabled={isGeneratingAI}
+                          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          {isGeneratingAI ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              Generate Prompt with AI
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Variable className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                          Insert Variables
+                        </h4>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {AVAILABLE_VARIABLES.map(variable => (
+                          <button
+                            key={variable.name}
+                            type="button"
+                            onClick={() => handleInsertVariable(variable.name)}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded transition-colors"
+                            title={variable.description}
+                          >
+                            <Plus className="w-3 h-3" />
+                            {variable.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Click to insert variables into your prompt. Variables will be replaced with actual values when the prompt is used.
+                      </p>
+                    </div>
+                  </div>
+
                   <textarea
+                    ref={textareaRef}
                     id="content"
                     value={formData.content}
                     onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
-                    rows={8}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                    placeholder="Enter your prompt content here..."
+                    rows={10}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none font-mono text-sm"
+                    placeholder="Enter your prompt content here... Use the buttons above to insert variables like {{sender_name}}"
                     required
                   />
                 </div>
