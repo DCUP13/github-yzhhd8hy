@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mail, FileText, Send, Users, Layout, Globe } from 'lucide-react';
+import { Mail, FileText, Send, Users, LayoutGrid as Layout, Globe } from 'lucide-react';
 import { useDashboard } from '../contexts/DashboardContext';
 
 interface DashboardProps {

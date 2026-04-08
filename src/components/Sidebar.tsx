@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users } from 'lucide-react';
+import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users } from 'lucide-react';
 
 interface SidebarProps {
   onSignOut: () => void;
