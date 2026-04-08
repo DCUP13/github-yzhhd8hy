@@ -13,7 +13,6 @@ import { Contacts } from './components/Contacts';
 import { EmailProvider } from './contexts/EmailContext';
 import { supabase } from './lib/supabase';
 import type { Template } from './features/templates/types';
-import { AlertCircle } from 'lucide-react';
 import { DashboardProvider } from './contexts/DashboardContext';
 
 type View = 'login' | 'register' | 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts';
@@ -41,7 +40,6 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [supabaseError, setSupabaseError] = useState(false);
 
   const fetchUserSettings = async () => {
     try {
@@ -52,11 +50,15 @@ export default function App() {
         .from('user_settings')
         .select('dark_mode')
         .eq('user_id', user.data.user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching user settings:', error);
+        return;
+      }
+
       if (data) {
-        setDarkMode(data.dark_mode);
+        setDarkMode(data.dark_mode || false);
       }
     } catch (error) {
       console.error('Error fetching user settings:', error);
@@ -64,52 +66,48 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Check Supabase connection
-    const checkConnection = async () => {
+    // Check for existing session
+    const initializeAuth = async () => {
       try {
-        const { error } = await supabase.from('profiles').select('count');
-        if (error) throw error;
-        setSupabaseError(false);
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error('Session error:', error);
+          setView('login');
+          setIsLoading(false);
+          return;
+        }
+
+        if (session) {
+          setView('dashboard');
+          await fetchUserSettings();
+        } else {
+          setView('login');
+        }
       } catch (error) {
-        console.error('Supabase connection error:', error);
-        setSupabaseError(true);
+        console.error('Auth initialization failed:', error);
+        setView('login');
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    checkConnection();
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Session error:', error);
-        // Don't set supabaseError to true here since other parts work
-        setView('login');
-      } else if (session) {
-        setView('dashboard');
-        fetchUserSettings();
-      }
-      setIsLoading(false);
-    }).catch((error) => {
-      console.error('Auth session check failed:', error);
-      setView('login');
-      setIsLoading(false);
-    });
+    initializeAuth();
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
-        if (session) {
+        if (event === 'SIGNED_IN' && session) {
           setView('dashboard');
-          fetchUserSettings();
-        } else {
+          await fetchUserSettings();
+        } else if (event === 'SIGNED_OUT') {
           setView('login');
           setDarkMode(false);
         }
       } catch (error) {
         console.error('Auth state change error:', error);
-        setView('login');
       }
     });
 
@@ -178,30 +176,6 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (supabaseError) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-md w-full">
-          <div className="flex items-center gap-3 text-red-600 dark:text-red-400 mb-4">
-            <AlertCircle className="w-6 h-6" />
-            <h1 className="text-xl font-semibold">Connection Error</h1>
-          </div>
-          <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Unable to connect to the database. Please click the "Connect to Supabase" button in the top right corner to establish a connection.
-          </p>
-          <div className="flex justify-end">
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-            >
-              Retry Connection
-            </button>
-          </div>
-        </div>
       </div>
     );
   }
