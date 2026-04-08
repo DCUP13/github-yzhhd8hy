@@ -67,10 +67,10 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
-    let authInitialized = false;
 
     const initializeAuth = async () => {
       try {
+        console.log('Initializing auth...');
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (!mounted) return;
@@ -79,36 +79,35 @@ export default function App() {
           console.error('Session error:', error);
           setView('login');
           setIsLoading(false);
-          authInitialized = true;
           return;
         }
 
         if (session) {
+          console.log('Session found, loading dashboard');
           setView('dashboard');
           await fetchUserSettings();
         } else {
+          console.log('No session, showing login');
           setView('login');
         }
 
         setIsLoading(false);
-        authInitialized = true;
       } catch (error) {
         console.error('Auth initialization failed:', error);
         if (mounted) {
           setView('login');
           setIsLoading(false);
-          authInitialized = true;
         }
       }
     };
 
     const timeout = setTimeout(() => {
-      if (!authInitialized && mounted) {
+      if (mounted) {
         console.warn('Auth initialization timeout - forcing login view');
         setView('login');
         setIsLoading(false);
       }
-    }, 5000);
+    }, 3000);
 
     initializeAuth();
 
@@ -116,10 +115,12 @@ export default function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted || !authInitialized) return;
+      if (!mounted) return;
 
       // Ignore INITIAL_SESSION event to prevent double-firing
       if (event === 'INITIAL_SESSION') return;
+
+      console.log('Auth state change:', event);
 
       try {
         if (event === 'SIGNED_IN' && session) {
