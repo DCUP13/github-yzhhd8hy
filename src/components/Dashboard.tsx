@@ -29,8 +29,8 @@ export function Dashboard({ onSignOut, currentView }: DashboardProps) {
       title: 'Emails Sent Today',
       value: stats.totalEmailsSentToday.toLocaleString(),
       icon: Send,
-      color: 'text-purple-500',
-      bgColor: 'bg-purple-100 dark:bg-purple-900/20',
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-100 dark:bg-blue-900/20',
     },
     {
       title: 'Total Templates',
@@ -43,8 +43,8 @@ export function Dashboard({ onSignOut, currentView }: DashboardProps) {
       title: 'Total Campaigns',
       value: stats.totalCampaigns.toLocaleString(),
       icon: Layout,
-      color: 'text-indigo-500',
-      bgColor: 'bg-indigo-100 dark:bg-indigo-900/20',
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-100 dark:bg-blue-900/20',
     },
     {
       title: 'Total Domains',

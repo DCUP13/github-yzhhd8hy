@@ -616,7 +616,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   if (isLoading) {
     return (
       <div className="p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -628,7 +628,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
           <>
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <Mail className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Emails</h1>
               </div>
               <div className="flex gap-2">
@@ -655,7 +655,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 </button>
                 <button
                   onClick={() => setShowComposeDialog(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   New Email
@@ -674,8 +674,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     disabled={isProcessingEmails}
                     className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
                       isProcessingEmails
-                        ? 'bg-indigo-400 cursor-wait'
-                        : 'bg-indigo-600 hover:bg-indigo-700'
+                        ? 'bg-blue-400 cursor-wait'
+                        : 'bg-blue-600 hover:bg-blue-700'
                     }`}
                   >
                     {isProcessingEmails ? (
@@ -698,8 +698,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                       disabled={isProcessingDrafts}
                       className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
                         isProcessingDrafts
-                          ? 'bg-indigo-400 cursor-wait'
-                          : 'bg-indigo-600 hover:bg-indigo-700'
+                          ? 'bg-blue-400 cursor-wait'
+                          : 'bg-blue-600 hover:bg-blue-700'
                       }`}
                     >
                       {isProcessingDrafts ? (
@@ -750,7 +750,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     }}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'inbox'
-                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
                   >
@@ -766,7 +766,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     }}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'outbox'
-                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
                   >
@@ -782,7 +782,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     }}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'sent'
-                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
                   >
@@ -798,7 +798,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     }}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'drafts'
-                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                     }`}
                   >
@@ -819,7 +819,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   placeholder="Search emails..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
               </div>
             </div>
@@ -941,7 +941,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                           setIsReplyAll(false);
                           setShowReplyDialog(true);
                         }}
-                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                       >
                         <Reply className="w-4 h-4 mr-2" />
                         Reply
@@ -951,7 +951,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                           setIsReplyAll(true);
                           setShowReplyDialog(true);
                         }}
-                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                       >
                         <Reply className="w-4 h-4 mr-2" />
                         Reply All
@@ -1051,7 +1051,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                         </div>
                         <button
                           onClick={() => handleDownloadAttachment(attachment)}
-                          className="inline-flex items-center px-3 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                          className="inline-flex items-center px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                         >
                           Download
                         </button>

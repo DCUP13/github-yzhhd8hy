@@ -392,7 +392,7 @@ export function AmazonTab({
   if (isLoading) {
     return (
       <div className="flex justify-center py-8">
-        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -435,7 +435,7 @@ export function AmazonTab({
             id="smtpUsername"
             value={emailSettings.smtpUsername}
             onChange={(e) => onEmailSettingChange('smtpUsername', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             placeholder="Enter SMTP username"
             required
           />
@@ -451,7 +451,7 @@ export function AmazonTab({
               id="smtpPassword"
               value={emailSettings.smtpPassword}
               onChange={(e) => onEmailSettingChange('smtpPassword', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white pr-10"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white pr-10"
               placeholder="Enter SMTP password"
               required
             />
@@ -474,7 +474,7 @@ export function AmazonTab({
             id="smtpPort"
             value={emailSettings.smtpPort}
             onChange={(e) => onEmailSettingChange('smtpPort', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             placeholder="Enter SMTP port"
             required
           />
@@ -489,7 +489,7 @@ export function AmazonTab({
             id="smtpServer"
             value={emailSettings.smtpServer}
             onChange={(e) => onEmailSettingChange('smtpServer', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             placeholder="Enter SMTP server"
             required
           />
@@ -506,8 +506,8 @@ export function AmazonTab({
             disabled={isSaving}
             className={`px-4 py-2 rounded-lg text-sm font-medium text-white ${
               isSaving 
-                ? 'bg-indigo-400 cursor-wait' 
-                : 'bg-indigo-600 hover:bg-indigo-700'
+                ? 'bg-blue-400 cursor-wait' 
+                : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {isSaving ? 'Saving...' : 'Save Settings'}
@@ -547,11 +547,11 @@ export function AmazonTab({
                 setDomainError('');
               }}
               placeholder="example.com"
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
             <button
               type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -622,7 +622,7 @@ export function AmazonTab({
                   setEmailError('');
                 }}
                 placeholder="Enter email address"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
               {emailError && (
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">{emailError}</p>
@@ -640,7 +640,7 @@ export function AmazonTab({
                 onChange={(e) => setDailyLimit(Math.min(50000, Math.max(1, parseInt(e.target.value))))}
                 min="1"
                 max="50000"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Maximum number of emails that can be sent per day (1-50,000)
@@ -650,7 +650,7 @@ export function AmazonTab({
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Add Email
               </button>
@@ -680,7 +680,7 @@ export function AmazonTab({
                         onChange={(e) => handleUpdateDailyLimit(email, Math.min(50000, Math.max(1, parseInt(e.target.value))))}
                         min="1"
                         max="50000"
-                        className="w-24 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-24 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         emails/day
@@ -695,7 +695,7 @@ export function AmazonTab({
                     className={`inline-flex items-center px-3 py-1 text-sm font-medium rounded-lg ${
                       email.testing
                         ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-wait'
-                        : 'text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20'
+                        : 'text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20'
                     }`}
                   >
                     {email.testing ? (

@@ -25,7 +25,7 @@ export function Sidebar({
   onContactsClick
 }: SidebarProps) {
   return (
-    <div className="h-screen w-64 bg-indigo-800 dark:bg-gray-800 text-white p-6">
+    <div className="h-screen w-64 bg-blue-800 dark:bg-gray-800 text-white p-6">
       <div className="mb-8">
         <h2 className="text-xl font-bold">Dashboard</h2>
       </div>
@@ -33,7 +33,7 @@ export function Sidebar({
       <nav className="space-y-2">
         <button 
           onClick={onHomeClick}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-indigo-700 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
         >
           <Home className="w-4 h-4" />
           Home
@@ -41,7 +41,7 @@ export function Sidebar({
         
         <button 
           onClick={onAppClick}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-indigo-700 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
         >
           <Layout className="w-4 h-4" />
           Campaigns
@@ -49,7 +49,7 @@ export function Sidebar({
         
         <button 
           onClick={onTemplatesClick}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-indigo-700 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
         >
           <FileText className="w-4 h-4" />
           Templates
@@ -57,7 +57,7 @@ export function Sidebar({
 
         <button 
           onClick={onEmailsClick}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-indigo-700 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
         >
           <Inbox className="w-4 h-4" />
           Emails
@@ -65,7 +65,7 @@ export function Sidebar({
 
         <button 
           onClick={onAddressesClick}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-indigo-700 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
         >
           <Mail className="w-4 h-4" />
           Addresses
@@ -73,7 +73,7 @@ export function Sidebar({
         
         <button
           onClick={onPromptsClick}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-indigo-700 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
         >
           <MessageSquare className="w-4 h-4" />
           Prompts
@@ -81,7 +81,7 @@ export function Sidebar({
 
         <button
           onClick={onContactsClick}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-indigo-700 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
         >
           <Users className="w-4 h-4" />
           Contacts
@@ -89,7 +89,7 @@ export function Sidebar({
 
         <button
           onClick={onSettingsClick}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-indigo-700 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
         >
           <SettingsIcon className="w-4 h-4" />
           Settings
@@ -97,7 +97,7 @@ export function Sidebar({
         
         <button 
           onClick={onSignOut}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-indigo-700 dark:hover:bg-gray-700 transition-colors text-red-300 hover:text-red-200"
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors text-red-300 hover:text-red-200"
         >
           <LogOut className="w-4 h-4" />
           Sign out

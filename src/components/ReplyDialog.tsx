@@ -281,7 +281,7 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
             </p>
             <button
               onClick={onClose}
-              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               Close
             </button>
@@ -330,7 +330,7 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
                           value={customFromEmail}
                           onChange={(e) => setCustomFromEmail(e.target.value)}
                           placeholder="your-email@domain.com"
-                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           required
                         />
                         <button
@@ -350,7 +350,7 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
                         id="fromEmail"
                         value={fromEmail}
                         onChange={(e) => handleFromEmailChange(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         required
                       >
                         <option value="">Select sender email</option>
@@ -387,17 +387,17 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
                     <label htmlFor="toEmails" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       To
                     </label>
-                    <div className="min-h-[42px] px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 bg-white dark:bg-gray-700 flex flex-wrap items-center gap-1">
+                    <div className="min-h-[42px] px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white dark:bg-gray-700 flex flex-wrap items-center gap-1">
                       {toEmails.map((email, index) => (
                         <span
                           key={index}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 rounded text-sm"
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm"
                         >
                           {email}
                           <button
                             type="button"
                             onClick={() => removeToEmail(email)}
-                            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200"
+                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -435,7 +435,7 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
                     type="text"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     placeholder="Reply subject"
                   />
                 </div>
@@ -470,9 +470,9 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
                 disabled={isSending}
                 className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
                   isSending 
-                    ? 'bg-indigo-400 cursor-wait' 
-                    : 'bg-indigo-600 hover:bg-indigo-700'
-                } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                    ? 'bg-blue-400 cursor-wait' 
+                    : 'bg-blue-600 hover:bg-blue-700'
+                } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               >
                 {isSending ? (
                   <>

@@ -604,7 +604,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
   if (isLoading) {
     return (
       <div className="p-8 bg-white dark:bg-gray-900 flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -616,7 +616,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
           <>
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <Layout className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                <Layout className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Campaigns</h1>
               </div>
               <div className="flex items-center gap-4">
@@ -632,16 +632,16 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
                     />
                     <div className={`toggle-label block overflow-hidden h-6 rounded-full ${
-                      testModeEnabled ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'
+                      testModeEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
                     }`}></div>
                   </div>
-                  <span className={`text-xs ${testModeEnabled ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                  <span className={`text-xs ${testModeEnabled ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
                     {testModeEnabled ? 'Emails go to Drafts' : 'Normal Sending'}
                   </span>
                 </div>
                 <button
                   onClick={handleCreateCampaign}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Create Campaign
@@ -676,7 +676,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <Layout className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                          <Layout className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                           <div>
                             <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                               {campaign.name}
@@ -720,7 +720,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                                   !validation.valid
                                     ? 'bg-gray-300 dark:bg-gray-600'
                                     : campaign.isActive
-                                      ? 'bg-indigo-600'
+                                      ? 'bg-blue-600'
                                       : 'bg-gray-300 dark:bg-gray-600'
                                 }`}></div>
                               </div>
@@ -764,7 +764,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
           <div className="space-y-6">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <Layout className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                <Layout className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 <input
                   type="text"
                   value={currentCampaign.name}
@@ -787,7 +787,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                 </button>
                 <button
                   onClick={() => handleSaveCampaign(currentCampaign.name)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   Save Campaign
@@ -817,7 +817,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                           <select
                             value={selectedState}
                             onChange={(e) => setSelectedState(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           >
                             <option value="">Select State</option>
                             {Object.keys(statesAndCities).map(state => (
@@ -833,7 +833,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                             value={selectedCity}
                             onChange={(e) => setSelectedCity(e.target.value)}
                             disabled={!selectedState}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
                           >
                             <option value="">Select City</option>
                             {selectedState && statesAndCities[selectedState as keyof typeof statesAndCities]?.map(city => (
@@ -860,11 +860,11 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                           type="text"
                           id="newSubjectLine"
                           placeholder="Enter a subject line"
-                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         />
                         <button
                           onClick={handleAddSubjectLine}
-                          className="px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          className="px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                         >
                           Add Subject Line
                         </button>
@@ -903,7 +903,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                         <select
                           value={selectedTemplateId}
                           onChange={(e) => setSelectedTemplateId(e.target.value)}
-                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         >
                           <option value="">Select a template</option>
                           {templates
@@ -924,7 +924,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                         <button
                           onClick={handleAddTemplate}
                           disabled={!selectedTemplateId}
-                          className="px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                          className="px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
                         >
                           Add Template
                         </button>
@@ -977,7 +977,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <select
-                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           onChange={(e) => {
                             const email = availableEmails.find(email => email.address === e.target.value);
                             if (email) handleAddEmail(email);
@@ -1032,7 +1032,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     <select
                       value={currentCampaign.daysTillClose}
                       onChange={(e) => handleUpdateCampaign({ daysTillClose: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     >
                       {daysTillCloseOptions.map(option => (
                         <option key={option.value} value={option.value}>
@@ -1054,7 +1054,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       value={currentCampaign.senderPhone}
                       onChange={(e) => handleUpdateCampaign({ senderPhone: e.target.value })}
                       placeholder="(555) 123-4567"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
 
@@ -1068,7 +1068,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                         value={currentCampaign.senderCity}
                         onChange={(e) => handleUpdateCampaign({ senderCity: e.target.value })}
                         placeholder="Enter sender city"
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                     </div>
                     <div>
@@ -1078,7 +1078,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       <select
                         value={currentCampaign.senderState}
                         onChange={(e) => handleUpdateCampaign({ senderState: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       >
                         <option value="">Select State</option>
                         {Object.keys(statesAndCities).map(state => (
@@ -1097,7 +1097,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       value={currentCampaign.senderName}
                       onChange={(e) => handleUpdateCampaign({ senderName: e.target.value })}
                       placeholder="Enter sender name"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
 
@@ -1110,7 +1110,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       value={currentCampaign.emd}
                       onChange={(e) => handleUpdateCampaign({ emd: e.target.value })}
                       placeholder="Enter EMD amount"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
 
@@ -1123,7 +1123,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       value={currentCampaign.optionPeriod}
                       onChange={(e) => handleUpdateCampaign({ optionPeriod: e.target.value })}
                       placeholder="Enter option period"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
 
@@ -1136,7 +1136,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       value={currentCampaign.titleCompany}
                       onChange={(e) => handleUpdateCampaign({ titleCompany: e.target.value })}
                       placeholder="Enter title company name"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -1156,7 +1156,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                         type="time"
                         value={currentCampaign.sendTimeStart}
                         onChange={(e) => handleUpdateCampaign({ sendTimeStart: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                     </div>
                     <div>
@@ -1168,7 +1168,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                         type="time"
                         value={currentCampaign.sendTimeEnd}
                         onChange={(e) => handleUpdateCampaign({ sendTimeEnd: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                     </div>
                   </div>
@@ -1184,7 +1184,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       value={currentCampaign.sendDelayMinutes ?? ''}
                       onChange={(e) => handleUpdateCampaign({ sendDelayMinutes: e.target.value ? parseInt(e.target.value) : null })}
                       placeholder="Enter delay in minutes"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                     <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                       Time to wait between sending each email

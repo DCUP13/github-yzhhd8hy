@@ -65,7 +65,7 @@ export function Addresses({ onSignOut, currentView }: EmailsProps) {
       <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-3 mb-6">
-            <Mail className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+            <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Email Addresses</h1>
           </div>
 
@@ -91,7 +91,7 @@ export function Addresses({ onSignOut, currentView }: EmailsProps) {
     <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
-          <Mail className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+          <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400" />
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Email Addresses</h1>
         </div>
 
@@ -138,7 +138,7 @@ export function Addresses({ onSignOut, currentView }: EmailsProps) {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => handleResetSentEmails(email)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
                         title="Reset sent emails count"
                       >
                         <RotateCcw className="w-3 h-3" />
