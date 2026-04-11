@@ -48,7 +48,10 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
   const fetchPrompts = async () => {
     try {
       const user = await supabase.auth.getUser();
-      if (!user.data.user) return;
+      if (!user.data.user) {
+        setIsLoading(false);
+        return;
+      }
 
       const { data, error } = await supabase
         .from('prompts')
