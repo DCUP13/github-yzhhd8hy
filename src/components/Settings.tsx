@@ -43,13 +43,13 @@ export function Settings({ onSignOut, currentView }: SettingsProps) {
 
   const createDefaultSettings = async () => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
 
       const { error } = await supabase
         .from('user_settings')
         .insert({
-          user_id: user.data.user.id,
+          user_id: session.user.id,
           notifications: true,
           two_factor_auth: false,
           newsletter: false,
@@ -67,15 +67,15 @@ export function Settings({ onSignOut, currentView }: SettingsProps) {
 
   const fetchSettings = async () => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
         throw new Error('User not authenticated');
       }
 
       const { data, error } = await supabase
         .from('user_settings')
         .select('*')
-        .eq('user_id', user.data.user.id)
+        .eq('user_id', session.user.id)
         .maybeSingle();
 
       if (error) throw error;
@@ -101,8 +101,8 @@ export function Settings({ onSignOut, currentView }: SettingsProps) {
 
   const handleToggle = async (setting: keyof GeneralSettings) => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
         throw new Error('User not authenticated');
       }
 
@@ -124,7 +124,7 @@ export function Settings({ onSignOut, currentView }: SettingsProps) {
       const { error } = await supabase
         .from('user_settings')
         .update(dbSettings)
-        .eq('user_id', user.data.user.id);
+        .eq('user_id', session.user.id);
 
       if (error) throw error;
 

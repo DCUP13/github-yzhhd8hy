@@ -41,15 +41,19 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
 
-  const fetchUserSettings = async () => {
+  const fetchUserSettings = async (userId?: string) => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) return;
+      let uid = userId;
+      if (!uid) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+        uid = session.user.id;
+      }
 
       const { data, error } = await supabase
         .from('user_settings')
         .select('dark_mode')
-        .eq('user_id', user.data.user.id)
+        .eq('user_id', uid)
         .maybeSingle();
 
       if (error) {
@@ -85,7 +89,7 @@ export default function App() {
         if (session) {
           console.log('Session found, loading dashboard');
           setView('dashboard');
-          await fetchUserSettings();
+          await fetchUserSettings(session.user.id);
         } else {
           console.log('No session, showing login');
           setView('login');
@@ -114,7 +118,7 @@ export default function App() {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
 
       // Ignore INITIAL_SESSION event to prevent double-firing
@@ -122,16 +126,18 @@ export default function App() {
 
       console.log('Auth state change:', event);
 
-      try {
-        if (event === 'SIGNED_IN' && session) {
-          setView('dashboard');
-          await fetchUserSettings();
-        } else if (event === 'SIGNED_OUT') {
-          setView('login');
-          setDarkMode(false);
-        }
-      } catch (error) {
-        console.error('Auth state change error:', error);
+      if (event === 'SIGNED_IN' && session) {
+        setView('dashboard');
+        (async () => {
+          try {
+            await fetchUserSettings(session.user.id);
+          } catch (error) {
+            console.error('Auth state change error:', error);
+          }
+        })();
+      } else if (event === 'SIGNED_OUT') {
+        setView('login');
+        setDarkMode(false);
       }
     });
 
