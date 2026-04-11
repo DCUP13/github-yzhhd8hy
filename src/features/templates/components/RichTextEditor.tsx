@@ -3,6 +3,7 @@ import { Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJusti
 
 export interface RichTextEditorRef {
   getContent: () => string;
+  setContent: (html: string) => void;
 }
 
 interface RichTextEditorProps {
@@ -119,7 +120,10 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     });
 
     useImperativeHandle(ref, () => ({
-      getContent: () => editorRef.current?.innerHTML || ''
+      getContent: () => editorRef.current?.innerHTML || '',
+      setContent: (html: string) => {
+        if (editorRef.current) editorRef.current.innerHTML = html;
+      }
     }));
 
     useEffect(() => {

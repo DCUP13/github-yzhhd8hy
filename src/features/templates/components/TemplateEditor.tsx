@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { Save, X } from 'lucide-react';
+import { Save, X, Sparkles } from 'lucide-react';
 import type { Template } from '../types';
 import { RichTextEditor, type RichTextEditorRef } from './RichTextEditor';
 import { SaveAsDialog } from './SaveAsDialog';
 import { FilePreview } from './FilePreview';
+import { AIGenerateDialog } from './AIGenerateDialog';
 
 interface TemplateEditorProps {
   template: Template;
@@ -14,6 +15,12 @@ interface TemplateEditorProps {
 export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorProps) {
   const editorRef = useRef<RichTextEditorRef>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showAIDialog, setShowAIDialog] = useState(false);
+
+  const handleAIGenerate = (html: string) => {
+    editorRef.current?.setContent(html);
+    setShowAIDialog(false);
+  };
 
   const handleSave = (name: string, format: 'html' | 'pdf' | 'docx') => {
     if (!editorRef.current) return;
@@ -45,13 +52,22 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
               Close
             </button>
             {!template.imported && (
-              <button
-                onClick={() => setShowSaveDialog(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                Save
-              </button>
+              <>
+                <button
+                  onClick={() => setShowAIDialog(true)}
+                  className="inline-flex items-center px-4 py-2 border border-blue-300 dark:border-blue-600 text-sm font-medium rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate with AI
+                </button>
+                <button
+                  onClick={() => setShowSaveDialog(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -76,6 +92,13 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
           initialName={template.name}
           onSave={handleSave}
           onClose={() => setShowSaveDialog(false)}
+        />
+      )}
+
+      {showAIDialog && (
+        <AIGenerateDialog
+          onGenerate={handleAIGenerate}
+          onClose={() => setShowAIDialog(false)}
         />
       )}
     </div>
