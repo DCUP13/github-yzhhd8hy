@@ -47,8 +47,8 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
 
   const fetchPrompts = async () => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
         setIsLoading(false);
         return;
       }
@@ -56,7 +56,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
       const { data, error } = await supabase
         .from('prompts')
         .select('*')
-        .eq('user_id', user.data.user.id)
+        .eq('user_id', session.user.id)
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
@@ -115,8 +115,8 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
     }
 
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
         throw new Error('User not authenticated');
       }
 
@@ -130,7 +130,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
         category: formData.category,
         content: formData.content,
         variables: variables,
-        user_id: user.data.user.id,
+        user_id: session.user.id,
         updated_at: new Date().toISOString()
       };
 
