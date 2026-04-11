@@ -91,7 +91,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
       title: prompt.title,
       category: prompt.category,
       content: prompt.content,
-      variables: prompt.variables.join(', ')
+      variables: (prompt.variables ?? []).join(', ')
     });
     setShowCreateModal(true);
   };
@@ -244,9 +244,9 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   {prompt.content}
                 </p>
 
-                {prompt.variables.length > 0 && (
+                {(prompt.variables ?? []).length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-3">
-                    {prompt.variables.slice(0, 3).map((variable, index) => (
+                    {(prompt.variables ?? []).slice(0, 3).map((variable, index) => (
                       <span
                         key={index}
                         className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
@@ -254,9 +254,9 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                         {`{{${variable}}}`}
                       </span>
                     ))}
-                    {prompt.variables.length > 3 && (
+                    {(prompt.variables ?? []).length > 3 && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 dark:text-gray-400">
-                        +{prompt.variables.length - 3} more
+                        +{(prompt.variables ?? []).length - 3} more
                       </span>
                     )}
                   </div>
