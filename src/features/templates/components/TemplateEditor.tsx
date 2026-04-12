@@ -16,9 +16,11 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
   const editorRef = useRef<RichTextEditorRef>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showAIDialog, setShowAIDialog] = useState(false);
+  const [pendingTitle, setPendingTitle] = useState(template.name || '');
 
-  const handleAIGenerate = (html: string) => {
+  const handleAIGenerate = (html: string, title: string) => {
     editorRef.current?.setContent(html);
+    setPendingTitle(title || 'Untitled Template');
     setShowAIDialog(false);
   };
 
@@ -41,7 +43,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
       <div className="border-b border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {template.name || 'Untitled Template'}
+            {pendingTitle || 'Untitled Template'}
           </h2>
           <div className="flex items-center gap-2">
             <button
@@ -89,7 +91,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
 
       {showSaveDialog && (
         <SaveAsDialog
-          initialName={template.name}
+          initialName={pendingTitle}
           onSave={handleSave}
           onClose={() => setShowSaveDialog(false)}
         />

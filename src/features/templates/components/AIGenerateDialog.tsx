@@ -14,7 +14,7 @@ interface FieldDefinition {
 }
 
 interface AIGenerateDialogProps {
-  onGenerate: (html: string) => void;
+  onGenerate: (html: string, title: string) => void;
   onClose: () => void;
 }
 
@@ -186,7 +186,7 @@ export function AIGenerateDialog({ onGenerate, onClose }: AIGenerateDialogProps)
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generation failed');
 
-      onGenerate(data.template);
+      onGenerate(data.template, title.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
