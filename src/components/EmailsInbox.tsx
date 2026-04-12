@@ -167,13 +167,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    console.log('Fetched draft emails:', data?.map(d => ({
-      id: d.id,
-      to_email: d.to_email,
-      hasAttachments: !!d.attachments,
-      attachmentType: typeof d.attachments,
-      attachmentLength: Array.isArray(d.attachments) ? d.attachments.length : 'not array'
-    })));
+
     setDraftEmails(data || []);
   };
 
@@ -241,7 +235,6 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       }
 
       const result = await response.json();
-      console.log('Email processing result:', result);
       
       await fetchAllEmails();
       
@@ -442,7 +435,6 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       }
 
       const result = await response.json();
-      console.log('Draft generation result:', result);
 
       await fetchDraftEmails();
 
