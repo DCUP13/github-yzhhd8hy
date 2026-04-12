@@ -142,9 +142,6 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Template not found: ${templateError?.message}`);
     }
 
-    console.log(`Replacing variables in template: ${template.name}`);
-    console.log(`Variables:`, variables);
-
     // Merge listing data if contact_id is provided
     let allVariables = { ...variables };
 

@@ -12,8 +12,21 @@ interface GenerateDraftsRequest {
   campaign_id?: string;
 }
 
-function replacePlaceholders(content: string, variables: Record<string, string>): string {
+function processConditionalSections(content: string, variables: Record<string, string>): string {
   let result = content;
+  const conditionalPattern = /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g;
+  result = result.replace(conditionalPattern, (_match, placeholderKey, innerContent) => {
+    const value = variables[placeholderKey];
+    if (value && value.trim() !== '') {
+      return innerContent;
+    }
+    return '';
+  });
+  return result;
+}
+
+function replacePlaceholders(content: string, variables: Record<string, string>): string {
+  let result = processConditionalSections(content, variables);
 
   for (const [placeholder, value] of Object.entries(variables)) {
     const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
