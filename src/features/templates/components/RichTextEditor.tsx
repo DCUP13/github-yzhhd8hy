@@ -122,7 +122,15 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     useImperativeHandle(ref, () => ({
       getContent: () => editorRef.current?.innerHTML || '',
       setContent: (html: string) => {
-        if (editorRef.current) editorRef.current.innerHTML = html;
+        if (!editorRef.current) return;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        doc.body.querySelectorAll<HTMLElement>('*').forEach(el => {
+          el.style.removeProperty('color');
+          el.style.removeProperty('background-color');
+          el.style.removeProperty('background');
+        });
+        editorRef.current.innerHTML = doc.body.innerHTML;
       }
     }));
 
@@ -387,7 +395,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
 
         <div
           ref={editorRef}
-          className={`editor-content p-6 min-h-[300px] max-h-[400px] overflow-y-auto focus:outline-none ${className}`}
+          className={`editor-content p-6 min-h-[300px] max-h-[400px] overflow-y-auto focus:outline-none text-gray-900 dark:text-white ${className}`}
           contentEditable
           suppressContentEditableWarning
           onKeyDown={(e) => {
