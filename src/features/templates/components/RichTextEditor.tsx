@@ -404,6 +404,17 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
               document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
             }
           }}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData('text/plain');
+            const html = e.clipboardData.getData('text/html');
+            if (!html && text) {
+              const stripped = text.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '').trim();
+              if (stripped !== text) {
+                e.preventDefault();
+                document.execCommand('insertText', false, stripped);
+              }
+            }
+          }}
         />
       </div>
     );
