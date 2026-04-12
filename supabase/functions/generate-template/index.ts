@@ -106,7 +106,8 @@ Write a compelling, professional email that fulfills the description. Use the fi
       max_tokens: 2000,
     });
 
-    const template = completion.choices[0]?.message?.content ?? '';
+    const raw = completion.choices[0]?.message?.content ?? '';
+    const template = raw.replace(/^```[a-zA-Z]*\r?\n?/, '').replace(/\r?\n?```$/, '').trim();
 
     return new Response(
       JSON.stringify({ template }),
