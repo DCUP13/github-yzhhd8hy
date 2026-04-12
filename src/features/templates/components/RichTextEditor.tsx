@@ -406,9 +406,8 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           }}
           onPaste={(e) => {
             const text = e.clipboardData.getData('text/plain');
-            const html = e.clipboardData.getData('text/html');
-            if (!html && text) {
-              const stripped = text.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '').trim();
+            if (text) {
+              const stripped = text.replace(/^```[a-zA-Z]*\r?\n?/, '').replace(/\r?\n?```$/, '').trim();
               if (stripped !== text) {
                 e.preventDefault();
                 document.execCommand('insertText', false, stripped);
