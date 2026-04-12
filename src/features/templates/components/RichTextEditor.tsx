@@ -129,6 +129,13 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           el.style.removeProperty('color');
           el.style.removeProperty('background-color');
           el.style.removeProperty('background');
+          el.style.removeProperty('margin-left');
+          el.style.removeProperty('margin-right');
+          el.style.removeProperty('padding-left');
+          el.style.removeProperty('padding-right');
+          el.style.removeProperty('text-indent');
+          el.style.removeProperty('max-width');
+          el.style.removeProperty('width');
         });
         editorRef.current.innerHTML = doc.body.innerHTML;
       }

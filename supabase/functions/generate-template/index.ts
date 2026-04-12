@@ -83,6 +83,8 @@ OUTPUT FORMAT:
 - Return ONLY valid HTML suitable for an email body (no <html>, <head>, or <body> tags)
 - Use inline styles for formatting
 - Use a clean, professional design with proper paragraph spacing
+- Do NOT wrap content in a centered container or add margin/padding to the outermost element — content must start at the left edge
+- Do NOT set max-width, margin: auto, or any horizontal centering on the root element
 - Do not include markdown, code blocks, or any explanation — just the raw HTML`;
 
     const userPrompt = `Generate an HTML email template with the following details:
