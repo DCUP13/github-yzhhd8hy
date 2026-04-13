@@ -498,9 +498,16 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     }
   };
 
+  const stripHtml = (html: string): string => {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  };
+
   const truncateText = (text: string, maxLength: number) => {
     if (!text) return '';
-    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    const plain = stripHtml(text);
+    return plain.length > maxLength ? plain.substring(0, maxLength) + '...' : plain;
   };
 
   const hasAttachments = (attachments: any) => {
@@ -1012,9 +1019,14 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
 
             <div className="p-6">
               <div className="prose dark:prose-invert max-w-none">
-                <div className="whitespace-pre-wrap text-gray-900 dark:text-white">
-                  {selectedEmail.body || 'No content available'}
-                </div>
+                {selectedEmail.body ? (
+                  <div
+                    className="text-gray-900 dark:text-white"
+                    dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
+                  />
+                ) : (
+                  <div className="text-gray-900 dark:text-white">No content available</div>
+                )}
               </div>
 
               {activeTab === 'inbox' && hasAttachments((selectedEmail as Email).attachments) && (

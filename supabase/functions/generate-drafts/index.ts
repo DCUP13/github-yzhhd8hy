@@ -15,13 +15,19 @@ interface GenerateDraftsRequest {
 function processConditionalSections(content: string, variables: Record<string, string>): string {
   let result = content;
   const conditionalPattern = /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g;
-  result = result.replace(conditionalPattern, (_match, placeholderKey, innerContent) => {
-    const value = variables[placeholderKey];
-    if (value && value.trim() !== '') {
-      return innerContent;
-    }
-    return '';
-  });
+
+  let prev = '';
+  while (prev !== result) {
+    prev = result;
+    result = result.replace(conditionalPattern, (_match, placeholderKey, innerContent) => {
+      const value = variables[placeholderKey];
+      if (value && value.trim() !== '') {
+        return innerContent;
+      }
+      return '';
+    });
+  }
+
   return result;
 }
 
