@@ -14,12 +14,12 @@ interface GenerateDraftsRequest {
 
 function processConditionalSections(content: string, variables: Record<string, string>): string {
   let result = content;
-  const conditionalPattern = /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g;
+  const innermostPattern = /\{\{#if\s+(\w+)\}\}((?:(?!\{\{#if\s)[\s\S])*?)\{\{\/if\}\}/g;
 
   let prev = '';
   while (prev !== result) {
     prev = result;
-    result = result.replace(conditionalPattern, (_match, placeholderKey, innerContent) => {
+    result = result.replace(innermostPattern, (_match, placeholderKey, innerContent) => {
       const value = variables[placeholderKey];
       if (value && value.trim() !== '') {
         return innerContent;
@@ -27,6 +27,8 @@ function processConditionalSections(content: string, variables: Record<string, s
       return '';
     });
   }
+
+  result = result.replace(/\{\{\/if\}\}/g, '');
 
   return result;
 }
@@ -38,6 +40,8 @@ function replacePlaceholders(content: string, variables: Record<string, string>)
     const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
     result = result.replace(regex, value || '');
   }
+
+  result = result.replace(/\{\{\w+\}\}/g, '');
 
   return result;
 }

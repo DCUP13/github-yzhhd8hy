@@ -48,16 +48,21 @@ async function getPlaceholderConfig(
 
 function processConditionalSections(content: string, variables: Record<string, string>): string {
   let result = content;
+  const innermostPattern = /\{\{#if\s+(\w+)\}\}((?:(?!\{\{#if\s)[\s\S])*?)\{\{\/if\}\}/g;
 
-  const conditionalPattern = /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g;
+  let prev = '';
+  while (prev !== result) {
+    prev = result;
+    result = result.replace(innermostPattern, (_match, placeholderKey, innerContent) => {
+      const value = variables[placeholderKey];
+      if (value && value.trim() !== '') {
+        return innerContent;
+      }
+      return '';
+    });
+  }
 
-  result = result.replace(conditionalPattern, (match, placeholderKey, innerContent) => {
-    const value = variables[placeholderKey];
-    if (value && value.trim() !== '') {
-      return innerContent;
-    }
-    return '';
-  });
+  result = result.replace(/\{\{\/if\}\}/g, '');
 
   return result;
 }
