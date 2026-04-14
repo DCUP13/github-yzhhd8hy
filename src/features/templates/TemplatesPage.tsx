@@ -266,7 +266,9 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                     <div>
                       <p className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Contact Information:</p>
                       <ul className="space-y-0.5 text-blue-800 dark:text-blue-200">
-                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{name}}'}</code> - Contact name</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{first_name}}'}</code> - First name</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{last_name}}'}</code> - Last name</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{name}}'}</code> - Full name</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{email}}'}</code> - Email address</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{phone}}'}</code> - Phone number</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{phone_cell}}'}</code> - Cell phone</li>
