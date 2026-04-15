@@ -199,7 +199,6 @@ Deno.serve(async (req: Request) => {
           const variables: Record<string, string> = {
             first_name: contact.name?.split(' ')[0] || '',
             last_name: contact.name?.split(' ').slice(1).join(' ') || '',
-            full_name: contact.name || '',
             name: contact.name || '',
             email: contact.email || '',
             phone: contact.phone || '',
