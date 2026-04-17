@@ -33,6 +33,16 @@ function processConditionalSections(content: string, variables: Record<string, s
   return result;
 }
 
+function normalizeWhitespace(content: string): string {
+  return content
+    .replace(/[ \t]+([,.;:!?])/g, '$1')
+    .replace(/([,.;:!?])[ \t]{2,}/g, '$1 ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/^[ \t]+/gm, (m, offset, str) => (offset === 0 || str[offset - 1] === '\n' ? '' : m))
+    .replace(/\n{3,}/g, '\n\n');
+}
+
 function replacePlaceholders(content: string, variables: Record<string, string>): string {
   let result = processConditionalSections(content, variables);
 
@@ -43,7 +53,7 @@ function replacePlaceholders(content: string, variables: Record<string, string>)
 
   result = result.replace(/\{\{\w+\}\}/g, '');
 
-  return result;
+  return normalizeWhitespace(result);
 }
 
 Deno.serve(async (req: Request) => {
@@ -197,8 +207,8 @@ Deno.serve(async (req: Request) => {
 
           // Build variables for template replacement
           const variables: Record<string, string> = {
-            first_name: contact.name?.split(' ')[0] || '',
-            last_name: contact.name?.split(' ').slice(1).join(' ') || '',
+            first_name: contact.first_name_parsed || contact.name?.split(' ')[0] || '',
+            last_name: contact.last_name_parsed || contact.name?.split(' ').slice(1).join(' ') || '',
             name: contact.name || '',
             email: contact.email || '',
             phone: contact.phone || '',
