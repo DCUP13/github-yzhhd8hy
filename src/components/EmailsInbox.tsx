@@ -349,16 +349,15 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
 
       if (insertError) throw insertError;
 
-      const draftIds = draftEmails.map(draft => draft.id);
       const { error: deleteError } = await supabase
         .from('email_drafts')
         .delete()
-        .in('id', draftIds);
+        .eq('user_id', user.data.user.id);
 
       if (deleteError) throw deleteError;
 
       await fetchAllEmails();
-      alert(`Successfully moved ${draftEmails.length} drafts to outbox`);
+      console.log(`Successfully moved ${draftEmails.length} drafts to outbox`);
     } catch (error) {
       console.error('Error moving drafts to outbox:', error);
       alert(`Failed to move drafts to outbox: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -373,25 +372,31 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete all ${draftEmails.length} drafts? This action cannot be undone.`)) {
+    const count = draftEmails.length;
+
+    if (!confirm(`Are you sure you want to delete all ${count} drafts? This action cannot be undone.`)) {
       return;
     }
 
-    setIsProcessingDrafts(true);
     setShowDraftsDropdown(false);
+    setIsProcessingDrafts(true);
 
     try {
-      const draftIds = draftEmails.map(draft => draft.id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('You must be logged in to delete drafts');
+      }
+
       const { error } = await supabase
         .from('email_drafts')
         .delete()
-        .in('id', draftIds);
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
-      await fetchDraftEmails();
       setSelectedEmail(null);
-      alert(`Successfully deleted ${draftEmails.length} drafts`);
+      await fetchDraftEmails();
+      console.log(`Successfully deleted ${count} drafts`);
     } catch (error) {
       console.error('Error deleting all drafts:', error);
       alert(`Failed to delete drafts: ${error instanceof Error ? error.message : 'Unknown error'}`);
