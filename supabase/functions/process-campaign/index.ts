@@ -89,6 +89,20 @@ function normalizeWhitespace(content: string): string {
     .replace(/\n{3,}/g, '\n\n');
 }
 
+function applyFallbacks(
+  variables: Record<string, string>,
+  configMap: Map<string, PlaceholderConfig>
+): Record<string, string> {
+  const result: Record<string, string> = { ...variables };
+  for (const [key, config] of configMap.entries()) {
+    const value = result[key];
+    if ((!value || value.trim() === '') && config.fallback_text && config.fallback_text.trim() !== '') {
+      result[key] = config.fallback_text;
+    }
+  }
+  return result;
+}
+
 function replacePlaceholders(content: string, variables: Record<string, string>): string {
   let result = content;
 
@@ -375,12 +389,14 @@ Deno.serve(async (req: Request) => {
           format: at.templates.format,
         }));
 
+        const subjectVariables = applyFallbacks(variables, placeholderConfigs);
+
         emailsToInsert.push({
           user_id,
           campaign_id,
           to_email: contact.email,
           from_email: fromEmail,
-          subject: replacePlaceholders(subject, variables),
+          subject: replacePlaceholders(subject, subjectVariables),
           body: bodyContent,
           attachments: attachments.length > 0 ? JSON.stringify(attachments) : '[]',
           status: 'pending',

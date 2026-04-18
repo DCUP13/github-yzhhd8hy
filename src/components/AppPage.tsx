@@ -854,12 +854,17 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Subject Lines
                     </label>
+                    <div className="p-3 mb-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <p className="text-sm text-blue-800 dark:text-blue-300">
+                        <strong>Smart placeholders:</strong> You can use the same <code className="px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-xs">{'{{placeholder}}'}</code> variables here as in your templates (e.g. <code className="px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-xs">{'{{first_name}}'}</code>, <code className="px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-xs">{'{{listing_city}}'}</code>). When a contact is missing that data, the fallback text configured in <strong>Settings &rarr; Data Quality</strong> will be used so subjects never come out blank or as &ldquo;(no subject)&rdquo;.
+                      </p>
+                    </div>
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <input
                           type="text"
                           id="newSubjectLine"
-                          placeholder="Enter a subject line"
+                          placeholder="Enter a subject line (e.g. Quick question about {{listing_city}})"
                           className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         />
                         <button

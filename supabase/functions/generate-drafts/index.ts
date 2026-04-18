@@ -12,6 +12,58 @@ interface GenerateDraftsRequest {
   campaign_id?: string;
 }
 
+interface PlaceholderConfig {
+  tier: 'critical' | 'important' | 'optional';
+  fallback_text: string;
+}
+
+async function getPlaceholderConfigs(supabase: any, userId: string): Promise<Map<string, PlaceholderConfig>> {
+  const configMap = new Map<string, PlaceholderConfig>();
+
+  const { data: defaultConfigs } = await supabase
+    .from("default_placeholder_config")
+    .select("placeholder_key, tier, fallback_text");
+
+  if (defaultConfigs) {
+    for (const config of defaultConfigs) {
+      configMap.set(config.placeholder_key, {
+        tier: config.tier,
+        fallback_text: config.fallback_text,
+      });
+    }
+  }
+
+  const { data: userConfigs } = await supabase
+    .from("placeholder_config")
+    .select("placeholder_key, tier, fallback_text")
+    .eq("user_id", userId);
+
+  if (userConfigs) {
+    for (const config of userConfigs) {
+      configMap.set(config.placeholder_key, {
+        tier: config.tier,
+        fallback_text: config.fallback_text,
+      });
+    }
+  }
+
+  return configMap;
+}
+
+function applyFallbacks(
+  variables: Record<string, string>,
+  configMap: Map<string, PlaceholderConfig>
+): Record<string, string> {
+  const result: Record<string, string> = { ...variables };
+  for (const [key, config] of configMap.entries()) {
+    const value = result[key];
+    if ((!value || value.trim() === '') && config.fallback_text && config.fallback_text.trim() !== '') {
+      result[key] = config.fallback_text;
+    }
+  }
+  return result;
+}
+
 function processConditionalSections(content: string, variables: Record<string, string>): string {
   let result = content;
   const innermostPattern = /\{\{#if\s+(\w+)\}\}((?:(?!\{\{#if\s)[\s\S])*?)\{\{\/if\}\}/g;
@@ -117,6 +169,8 @@ Deno.serve(async (req: Request) => {
     }
 
     let totalDraftsCreated = 0;
+
+    const placeholderConfigs = await getPlaceholderConfigs(supabase, user_id);
 
     // Process each campaign
     for (const campaign of campaigns) {
@@ -267,12 +321,14 @@ Deno.serve(async (req: Request) => {
             });
           }
 
+          const subjectVariables = applyFallbacks(variables, placeholderConfigs);
+
           draftsToInsert.push({
             user_id,
             campaign_id: campaign.id,
             to_email: contact.email,
             from_email: fromEmail,
-            subject: replacePlaceholders(subject, variables),
+            subject: replacePlaceholders(subject, subjectVariables),
             body: bodyContent,
             attachments,
           });
