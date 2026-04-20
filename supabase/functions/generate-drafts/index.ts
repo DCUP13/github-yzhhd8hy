@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
+import JSZip from "npm:jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -106,6 +107,125 @@ function replacePlaceholders(content: string, variables: Record<string, string>)
   result = result.replace(/\{\{\w+\}\}/g, '');
 
   return normalizeWhitespace(result);
+}
+
+function escapeXmlText(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function replaceDocxParagraphPlaceholders(paragraphXml: string, variables: Record<string, string>): string {
+  const tRegex = /<w:t([^>]*)>([^<]*)<\/w:t>/g;
+  const tMatches: Array<{ start: number; end: number; attrs: string; text: string }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = tRegex.exec(paragraphXml)) !== null) {
+    tMatches.push({
+      start: m.index,
+      end: m.index + m[0].length,
+      attrs: m[1],
+      text: m[2],
+    });
+  }
+
+  if (tMatches.length === 0) return paragraphXml;
+
+  const combined = tMatches.map((t) => t.text).join('');
+  if (!combined.includes('{{')) return paragraphXml;
+
+  const replaced = replacePlaceholders(combined, variables);
+  if (replaced === combined) return paragraphXml;
+
+  let result = '';
+  let cursor = 0;
+  for (let i = 0; i < tMatches.length; i++) {
+    const t = tMatches[i];
+    result += paragraphXml.slice(cursor, t.start);
+    if (i === 0) {
+      const hasSpaceAttr = /xml:space=/.test(t.attrs);
+      const attrs = hasSpaceAttr ? t.attrs : `${t.attrs} xml:space="preserve"`;
+      result += `<w:t${attrs}>${escapeXmlText(replaced)}</w:t>`;
+    } else {
+      result += `<w:t${t.attrs}></w:t>`;
+    }
+    cursor = t.end;
+  }
+  result += paragraphXml.slice(cursor);
+  return result;
+}
+
+function replaceDocxXmlPlaceholders(xml: string, variables: Record<string, string>): string {
+  return xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g, (para) =>
+    replaceDocxParagraphPlaceholders(para, variables)
+  );
+}
+
+async function replaceDocxPlaceholders(
+  base64Content: string,
+  variables: Record<string, string>
+): Promise<string> {
+  const bytes = base64ToBytes(base64Content);
+  const zip = await JSZip.loadAsync(bytes);
+
+  const targetPaths = Object.keys(zip.files).filter((path) =>
+    /^word\/(document\d*|header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(path)
+  );
+
+  for (const path of targetPaths) {
+    const file = zip.file(path);
+    if (!file) continue;
+    const xml = await file.async('string');
+    const updated = replaceDocxXmlPlaceholders(xml, variables);
+    if (updated !== xml) {
+      zip.file(path, updated);
+    }
+  }
+
+  const output = await zip.generateAsync({ type: 'uint8array' });
+  return bytesToBase64(output);
+}
+
+async function replaceAttachmentPlaceholders(
+  rawContent: string,
+  format: string | undefined,
+  variables: Record<string, string>
+): Promise<string> {
+  const fmt = (format || '').toLowerCase();
+
+  if (fmt === 'docx') {
+    try {
+      const parsed = JSON.parse(rawContent);
+      if (parsed && typeof parsed.originalFile === 'string') {
+        const updatedBase64 = await replaceDocxPlaceholders(parsed.originalFile, variables);
+        parsed.originalFile = updatedBase64;
+        if (typeof parsed.preview === 'string') {
+          parsed.preview = replacePlaceholders(parsed.preview, variables);
+        }
+        return JSON.stringify(parsed);
+      }
+    } catch (err) {
+      console.error('Failed to replace placeholders in DOCX attachment, falling back to text replacement:', err);
+    }
+  }
+
+  return replacePlaceholders(rawContent, variables);
 }
 
 Deno.serve(async (req: Request) => {
@@ -314,9 +434,15 @@ Deno.serve(async (req: Request) => {
             const selectedAttachmentTemplate = attachmentTemplates[attachmentIndex % attachmentTemplates.length];
             attachmentIndex++;
 
+            const replacedContent = await replaceAttachmentPlaceholders(
+              selectedAttachmentTemplate.templates.content,
+              selectedAttachmentTemplate.templates.format,
+              variables
+            );
+
             attachments.push({
               name: selectedAttachmentTemplate.templates.name,
-              content: replacePlaceholders(selectedAttachmentTemplate.templates.content, variables),
+              content: replacedContent,
               format: selectedAttachmentTemplate.templates.format,
             });
           }
