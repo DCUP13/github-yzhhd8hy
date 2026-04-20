@@ -3,6 +3,7 @@ import { Mail, Paperclip, Search, RefreshCw, Clock, User, ArrowLeft, Reply, Send
 import { supabase } from '../lib/supabase';
 import { ReplyDialog } from './ReplyDialog';
 import { ComposeEmailDialog } from './ComposeEmailDialog';
+import { AttachmentViewerDialog } from './AttachmentViewerDialog';
 import { useEmails } from '../contexts/EmailContext';
 
 interface EmailsInboxProps {
@@ -88,6 +89,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [showDraftsDropdown, setShowDraftsDropdown] = useState(false);
   const [isProcessingDrafts, setIsProcessingDrafts] = useState(false);
   const [isGeneratingDrafts, setIsGeneratingDrafts] = useState(false);
+  const [viewingAttachment, setViewingAttachment] = useState<{ attachment: any; source: 'inbox' | 'template'; emailId?: string } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1041,9 +1043,11 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   </h3>
                   <div className="space-y-2">
                     {getAttachments((selectedEmail as Email).attachments).map((attachment: any, index: number) => (
-                      <div
+                      <button
                         key={index}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                        type="button"
+                        onClick={() => setViewingAttachment({ attachment, source: 'inbox', emailId: selectedEmail.id })}
+                        className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-200 dark:hover:border-blue-800 transition-colors text-left"
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-lg">
@@ -1054,17 +1058,23 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                               {attachment.filename}
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {formatFileSize(attachment.size)} • {attachment.contentType.split('/')[1].toUpperCase()}
+                              {formatFileSize(attachment.size)} • {attachment.contentType.split('/')[1]?.toUpperCase() || attachment.contentType.toUpperCase()}
                             </p>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleDownloadAttachment(attachment)}
-                          className="inline-flex items-center px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                        >
-                          Download
-                        </button>
-                      </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400">View</span>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => { e.stopPropagation(); handleDownloadAttachment(attachment); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handleDownloadAttachment(attachment); } }}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                          >
+                            Download
+                          </span>
+                        </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1077,13 +1087,15 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   </h3>
                   <div className="space-y-2">
                     {getAttachments((selectedEmail as DraftEmail).attachments).map((attachment: any, index: number) => (
-                      <div
+                      <button
                         key={index}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                        type="button"
+                        onClick={() => setViewingAttachment({ attachment, source: 'template' })}
+                        className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-200 dark:hover:border-blue-800 transition-colors text-left"
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-lg">
-                            {attachment.format === 'docx' ? '📝' : attachment.format === 'pdf' ? '📄' : '📎'}
+                            {attachment.format === 'docx' ? 'DOC' : attachment.format === 'pdf' ? 'PDF' : 'FILE'}
                           </span>
                           <div>
                             <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1094,10 +1106,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                             </p>
                           </div>
                         </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 italic">
-                          Template attachment
-                        </span>
-                      </div>
+                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">View</span>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1110,13 +1120,15 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   </h3>
                   <div className="space-y-2">
                     {getAttachments((selectedEmail as OutboxEmail).attachments).map((attachment: any, index: number) => (
-                      <div
+                      <button
                         key={index}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                        type="button"
+                        onClick={() => setViewingAttachment({ attachment, source: 'template' })}
+                        className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-200 dark:hover:border-blue-800 transition-colors text-left"
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-lg">
-                            {attachment.format === 'docx' ? '📝' : attachment.format === 'pdf' ? '📄' : '📎'}
+                            {attachment.format === 'docx' ? 'DOC' : attachment.format === 'pdf' ? 'PDF' : 'FILE'}
                           </span>
                           <div>
                             <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1127,10 +1139,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                             </p>
                           </div>
                         </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 italic">
-                          Template attachment
-                        </span>
-                      </div>
+                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">View</span>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1143,13 +1153,15 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   </h3>
                   <div className="space-y-2">
                     {getAttachments((selectedEmail as SentEmail).attachments).map((attachment: any, index: number) => (
-                      <div
+                      <button
                         key={index}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                        type="button"
+                        onClick={() => setViewingAttachment({ attachment, source: 'template' })}
+                        className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-200 dark:hover:border-blue-800 transition-colors text-left"
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-lg">
-                            {attachment.format === 'docx' ? '📝' : attachment.format === 'pdf' ? '📄' : '📎'}
+                            {attachment.format === 'docx' ? 'DOC' : attachment.format === 'pdf' ? 'PDF' : 'FILE'}
                           </span>
                           <div>
                             <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1160,10 +1172,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                             </p>
                           </div>
                         </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 italic">
-                          Template attachment
-                        </span>
-                      </div>
+                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">View</span>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1191,6 +1201,15 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
           onSend={() => {
             fetchAllEmails();
           }}
+        />
+      )}
+
+      {viewingAttachment && (
+        <AttachmentViewerDialog
+          attachment={viewingAttachment.attachment}
+          source={viewingAttachment.source}
+          emailId={viewingAttachment.emailId}
+          onClose={() => setViewingAttachment(null)}
         />
       )}
     </div>
