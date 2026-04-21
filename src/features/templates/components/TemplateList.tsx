@@ -39,7 +39,7 @@ export function TemplateList({ templates, onEdit, onDelete, onExport }: Template
   };
 
   const handleTemplateClick = (template: Template) => {
-    if (template.imported) {
+    if (template.imported && template.format !== 'docx') {
       setPreviewTemplate(template);
     } else {
       onEdit(template);
