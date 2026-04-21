@@ -5,6 +5,7 @@ import { RichTextEditor, type RichTextEditorRef } from './RichTextEditor';
 import { SaveAsDialog } from './SaveAsDialog';
 import { FilePreview } from './FilePreview';
 import { AIGenerateDialog } from './AIGenerateDialog';
+import { getDocxPreviewHtml } from '../utils/docxConvert';
 
 interface TemplateEditorProps {
   template: Template;
@@ -26,7 +27,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
 
   const handleSave = (name: string, format: 'html' | 'pdf' | 'docx') => {
     if (!editorRef.current) return;
-    
+
     onSave({
       ...template,
       name,
@@ -37,6 +38,12 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
 
     setShowSaveDialog(false);
   };
+
+  const isDocx = template.format === 'docx';
+  const isEditableImport = !template.imported || isDocx;
+  const initialEditorContent = isDocx
+    ? getDocxPreviewHtml(template.content)
+    : template.content;
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-800">
@@ -53,15 +60,17 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
               <X className="w-4 h-4 mr-2" />
               Close
             </button>
-            {!template.imported && (
+            {isEditableImport && (
               <>
-                <button
-                  onClick={() => setShowAIDialog(true)}
-                  className="inline-flex items-center px-4 py-2 border border-blue-300 dark:border-blue-600 text-sm font-medium rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Generate with AI
-                </button>
+                {!template.imported && (
+                  <button
+                    onClick={() => setShowAIDialog(true)}
+                    className="inline-flex items-center px-4 py-2 border border-blue-300 dark:border-blue-600 text-sm font-medium rounded-lg text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Generate with AI
+                  </button>
+                )}
                 <button
                   onClick={() => setShowSaveDialog(true)}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -77,12 +86,12 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
       
       <div className="flex-1 p-6 overflow-auto">
         <div className="max-w-4xl mx-auto">
-          {template.imported ? (
+          {template.imported && !isDocx ? (
             <FilePreview format={template.format} content={template.content} />
           ) : (
             <RichTextEditor
               ref={editorRef}
-              content={template.content}
+              content={initialEditorContent}
               className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             />
           )}
@@ -92,6 +101,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
       {showSaveDialog && (
         <SaveAsDialog
           initialName={pendingTitle}
+          initialFormat={template.format}
           onSave={handleSave}
           onClose={() => setShowSaveDialog(false)}
         />

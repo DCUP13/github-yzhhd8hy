@@ -3,13 +3,14 @@ import { X, Save } from 'lucide-react';
 
 interface SaveAsDialogProps {
   initialName: string;
+  initialFormat?: 'html' | 'pdf' | 'docx';
   onSave: (name: string, format: 'html' | 'pdf' | 'docx') => void;
   onClose: () => void;
 }
 
-export function SaveAsDialog({ initialName, onSave, onClose }: SaveAsDialogProps) {
+export function SaveAsDialog({ initialName, initialFormat = 'html', onSave, onClose }: SaveAsDialogProps) {
   const [name, setName] = useState(initialName);
-  const [format, setFormat] = useState<'html' | 'pdf' | 'docx'>('html');
+  const [format, setFormat] = useState<'html' | 'pdf' | 'docx'>(initialFormat);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

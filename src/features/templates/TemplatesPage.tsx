@@ -5,6 +5,7 @@ import { TemplateEditor } from './components/TemplateEditor';
 import type { Template } from './types';
 import { exportAsHTML, exportAsPDF, exportAsDOCX } from './utils/exportUtils';
 import { createTemplateFromFile } from './utils/importUtils';
+import { htmlToDocxJsonContent } from './utils/docxConvert';
 import { supabase } from '../../lib/supabase';
 
 interface TemplatesPageProps {
@@ -62,9 +63,14 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
         throw new Error('User not authenticated');
       }
 
+      let contentToStore = template.content;
+      if (template.format === 'docx') {
+        contentToStore = await htmlToDocxJsonContent(template.content);
+      }
+
       const templateData = {
         name: template.name,
-        content: template.content,
+        content: contentToStore,
         format: template.format,
         imported: template.imported || false,
         user_id: user.data.user.id,
@@ -209,7 +215,7 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
   };
 
   const handleEditTemplate = (template: Template) => {
-    if (template.imported) {
+    if (template.imported && template.format !== 'docx') {
       alert('Imported templates cannot be edited. You can create a copy instead.');
       return;
     }
