@@ -1,5 +1,3 @@
-import { asBlob } from 'html-docx-js-typescript';
-
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -18,7 +16,8 @@ function wrapHtmlForDocx(bodyHtml: string): string {
 }
 
 export async function htmlToDocxJsonContent(html: string): Promise<string> {
-  const result = await asBlob(wrapHtmlForDocx(html));
+  const mod = await import('html-docx-js-typescript');
+  const result = await mod.asBlob(wrapHtmlForDocx(html));
   const blob = result instanceof Blob ? result : new Blob([result as unknown as ArrayBuffer]);
   const base64 = await blobToBase64(blob);
   return JSON.stringify({
