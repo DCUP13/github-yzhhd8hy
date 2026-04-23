@@ -89,15 +89,13 @@ export default function App() {
         if (session) {
           console.log('Session found, loading dashboard');
           setView('dashboard');
-          setIsLoading(false);
-          fetchUserSettings(session.user.id).catch((err) =>
-            console.error('Error loading user settings:', err),
-          );
+          await fetchUserSettings(session.user.id);
         } else {
           console.log('No session, showing login');
           setView('login');
-          setIsLoading(false);
         }
+
+        setIsLoading(false);
       } catch (error) {
         console.error('Auth initialization failed:', error);
         if (mounted) {
@@ -106,6 +104,14 @@ export default function App() {
         }
       }
     };
+
+    const timeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('Auth initialization timeout - forcing login view');
+        setView('login');
+        setIsLoading(false);
+      }
+    }, 3000);
 
     initializeAuth();
 
@@ -137,6 +143,7 @@ export default function App() {
 
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, []);
