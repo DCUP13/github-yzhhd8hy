@@ -71,7 +71,6 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
-    let authInitialized = false;
 
     const initializeAuth = async () => {
       try {
@@ -83,8 +82,6 @@ export default function App() {
         if (error) {
           console.error('Session error:', error);
           setView('login');
-          authInitialized = true;
-          clearTimeout(timeout);
           setIsLoading(false);
           return;
         }
@@ -98,23 +95,18 @@ export default function App() {
           setView('login');
         }
 
-        if (!mounted) return;
-        authInitialized = true;
-        clearTimeout(timeout);
         setIsLoading(false);
       } catch (error) {
         console.error('Auth initialization failed:', error);
         if (mounted) {
           setView('login');
-          authInitialized = true;
-          clearTimeout(timeout);
           setIsLoading(false);
         }
       }
     };
 
     const timeout = setTimeout(() => {
-      if (mounted && !authInitialized) {
+      if (mounted) {
         console.warn('Auth initialization timeout - forcing login view');
         setView('login');
         setIsLoading(false);
