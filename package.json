@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
+    "html-docx-js-typescript": "^0.1.5",
     "html2pdf.js": "^0.10.1",
-    "jszip": "^3.10.1",
     "lucide-react": "^0.344.0",
     "mammoth": "^1.6.0",
     "pdfjs-dist": "3.11.174",
