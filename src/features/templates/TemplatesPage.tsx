@@ -307,6 +307,7 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_state}}'}</code> - Property state</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_zip}}'}</code> - Property zip code</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_price}}'}</code> - Listing price</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{offer_price}}'}</code> - Calculated offer price (configured per campaign)</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_bedrooms}}'}</code> - Number of bedrooms</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_bathrooms}}'}</code> - Number of bathrooms</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{listing_sqft}}'}</code> - Square footage</li>

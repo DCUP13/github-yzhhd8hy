@@ -52,6 +52,7 @@ const AVAILABLE_FIELDS: FieldInfo[] = [
   { name: 'listing_state', label: 'Property State', description: 'Property state', category: 'listing' },
   { name: 'listing_zip', label: 'Property Zip', description: 'Property zip code', category: 'listing' },
   { name: 'listing_price', label: 'Listing Price', description: 'Listing price', category: 'listing' },
+  { name: 'offer_price', label: 'Offer Price', description: 'Calculated offer price (configured per campaign)', category: 'listing' },
   { name: 'listing_bedrooms', label: 'Bedrooms', description: 'Number of bedrooms', category: 'listing' },
   { name: 'listing_bathrooms', label: 'Bathrooms', description: 'Number of bathrooms', category: 'listing' },
   { name: 'listing_sqft', label: 'Square Footage', description: 'Square footage', category: 'listing' },
