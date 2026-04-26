@@ -379,6 +379,23 @@ Deno.serve(async (req: Request) => {
 
           const listing = listings && listings.length > 0 ? listings[0] : null;
 
+          let offerPrice = '';
+          const listingPriceNumber: number | null = listing?.price ?? null;
+          if (listingPriceNumber && campaign.offer_price_type && campaign.offer_price_value != null) {
+            const value = Number(campaign.offer_price_value);
+            if (!Number.isNaN(value)) {
+              let computed = 0;
+              if (campaign.offer_price_type === 'percentage') {
+                computed = Math.round(listingPriceNumber * (value / 100));
+              } else if (campaign.offer_price_type === 'dollar_off') {
+                computed = Math.max(0, listingPriceNumber - value);
+              }
+              if (computed > 0) {
+                offerPrice = `$${computed.toLocaleString()}`;
+              }
+            }
+          }
+
           // Build variables for template replacement
           const variables: Record<string, string> = {
             first_name: contact.first_name_parsed || contact.name?.split(' ')[0] || '',
@@ -412,6 +429,7 @@ Deno.serve(async (req: Request) => {
             listing_type: listing?.home_type || '',
             listing_url: listing?.listing_url || '',
             listing_status: listing?.status || '',
+            offer_price: offerPrice,
           };
 
           // Replace variables in body template
