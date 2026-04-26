@@ -70,45 +70,102 @@ export function AttachmentViewerDialog({ attachment, emailId, source, onClose }:
         return;
       }
 
-      if (fmt === 'docx') {
-        try {
-          let binary: Uint8Array | null = null;
-          try {
-            const parsed = JSON.parse(rawContent);
-            if (parsed && typeof parsed.originalFile === 'string') {
-              binary = decodeBase64ToBytes(parsed.originalFile);
-            }
-          } catch {
-            binary = null;
-          }
+      let parsed: any = null;
+      try {
+        const maybe = JSON.parse(rawContent);
+        if (maybe && typeof maybe === 'object') parsed = maybe;
+      } catch {
+        parsed = null;
+      }
 
-          if (binary) {
+      const tryDecodeBase64 = (val: unknown): Uint8Array | null => {
+        if (typeof val !== 'string' || !val) return null;
+        const cleaned = val.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+        if (!/^[A-Za-z0-9+/=]+$/.test(cleaned)) return null;
+        try {
+          return decodeBase64ToBytes(cleaned);
+        } catch {
+          return null;
+        }
+      };
+
+      const setHtmlPreview = (html: string) => {
+        const blob = new Blob([htmlShell(html)], { type: 'text/html' });
+        const url = pushUrl(URL.createObjectURL(blob));
+        setPreviewUrl(url);
+        setPreviewKind('iframe');
+      };
+
+      if (fmt === 'docx') {
+        const previewHtml = parsed && typeof parsed.preview === 'string' ? parsed.preview : '';
+        const binary = parsed
+          ? tryDecodeBase64(parsed.originalFile)
+          : tryDecodeBase64(rawContent);
+
+        let renderedHtml = '';
+        if (binary) {
+          try {
             const result = await mammoth.convertToHtml({ arrayBuffer: binary.buffer });
             if (cancelled) return;
-            const blob = new Blob([htmlShell(result.value)], { type: 'text/html' });
-            const url = pushUrl(URL.createObjectURL(blob));
-            setPreviewUrl(url);
-            setPreviewKind('iframe');
-
-            const fileBlob = new Blob([binary], {
-              type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            });
-            const dlUrl = pushUrl(URL.createObjectURL(fileBlob));
-            setDownloadUrl(dlUrl);
-            setDownloadFilename(`${displayName.replace(/\.[^.]+$/, '')}.docx`);
-            return;
+            renderedHtml = (result.value || '').trim();
+          } catch (err) {
+            console.error('mammoth render failed:', err);
           }
+        }
 
-          const blob = new Blob([htmlShell(rawContent)], { type: 'text/html' });
+        if (!renderedHtml && previewHtml) renderedHtml = previewHtml;
+
+        if (renderedHtml) {
+          setHtmlPreview(renderedHtml);
+        } else if (previewHtml) {
+          setHtmlPreview(previewHtml);
+        } else {
+          setHtmlPreview('<p style="color:#666">No preview available. You can still download the attachment.</p>');
+        }
+
+        if (binary) {
+          const fileBlob = new Blob([binary], {
+            type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          });
+          const dlUrl = pushUrl(URL.createObjectURL(fileBlob));
+          setDownloadUrl(dlUrl);
+          setDownloadFilename(displayName.toLowerCase().endsWith('.docx') ? displayName : `${displayName.replace(/\.[^.]+$/, '')}.docx`);
+        } else {
+          const fallbackBlob = new Blob([previewHtml || rawContent], { type: 'text/html' });
+          const dlUrl = pushUrl(URL.createObjectURL(fallbackBlob));
+          setDownloadUrl(dlUrl);
+          setDownloadFilename(`${displayName.replace(/\.[^.]+$/, '')}.html`);
+        }
+        return;
+      }
+
+      if (fmt === 'pdf') {
+        const binary =
+          (parsed && tryDecodeBase64(parsed.originalFile)) ||
+          (parsed && tryDecodeBase64(parsed.content)) ||
+          tryDecodeBase64(rawContent);
+
+        if (binary) {
+          const blob = new Blob([binary], { type: 'application/pdf' });
           const url = pushUrl(URL.createObjectURL(blob));
           setPreviewUrl(url);
           setPreviewKind('iframe');
           setDownloadUrl(url);
-          setDownloadFilename(`${displayName}.html`);
-        } catch (err) {
-          if (cancelled) return;
-          setError(err instanceof Error ? err.message : 'Failed to render DOCX preview.');
+          setDownloadFilename(displayName.toLowerCase().endsWith('.pdf') ? displayName : `${displayName.replace(/\.[^.]+$/, '')}.pdf`);
+          return;
         }
+
+        const previewHtml = parsed && typeof parsed.preview === 'string' ? parsed.preview : '';
+        if (previewHtml) {
+          setHtmlPreview(previewHtml);
+          const dlBlob = new Blob([previewHtml], { type: 'text/html' });
+          const dlUrl = pushUrl(URL.createObjectURL(dlBlob));
+          setDownloadUrl(dlUrl);
+          setDownloadFilename(`${displayName.replace(/\.[^.]+$/, '')}.html`);
+          return;
+        }
+
+        setError('Unable to read PDF content for preview.');
         return;
       }
 
@@ -122,11 +179,14 @@ export function AttachmentViewerDialog({ attachment, emailId, source, onClose }:
         return;
       }
 
-      const blob = new Blob([htmlShell(rawContent)], { type: 'text/html' });
-      const url = pushUrl(URL.createObjectURL(blob));
-      setPreviewUrl(url);
-      setPreviewKind('iframe');
-      setDownloadUrl(url);
+      const htmlSource =
+        parsed && typeof parsed.preview === 'string' && parsed.preview
+          ? parsed.preview
+          : rawContent;
+      setHtmlPreview(htmlSource);
+      const dlBlob = new Blob([htmlSource], { type: 'text/html' });
+      const dlUrl = pushUrl(URL.createObjectURL(dlBlob));
+      setDownloadUrl(dlUrl);
       const ext = fmt || 'html';
       setDownloadFilename(`${displayName.replace(/\.[^.]+$/, '')}.${ext === 'pdf' ? 'html' : ext}`);
     };
