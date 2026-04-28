@@ -430,6 +430,7 @@ Deno.serve(async (req: Request) => {
             listing_url: listing?.listing_url || '',
             listing_status: listing?.status || '',
             offer_price: offerPrice,
+            todays_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
           };
 
           // Replace variables in body template

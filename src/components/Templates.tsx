@@ -46,6 +46,7 @@ const AVAILABLE_FIELDS: FieldInfo[] = [
   { name: 'emd', label: 'Earnest Money Deposit', description: 'Earnest money deposit', category: 'campaign' },
   { name: 'option_period', label: 'Option Period', description: 'Option period', category: 'campaign' },
   { name: 'title_company', label: 'Title Company', description: 'Title company', category: 'campaign' },
+  { name: 'todays_date', label: "Today's Date", description: "Current date when the draft is generated", category: 'campaign' },
 
   { name: 'listing_address', label: 'Property Address', description: 'Property address', category: 'listing' },
   { name: 'listing_city', label: 'Property City', description: 'Property city', category: 'listing' },

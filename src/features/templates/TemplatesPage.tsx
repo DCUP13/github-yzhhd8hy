@@ -297,6 +297,7 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{emd}}'}</code> - Earnest money deposit</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{option_period}}'}</code> - Option period</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{title_company}}'}</code> - Title company</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{todays_date}}'}</code> - Today's date</li>
                       </ul>
                     </div>
                     <div>
