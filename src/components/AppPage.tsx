@@ -31,8 +31,6 @@ interface Campaign {
   minDataQualityScore: number;
   skipIncompleteContacts: boolean;
   useSmartFallbacks: boolean;
-  offerPriceType: 'percentage' | 'dollar_off' | '';
-  offerPriceValue: number | null;
   templates: {
     template: Template;
     type: 'body' | 'attachment';
@@ -209,8 +207,6 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         minDataQualityScore: campaign.min_data_quality_score ?? 50,
         skipIncompleteContacts: campaign.skip_incomplete_contacts ?? false,
         useSmartFallbacks: campaign.use_smart_fallbacks ?? true,
-        offerPriceType: (campaign.offer_price_type as 'percentage' | 'dollar_off' | null) ?? '',
-        offerPriceValue: campaign.offer_price_value ?? null,
         templates: campaign.campaign_templates.map((ct: any) => ({
           template: ct.templates,
           type: ct.template_type
@@ -309,8 +305,6 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
       minDataQualityScore: 50,
       skipIncompleteContacts: false,
       useSmartFallbacks: true,
-      offerPriceType: '',
-      offerPriceValue: null,
       templates: [],
       emails: [],
       lastModified: new Date().toISOString()
@@ -355,8 +349,6 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
             min_data_quality_score: currentCampaign.minDataQualityScore,
             skip_incomplete_contacts: currentCampaign.skipIncompleteContacts,
             use_smart_fallbacks: currentCampaign.useSmartFallbacks,
-            offer_price_type: currentCampaign.offerPriceType || null,
-            offer_price_value: currentCampaign.offerPriceValue,
             updated_at: now
           })
           .select()
@@ -385,8 +377,6 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
             min_data_quality_score: currentCampaign.minDataQualityScore,
             skip_incomplete_contacts: currentCampaign.skipIncompleteContacts,
             use_smart_fallbacks: currentCampaign.useSmartFallbacks,
-            offer_price_type: currentCampaign.offerPriceType || null,
-            offer_price_value: currentCampaign.offerPriceValue,
             updated_at: now
           })
           .eq('id', campaignId);
@@ -1153,60 +1143,6 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       placeholder="Enter title company name"
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
-                  </div>
-
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      <DollarSign className="w-4 h-4 inline mr-1" />
-                      Offer Price Calculation
-                    </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                      Automatically compute <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs">{'{{offer_price}}'}</code> for each contact based on their listing price. Use this placeholder in your templates and attachments.
-                    </p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                          Method
-                        </label>
-                        <select
-                          value={currentCampaign.offerPriceType}
-                          onChange={(e) => handleUpdateCampaign({
-                            offerPriceType: e.target.value as 'percentage' | 'dollar_off' | '',
-                            offerPriceValue: e.target.value ? currentCampaign.offerPriceValue : null,
-                          })}
-                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        >
-                          <option value="">Not configured</option>
-                          <option value="percentage">Percentage of listing price</option>
-                          <option value="dollar_off">Dollar amount off listing price</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                          {currentCampaign.offerPriceType === 'percentage' ? 'Percentage (%)' : currentCampaign.offerPriceType === 'dollar_off' ? 'Amount ($)' : 'Value'}
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step={currentCampaign.offerPriceType === 'percentage' ? '0.1' : '1'}
-                          max={currentCampaign.offerPriceType === 'percentage' ? '100' : undefined}
-                          value={currentCampaign.offerPriceValue ?? ''}
-                          onChange={(e) => handleUpdateCampaign({
-                            offerPriceValue: e.target.value === '' ? null : parseFloat(e.target.value),
-                          })}
-                          disabled={!currentCampaign.offerPriceType}
-                          placeholder={currentCampaign.offerPriceType === 'percentage' ? 'e.g. 85' : currentCampaign.offerPriceType === 'dollar_off' ? 'e.g. 25000' : 'Select method first'}
-                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                    </div>
-                    {currentCampaign.offerPriceType && currentCampaign.offerPriceValue != null && (
-                      <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                        {currentCampaign.offerPriceType === 'percentage'
-                          ? `Offer will be ${currentCampaign.offerPriceValue}% of each contact's listing price.`
-                          : `Offer will be listing price minus $${Number(currentCampaign.offerPriceValue).toLocaleString()}.`}
-                      </p>
-                    )}
                   </div>
                 </div>
               </div>
