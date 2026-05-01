@@ -73,19 +73,36 @@ export function AttachmentViewerDialog({ attachment, emailId, source, onClose }:
       if (fmt === 'docx') {
         try {
           let binary: Uint8Array | null = null;
+          let previewHtml: string | null = null;
           try {
             const parsed = JSON.parse(rawContent);
             if (parsed && typeof parsed.originalFile === 'string') {
               binary = decodeBase64ToBytes(parsed.originalFile);
+            }
+            if (parsed && typeof parsed.preview === 'string' && parsed.preview.trim()) {
+              previewHtml = parsed.preview;
             }
           } catch {
             binary = null;
           }
 
           if (binary) {
-            const result = await mammoth.convertToHtml({ arrayBuffer: binary.buffer });
+            let renderedHtml = previewHtml || '';
+            if (!renderedHtml) {
+              try {
+                const result = await mammoth.convertToHtml({ arrayBuffer: binary.buffer });
+                renderedHtml = result.value || '';
+              } catch {
+                renderedHtml = '';
+              }
+            }
             if (cancelled) return;
-            const blob = new Blob([htmlShell(result.value)], { type: 'text/html' });
+
+            if (!renderedHtml) {
+              renderedHtml = '<p style="color:#6b7280;">Preview not available for this DOCX. Use the Download button to open it.</p>';
+            }
+
+            const blob = new Blob([htmlShell(renderedHtml)], { type: 'text/html' });
             const url = pushUrl(URL.createObjectURL(blob));
             setPreviewUrl(url);
             setPreviewKind('iframe');
@@ -96,6 +113,16 @@ export function AttachmentViewerDialog({ attachment, emailId, source, onClose }:
             const dlUrl = pushUrl(URL.createObjectURL(fileBlob));
             setDownloadUrl(dlUrl);
             setDownloadFilename(`${displayName.replace(/\.[^.]+$/, '')}.docx`);
+            return;
+          }
+
+          if (previewHtml) {
+            const blob = new Blob([htmlShell(previewHtml)], { type: 'text/html' });
+            const url = pushUrl(URL.createObjectURL(blob));
+            setPreviewUrl(url);
+            setPreviewKind('iframe');
+            setDownloadUrl(url);
+            setDownloadFilename(`${displayName}.html`);
             return;
           }
 
