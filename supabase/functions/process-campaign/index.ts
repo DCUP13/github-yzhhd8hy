@@ -423,6 +423,13 @@ Deno.serve(async (req: Request) => {
           sender_state: campaign.sender_state || '',
           city: campaign.city || '',
           days_till_close: campaign.days_till_close || '',
+          close_date: (() => {
+            const days = Number(campaign.days_till_close);
+            if (!Number.isFinite(days) || days <= 0) return '';
+            const d = new Date();
+            d.setDate(d.getDate() + days);
+            return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+          })(),
           emd: campaign.emd || '',
           option_period: campaign.option_period || '',
           title_company: campaign.title_company || '',
