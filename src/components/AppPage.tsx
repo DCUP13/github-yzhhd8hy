@@ -25,6 +25,8 @@ interface Campaign {
   emd: string;
   optionPeriod: string;
   titleCompany: string;
+  offerPriceType: 'percentage' | 'fixed';
+  offerPriceValue: string;
   sendTimeStart: string;
   sendTimeEnd: string;
   sendDelayMinutes: number | null;
@@ -201,6 +203,8 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         emd: campaign.emd || '',
         optionPeriod: campaign.option_period || '',
         titleCompany: campaign.title_company || '',
+        offerPriceType: (campaign.offer_price_type === 'fixed' ? 'fixed' : 'percentage'),
+        offerPriceValue: campaign.offer_price_value != null ? String(campaign.offer_price_value) : '',
         sendTimeStart: campaign.send_time_start || '09:00:00',
         sendTimeEnd: campaign.send_time_end || '17:00:00',
         sendDelayMinutes: campaign.send_delay_minutes ?? null,
@@ -299,6 +303,8 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
       emd: '',
       optionPeriod: '',
       titleCompany: '',
+      offerPriceType: 'percentage',
+      offerPriceValue: '',
       sendTimeStart: '09:00',
       sendTimeEnd: '17:00',
       sendDelayMinutes: null,
@@ -343,6 +349,10 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
             emd: currentCampaign.emd,
             option_period: currentCampaign.optionPeriod,
             title_company: currentCampaign.titleCompany,
+            offer_price_type: currentCampaign.offerPriceType,
+            offer_price_value: currentCampaign.offerPriceValue !== '' && !isNaN(Number(currentCampaign.offerPriceValue))
+              ? Number(currentCampaign.offerPriceValue)
+              : null,
             send_time_start: currentCampaign.sendTimeStart,
             send_time_end: currentCampaign.sendTimeEnd,
             send_delay_minutes: currentCampaign.sendDelayMinutes,
@@ -371,6 +381,10 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
             emd: currentCampaign.emd,
             option_period: currentCampaign.optionPeriod,
             title_company: currentCampaign.titleCompany,
+            offer_price_type: currentCampaign.offerPriceType,
+            offer_price_value: currentCampaign.offerPriceValue !== '' && !isNaN(Number(currentCampaign.offerPriceValue))
+              ? Number(currentCampaign.offerPriceValue)
+              : null,
             send_time_start: currentCampaign.sendTimeStart,
             send_time_end: currentCampaign.sendTimeEnd,
             send_delay_minutes: currentCampaign.sendDelayMinutes,
@@ -1143,6 +1157,39 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                       placeholder="Enter title company name"
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Offer Price
+                    </label>
+                    <div className="grid grid-cols-[160px_1fr] gap-2">
+                      <select
+                        value={currentCampaign.offerPriceType}
+                        onChange={(e) => handleUpdateCampaign({ offerPriceType: e.target.value as 'percentage' | 'fixed' })}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="percentage">Percentage of list</option>
+                        <option value="fixed">Fixed amount</option>
+                      </select>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-3 flex items-center text-gray-500 dark:text-gray-400 text-sm">
+                          {currentCampaign.offerPriceType === 'percentage' ? '%' : '$'}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step={currentCampaign.offerPriceType === 'percentage' ? '1' : '1000'}
+                          value={currentCampaign.offerPriceValue}
+                          onChange={(e) => handleUpdateCampaign({ offerPriceValue: e.target.value })}
+                          placeholder={currentCampaign.offerPriceType === 'percentage' ? 'e.g. 70' : 'e.g. 150000'}
+                          className="w-full pl-8 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      Used to compute {'{{offer_price}}'}. Percentage multiplies the listing price; fixed uses a flat dollar amount.
+                    </p>
                   </div>
                 </div>
               </div>
