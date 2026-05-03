@@ -398,6 +398,7 @@ Deno.serve(async (req: Request) => {
             sender_state: campaign.sender_state || '',
             city: campaign.city || '',
             days_till_close: campaign.days_till_close || '',
+            todays_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
             close_date: (() => {
               const days = Number(campaign.days_till_close);
               if (!Number.isFinite(days) || days <= 0) return '';

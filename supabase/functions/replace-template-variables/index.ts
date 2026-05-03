@@ -148,7 +148,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // Merge listing data if contact_id is provided
-    let allVariables = { ...variables };
+    let allVariables: Record<string, string> = {
+      todays_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      ...variables,
+    };
 
     if (contact_id) {
       const { data: listings } = await supabase
