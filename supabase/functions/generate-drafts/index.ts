@@ -419,6 +419,20 @@ Deno.serve(async (req: Request) => {
             listing_type: listing?.home_type || '',
             listing_url: listing?.listing_url || '',
             listing_status: listing?.status || '',
+            offer_price: (() => {
+              const listingPrice = Number(listing?.price);
+              const value = Number(campaign.offer_price_value);
+              if (!Number.isFinite(value) || value <= 0) return '';
+              const type = (campaign.offer_price_type || '').toLowerCase();
+              let amount: number;
+              if (type === 'percentage') {
+                if (!Number.isFinite(listingPrice) || listingPrice <= 0) return '';
+                amount = Math.round(listingPrice * (value / 100));
+              } else {
+                amount = Math.round(value);
+              }
+              return `$${amount.toLocaleString()}`;
+            })(),
           };
 
           // Replace variables in body template
