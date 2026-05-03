@@ -1163,7 +1163,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Offer Price
                     </label>
-                    <div className="grid grid-cols-[1fr_140px] gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <select
                         value={currentCampaign.offerPriceType}
                         onChange={(e) => handleUpdateCampaign({ offerPriceType: e.target.value as 'percentage' | 'fixed' })}
