@@ -289,11 +289,15 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                       <p className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Campaign Details:</p>
                       <ul className="space-y-0.5 text-blue-800 dark:text-blue-200">
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_name}}'}</code> - Your name</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_email}}'}</code> - Sending email address</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_phone}}'}</code> - Your phone</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_city}}'}</code> - Your city</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_state}}'}</code> - Your state</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{city}}'}</code> - Target city</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{todays_date}}'}</code> - Today's date</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{days_till_close}}'}</code> - Days until close</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{close_date}}'}</code> - Projected close date</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{offer_price}}'}</code> - Calculated offer price</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{emd}}'}</code> - Earnest money deposit</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{option_period}}'}</code> - Option period</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{title_company}}'}</code> - Title company</li>
