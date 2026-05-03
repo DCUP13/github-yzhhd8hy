@@ -418,6 +418,7 @@ Deno.serve(async (req: Request) => {
           screen_name: contact.screen_name || '',
           profile_url: contact.profile_url || '',
           sender_name: campaign.sender_name || '',
+          sender_email: fromEmail || '',
           sender_phone: campaign.sender_phone || '',
           sender_city: campaign.sender_city || '',
           sender_state: campaign.sender_state || '',
