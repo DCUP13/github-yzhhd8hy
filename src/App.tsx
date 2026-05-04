@@ -127,7 +127,7 @@ export default function App() {
       console.log('Auth state change:', event);
 
       if (event === 'SIGNED_IN' && session) {
-        setView('dashboard');
+        setView(prev => (prev === 'login' || prev === 'register') ? 'dashboard' : prev);
         (async () => {
           try {
             await fetchUserSettings(session.user.id);
