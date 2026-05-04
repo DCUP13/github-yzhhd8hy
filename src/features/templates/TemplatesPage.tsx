@@ -294,44 +294,25 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-lg border border-blue-200 dark:border-blue-800">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-blue-100 dark:bg-blue-900/40">
-                    <tr className="text-left text-blue-900 dark:text-blue-200">
-                      <th className="px-3 py-2 font-medium">Placeholder</th>
-                      <th className="px-3 py-2 font-medium">Description</th>
-                      <th className="px-3 py-2 font-medium">Fallback</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-blue-200 dark:divide-blue-800 bg-white dark:bg-gray-800">
-                    {placeholders.map(p => (
-                      <tr key={p.placeholder_key}>
-                        <td className="px-3 py-2">
-                          <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white">
-                            {`{{${p.placeholder_key}}}`}
-                          </code>
-                        </td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                          {p.description}
-                        </td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                          {p.fallback_text ? (
-                            <span className="italic">&ldquo;{p.fallback_text}&rdquo;</span>
-                          ) : (
-                            <span className="text-gray-400 dark:text-gray-500">(empty)</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {placeholders.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
-                          Loading placeholders...
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {placeholders.map(p => (
+                  <div
+                    key={p.placeholder_key}
+                    className="flex items-baseline gap-2 bg-white dark:bg-gray-800 rounded border border-blue-200 dark:border-blue-800 px-3 py-2"
+                  >
+                    <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
+                      {`{{${p.placeholder_key}}}`}
+                    </code>
+                    <span className="text-xs text-gray-600 dark:text-gray-300 truncate">
+                      {p.description}
+                    </span>
+                  </div>
+                ))}
+                {placeholders.length === 0 && (
+                  <div className="col-span-full px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                    Loading placeholders...
+                  </div>
+                )}
               </div>
             </div>
 
