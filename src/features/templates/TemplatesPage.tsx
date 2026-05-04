@@ -24,10 +24,15 @@ const PLACEHOLDER_SECTIONS: PlaceholderSection[] = [
     items: [
       { key: 'first_name', description: 'Contact first name' },
       { key: 'last_name', description: 'Contact last name' },
-      { key: 'full_name', description: 'Contact full name' },
+      { key: 'name', description: 'Contact full name' },
       { key: 'email', description: 'Contact email address' },
-      { key: 'phone', description: 'Contact phone number' },
+      { key: 'phone', description: 'Primary phone number' },
+      { key: 'phone_cell', description: 'Cell phone number' },
+      { key: 'phone_business', description: 'Business phone number' },
+      { key: 'phone_brokerage', description: 'Brokerage phone number' },
       { key: 'business_name', description: 'Business or company name' },
+      { key: 'screen_name', description: 'Contact screen or display name' },
+      { key: 'profile_url', description: 'Contact profile URL' },
     ],
   },
   {
@@ -47,25 +52,21 @@ const PLACEHOLDER_SECTIONS: PlaceholderSection[] = [
     ],
   },
   {
-    title: 'Sender Data',
+    title: 'Campaign & Sender Data',
     items: [
       { key: 'sender_name', description: 'Sender full name' },
       { key: 'sender_email', description: 'Sender email address' },
       { key: 'sender_phone', description: 'Sender phone number' },
       { key: 'sender_city', description: 'Sender city' },
       { key: 'sender_state', description: 'Sender state' },
-    ],
-  },
-  {
-    title: 'Campaign Data',
-    items: [
-      { key: 'offer_price', description: 'Calculated offer price from campaign settings' },
-    ],
-  },
-  {
-    title: 'System',
-    items: [
-      { key: 'todays_date', description: "Today's date, formatted" },
+      { key: 'offer_price', description: 'Calculated offer price' },
+      { key: 'emd', description: 'Earnest money deposit' },
+      { key: 'option_period', description: 'Option period length' },
+      { key: 'days_till_close', description: 'Days until closing' },
+      { key: 'close_date', description: 'Projected closing date' },
+      { key: 'title_company', description: 'Title company name' },
+      { key: 'city', description: 'Campaign target city' },
+      { key: 'todays_date', description: "Today's date" },
     ],
   },
 ];
@@ -328,16 +329,16 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {PLACEHOLDER_SECTIONS.map(section => (
-                  <div key={section.title} className="bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
-                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-3 uppercase tracking-wide">
+                  <div key={section.title}>
+                    <h4 className="text-xs font-semibold text-blue-900 dark:text-blue-200 mb-3 uppercase tracking-wide">
                       {section.title}
                     </h4>
                     <ul className="space-y-2">
                       {section.items.map(item => (
-                        <li key={item.key} className="text-sm">
-                          <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white">
+                        <li key={item.key}>
+                          <code className="px-1.5 py-0.5 rounded bg-white dark:bg-gray-800 text-xs font-mono text-gray-900 dark:text-white border border-blue-200 dark:border-blue-800">
                             {`{{${item.key}}}`}
                           </code>
                           <span className="block text-xs text-gray-600 dark:text-gray-400 mt-0.5">
