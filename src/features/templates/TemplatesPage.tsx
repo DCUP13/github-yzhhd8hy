@@ -294,7 +294,7 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_city}}'}</code> - Your city</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{sender_state}}'}</code> - Your state</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{city}}'}</code> - Target city</li>
-                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{todays_date}}'}</code> - Today's date</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{todays_date}}'}</code> - Current date</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{days_till_close}}'}</code> - Days until close</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{close_date}}'}</code> - Projected close date</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{'{{offer_price}}'}</code> - Calculated offer price</li>
