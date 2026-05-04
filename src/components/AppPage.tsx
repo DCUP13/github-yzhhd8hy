@@ -585,6 +585,22 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
             : c
         )
       );
+
+      if (isActive) {
+        const user = await supabase.auth.getUser();
+        const userId = user.data.user?.id;
+        if (userId) {
+          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-campaign`;
+          fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ campaign_id: campaignId, user_id: userId }),
+          }).catch(err => console.error('Failed to invoke process-campaign:', err));
+        }
+      }
     } catch (error) {
       console.error('Error updating campaign status:', error);
       alert(`Failed to update campaign status: ${error.message}`);
