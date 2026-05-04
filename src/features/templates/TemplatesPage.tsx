@@ -352,64 +352,29 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
               </div>
             </div>
 
-            <div className="mb-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-5">
-              <div className="flex items-start gap-3 mb-3">
+            <div className="mb-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
+              <div className="flex items-start gap-3 mb-2">
                 <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-emerald-900 dark:text-emerald-200">
                     Advanced Features
                   </h3>
-                  <p className="text-sm text-emerald-800 dark:text-emerald-300 mt-1">
+                  <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-0.5">
                     Go beyond simple placeholders with conditionals and nested fields.
                   </p>
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-lg border border-emerald-200 dark:border-emerald-800">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-emerald-100 dark:bg-emerald-900/40">
-                    <tr className="text-left text-emerald-900 dark:text-emerald-200">
-                      <th className="px-3 py-2 font-medium">Feature</th>
-                      <th className="px-3 py-2 font-medium">Syntax</th>
-                      <th className="px-3 py-2 font-medium">Description</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-emerald-200 dark:divide-emerald-800 bg-white dark:bg-gray-800">
-                    <tr>
-                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">Conditional block</td>
-                      <td className="px-3 py-2">
-                        <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
-                          {'{{#if field}}...{{/if}}'}
-                        </code>
-                      </td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                        Only renders the block when the field has a value. Useful for optional sentences.
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">Sender fields</td>
-                      <td className="px-3 py-2">
-                        <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
-                          {'{{sender_name}}'}
-                        </code>
-                      </td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                        Pulled from the campaign configuration (name, phone, city, state, title company, etc.).
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">Custom placeholder</td>
-                      <td className="px-3 py-2">
-                        <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
-                          {'{{your_key}}'}
-                        </code>
-                      </td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                        Add your own keys and fallbacks in Settings &rarr; Data Quality.
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div className="text-sm text-emerald-900 dark:text-emerald-100 space-y-2 pl-8">
+                <p>
+                  Wrap content in <code className="font-mono text-xs">{'{{#if field}}...{{/if}}'}</code> to only render it when the field has a value. Useful for optional sentences.
+                </p>
+                <p>
+                  Sender fields such as <code className="font-mono text-xs">{'{{sender_name}}'}</code>, <code className="font-mono text-xs">{'{{sender_phone}}'}</code>, and <code className="font-mono text-xs">{'{{title_company}}'}</code> are pulled from the campaign configuration.
+                </p>
+                <p>
+                  Add your own custom placeholders and fallbacks in Settings &rarr; Data Quality, then reference them with <code className="font-mono text-xs">{'{{your_key}}'}</code>.
+                </p>
               </div>
             </div>
           </>
