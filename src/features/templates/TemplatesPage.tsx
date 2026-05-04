@@ -13,39 +13,73 @@ interface TemplatesPageProps {
   currentView: string;
 }
 
-interface PlaceholderInfo {
-  placeholder_key: string;
-  tier: 'critical' | 'important' | 'optional';
-  fallback_text: string;
-  description: string;
+interface PlaceholderSection {
+  title: string;
+  items: { key: string; description: string }[];
 }
+
+const PLACEHOLDER_SECTIONS: PlaceholderSection[] = [
+  {
+    title: 'Contact Data',
+    items: [
+      { key: 'first_name', description: 'Contact first name' },
+      { key: 'last_name', description: 'Contact last name' },
+      { key: 'full_name', description: 'Contact full name' },
+      { key: 'email', description: 'Contact email address' },
+      { key: 'phone', description: 'Contact phone number' },
+      { key: 'business_name', description: 'Business or company name' },
+    ],
+  },
+  {
+    title: 'Listing Data',
+    items: [
+      { key: 'listing_address', description: 'Property street address' },
+      { key: 'listing_city', description: 'Property city' },
+      { key: 'listing_state', description: 'Property state' },
+      { key: 'listing_zip', description: 'Property ZIP code' },
+      { key: 'listing_price', description: 'Listing price' },
+      { key: 'listing_bedrooms', description: 'Number of bedrooms' },
+      { key: 'listing_bathrooms', description: 'Number of bathrooms' },
+      { key: 'listing_sqft', description: 'Property square footage' },
+      { key: 'listing_type', description: 'Property type' },
+      { key: 'listing_url', description: 'Public listing URL' },
+      { key: 'listing_status', description: 'Current listing status' },
+    ],
+  },
+  {
+    title: 'Sender Data',
+    items: [
+      { key: 'sender_name', description: 'Sender full name' },
+      { key: 'sender_email', description: 'Sender email address' },
+      { key: 'sender_phone', description: 'Sender phone number' },
+      { key: 'sender_city', description: 'Sender city' },
+      { key: 'sender_state', description: 'Sender state' },
+    ],
+  },
+  {
+    title: 'Campaign Data',
+    items: [
+      { key: 'offer_price', description: 'Calculated offer price from campaign settings' },
+    ],
+  },
+  {
+    title: 'System',
+    items: [
+      { key: 'todays_date', description: "Today's date, formatted" },
+    ],
+  },
+];
 
 export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [currentTemplate, setCurrentTemplate] = useState<Template | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [placeholders, setPlaceholders] = useState<PlaceholderInfo[]>([]);
   const templateFileRef = useRef<HTMLInputElement>(null);
 
   // Fetch templates when component mounts
   useEffect(() => {
     fetchTemplates();
-    fetchPlaceholders();
   }, []);
-
-  const fetchPlaceholders = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('default_placeholder_config')
-        .select('placeholder_key, tier, fallback_text, description')
-        .order('tier')
-        .order('placeholder_key');
-      if (error) throw error;
-      setPlaceholders((data as PlaceholderInfo[]) || []);
-    } catch (error) {
-      console.error('Error fetching placeholders:', error);
-    }
-  };
 
   const fetchTemplates = async () => {
     try {
@@ -294,25 +328,26 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {placeholders.map(p => (
-                  <div
-                    key={p.placeholder_key}
-                    className="flex items-baseline gap-2 bg-white dark:bg-gray-800 rounded border border-blue-200 dark:border-blue-800 px-3 py-2"
-                  >
-                    <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
-                      {`{{${p.placeholder_key}}}`}
-                    </code>
-                    <span className="text-xs text-gray-600 dark:text-gray-300 truncate">
-                      {p.description}
-                    </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {PLACEHOLDER_SECTIONS.map(section => (
+                  <div key={section.title} className="bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
+                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-3 uppercase tracking-wide">
+                      {section.title}
+                    </h4>
+                    <ul className="space-y-2">
+                      {section.items.map(item => (
+                        <li key={item.key} className="text-sm">
+                          <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white">
+                            {`{{${item.key}}}`}
+                          </code>
+                          <span className="block text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                            {item.description}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 ))}
-                {placeholders.length === 0 && (
-                  <div className="col-span-full px-3 py-4 text-center text-gray-500 dark:text-gray-400">
-                    Loading placeholders...
-                  </div>
-                )}
               </div>
             </div>
 
