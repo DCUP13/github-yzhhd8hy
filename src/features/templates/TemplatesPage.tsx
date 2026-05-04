@@ -387,17 +387,6 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">Nested field</td>
-                      <td className="px-3 py-2">
-                        <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
-                          {'{{agent_data.brokerage}}'}
-                        </code>
-                      </td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                        Access a property inside a JSON contact field using dot notation.
-                      </td>
-                    </tr>
-                    <tr>
                       <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">Sender fields</td>
                       <td className="px-3 py-2">
                         <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
