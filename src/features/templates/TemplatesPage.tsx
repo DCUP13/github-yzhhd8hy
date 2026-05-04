@@ -299,7 +299,6 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                   <thead className="bg-blue-100 dark:bg-blue-900/40">
                     <tr className="text-left text-blue-900 dark:text-blue-200">
                       <th className="px-3 py-2 font-medium">Placeholder</th>
-                      <th className="px-3 py-2 font-medium">Tier</th>
                       <th className="px-3 py-2 font-medium">Description</th>
                       <th className="px-3 py-2 font-medium">Fallback</th>
                     </tr>
@@ -311,19 +310,6 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                           <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white">
                             {`{{${p.placeholder_key}}}`}
                           </code>
-                        </td>
-                        <td className="px-3 py-2">
-                          <span
-                            className={`px-2 py-0.5 text-xs rounded font-medium ${
-                              p.tier === 'critical'
-                                ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
-                                : p.tier === 'important'
-                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                            }`}
-                          >
-                            {p.tier}
-                          </span>
                         </td>
                         <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
                           {p.description}
@@ -339,7 +325,7 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                     ))}
                     {placeholders.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={3} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
                           Loading placeholders...
                         </td>
                       </tr>
@@ -347,9 +333,6 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-blue-800 dark:text-blue-300 mt-3">
-                Customize tiers and fallbacks in <strong>Settings &rarr; Data Quality</strong>.
-              </p>
             </div>
 
             <div className="mb-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-5">
