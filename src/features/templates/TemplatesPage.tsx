@@ -316,32 +316,32 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
               </div>
             </div>
 
-            <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-5">
-              <div className="flex items-start gap-3 mb-4">
+            <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-start gap-3 mb-3">
                 <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-blue-900 dark:text-blue-200">
                     Available Template Placeholders
                   </h3>
-                  <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">
-                    Use <code className="px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-xs font-mono">{'{{placeholder}}'}</code> syntax in your template content or subject lines. Missing values are replaced with the fallback shown below.
+                  <p className="text-xs text-blue-800 dark:text-blue-300 mt-0.5">
+                    Use <code className="font-mono">{'{{placeholder}}'}</code> syntax in your template content or subject lines.
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3">
                 {PLACEHOLDER_SECTIONS.map(section => (
                   <div key={section.title}>
-                    <h4 className="text-xs font-semibold text-blue-900 dark:text-blue-200 mb-3 uppercase tracking-wide">
+                    <h4 className="text-xs font-semibold text-blue-900 dark:text-blue-200 mb-1.5 uppercase tracking-wide">
                       {section.title}
                     </h4>
-                    <ul className="space-y-2">
+                    <ul className="space-y-0.5">
                       {section.items.map(item => (
-                        <li key={item.key}>
-                          <code className="px-1.5 py-0.5 rounded bg-white dark:bg-gray-800 text-xs font-mono text-gray-900 dark:text-white border border-blue-200 dark:border-blue-800">
+                        <li key={item.key} className="flex items-baseline gap-2 text-xs leading-tight">
+                          <code className="font-mono text-gray-900 dark:text-white whitespace-nowrap">
                             {`{{${item.key}}}`}
                           </code>
-                          <span className="block text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                          <span className="text-gray-600 dark:text-gray-400 truncate">
                             {item.description}
                           </span>
                         </li>
