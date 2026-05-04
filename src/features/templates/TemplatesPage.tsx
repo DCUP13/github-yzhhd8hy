@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { File, Plus, Upload as UploadIcon } from 'lucide-react';
+import { File, Plus, Upload as UploadIcon, Info, Sparkles } from 'lucide-react';
 import { TemplateList } from './components/TemplateList';
 import { TemplateEditor } from './components/TemplateEditor';
 import type { Template } from './types';
@@ -13,16 +13,39 @@ interface TemplatesPageProps {
   currentView: string;
 }
 
+interface PlaceholderInfo {
+  placeholder_key: string;
+  tier: 'critical' | 'important' | 'optional';
+  fallback_text: string;
+  description: string;
+}
+
 export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [currentTemplate, setCurrentTemplate] = useState<Template | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [placeholders, setPlaceholders] = useState<PlaceholderInfo[]>([]);
   const templateFileRef = useRef<HTMLInputElement>(null);
 
   // Fetch templates when component mounts
   useEffect(() => {
     fetchTemplates();
+    fetchPlaceholders();
   }, []);
+
+  const fetchPlaceholders = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('default_placeholder_config')
+        .select('placeholder_key, tier, fallback_text, description')
+        .order('tier')
+        .order('placeholder_key');
+      if (error) throw error;
+      setPlaceholders((data as PlaceholderInfo[]) || []);
+    } catch (error) {
+      console.error('Error fetching placeholders:', error);
+    }
+  };
 
   const fetchTemplates = async () => {
     try {
@@ -258,6 +281,148 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
               </div>
             </div>
 
+            <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-5">
+              <div className="flex items-start gap-3 mb-4">
+                <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-200">
+                    Available Template Placeholders
+                  </h3>
+                  <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">
+                    Use <code className="px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-xs font-mono">{'{{placeholder}}'}</code> syntax in your template content or subject lines. Missing values are replaced with the fallback shown below.
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border border-blue-200 dark:border-blue-800">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-blue-100 dark:bg-blue-900/40">
+                    <tr className="text-left text-blue-900 dark:text-blue-200">
+                      <th className="px-3 py-2 font-medium">Placeholder</th>
+                      <th className="px-3 py-2 font-medium">Tier</th>
+                      <th className="px-3 py-2 font-medium">Description</th>
+                      <th className="px-3 py-2 font-medium">Fallback</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-blue-200 dark:divide-blue-800 bg-white dark:bg-gray-800">
+                    {placeholders.map(p => (
+                      <tr key={p.placeholder_key}>
+                        <td className="px-3 py-2">
+                          <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white">
+                            {`{{${p.placeholder_key}}}`}
+                          </code>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`px-2 py-0.5 text-xs rounded font-medium ${
+                              p.tier === 'critical'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
+                                : p.tier === 'important'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            {p.tier}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                          {p.description}
+                        </td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                          {p.fallback_text ? (
+                            <span className="italic">&ldquo;{p.fallback_text}&rdquo;</span>
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-500">(empty)</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {placeholders.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                          Loading placeholders...
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-blue-800 dark:text-blue-300 mt-3">
+                Customize tiers and fallbacks in <strong>Settings &rarr; Data Quality</strong>.
+              </p>
+            </div>
+
+            <div className="mb-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-5">
+              <div className="flex items-start gap-3 mb-3">
+                <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-emerald-900 dark:text-emerald-200">
+                    Advanced Features
+                  </h3>
+                  <p className="text-sm text-emerald-800 dark:text-emerald-300 mt-1">
+                    Go beyond simple placeholders with conditionals and nested fields.
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border border-emerald-200 dark:border-emerald-800">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-emerald-100 dark:bg-emerald-900/40">
+                    <tr className="text-left text-emerald-900 dark:text-emerald-200">
+                      <th className="px-3 py-2 font-medium">Feature</th>
+                      <th className="px-3 py-2 font-medium">Syntax</th>
+                      <th className="px-3 py-2 font-medium">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-emerald-200 dark:divide-emerald-800 bg-white dark:bg-gray-800">
+                    <tr>
+                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">Conditional block</td>
+                      <td className="px-3 py-2">
+                        <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
+                          {'{{#if field}}...{{/if}}'}
+                        </code>
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                        Only renders the block when the field has a value. Useful for optional sentences.
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">Nested field</td>
+                      <td className="px-3 py-2">
+                        <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
+                          {'{{agent_data.brokerage}}'}
+                        </code>
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                        Access a property inside a JSON contact field using dot notation.
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">Sender fields</td>
+                      <td className="px-3 py-2">
+                        <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
+                          {'{{sender_name}}'}
+                        </code>
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                        Pulled from the campaign configuration (name, phone, city, state, title company, etc.).
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">Custom placeholder</td>
+                      <td className="px-3 py-2">
+                        <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs font-mono text-gray-900 dark:text-white whitespace-nowrap">
+                          {'{{your_key}}'}
+                        </code>
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                        Add your own keys and fallbacks in Settings &rarr; Data Quality.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </>
         )}
 
