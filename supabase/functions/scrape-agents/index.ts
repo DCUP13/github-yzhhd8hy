@@ -449,6 +449,24 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Processing complete. Total contacts: ${totalContacts}, Total listings: ${totalListings}`);
 
+    // Trigger process-campaign to generate drafts/outbox emails now that contacts exist
+    if (totalContacts > 0) {
+      try {
+        const processUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-campaign`;
+        fetch(processUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+          },
+          body: JSON.stringify({ campaign_id, user_id, skip_scrape: true }),
+        }).catch((err) => console.error("Failed to trigger process-campaign:", err));
+        console.log("Triggered process-campaign to generate emails/drafts");
+      } catch (err) {
+        console.error("Error triggering process-campaign:", err);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

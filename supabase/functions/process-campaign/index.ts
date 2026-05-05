@@ -253,7 +253,8 @@ Deno.serve(async (req: Request) => {
       }
     );
 
-    const { campaign_id, user_id }: ProcessCampaignRequest = await req.json();
+    const requestBody = await req.json() as ProcessCampaignRequest & { skip_scrape?: boolean };
+    const { campaign_id, user_id, skip_scrape: skipScrape } = requestBody;
 
     if (!campaign_id || !user_id) {
       throw new Error("Missing campaign_id or user_id");
@@ -281,32 +282,39 @@ Deno.serve(async (req: Request) => {
     const testModeEnabled = campaign.test_mode ?? false;
     console.log(`Test mode: ${testModeEnabled ? 'ENABLED - emails will go to drafts' : 'DISABLED - emails will go to outbox'}`);
 
-    // Step 1: Scrape agents if no contacts exist
+    // Step 1: Scrape agents if no contacts exist (unless caller says scraping is already done)
     const { data: existingContacts } = await supabase
       .from("contacts")
       .select("id")
       .eq("campaign_id", campaign_id)
       .limit(1);
 
-    if (!existingContacts || existingContacts.length === 0) {
-      console.log("No contacts found, scraping agents...");
-      
+    if ((!existingContacts || existingContacts.length === 0) && !skipScrape) {
+      console.log("No contacts found, triggering scrape-agents (async)...");
+
       const scrapeUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/scrape-agents`;
-      const scrapeResponse = await fetch(scrapeUrl, {
+      fetch(scrapeUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         },
         body: JSON.stringify({ campaign_id, user_id }),
-      });
+      }).catch((err) => console.error("Failed to trigger scrape-agents:", err));
 
-      const scrapeResult = await scrapeResponse.json();
-      if (!scrapeResult.success) {
-        throw new Error(`Failed to scrape agents: ${scrapeResult.error}`);
-      }
-
-      console.log(`Scraped ${scrapeResult.contacts_inserted} contacts`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Scraping started. Drafts/emails will be generated once scraping completes.",
+          scraping: true,
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
     }
 
     // Step 2: Get campaign templates
