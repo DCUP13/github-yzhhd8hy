@@ -104,8 +104,28 @@ function applyFallbacks(
   return result;
 }
 
-function replacePlaceholders(content: string, variables: Record<string, string>): string {
+function processConditionalSections(content: string, variables: Record<string, string>): string {
   let result = content;
+  const innermostPattern = /\{\{#if\s+(\w+)\}\}((?:(?!\{\{#if\s)[\s\S])*?)\{\{\/if\}\}/g;
+
+  let prev = '';
+  while (prev !== result) {
+    prev = result;
+    result = result.replace(innermostPattern, (_match, placeholderKey, innerContent) => {
+      const value = variables[placeholderKey];
+      if (value && value.trim() !== '') {
+        return innerContent;
+      }
+      return '';
+    });
+  }
+
+  result = result.replace(/\{\{\/if\}\}/g, '');
+  return result;
+}
+
+function replacePlaceholders(content: string, variables: Record<string, string>): string {
+  let result = processConditionalSections(content, variables);
 
   for (const [placeholder, value] of Object.entries(variables)) {
     const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
@@ -360,21 +380,20 @@ Deno.serve(async (req: Request) => {
       throw new Error("No email addresses configured for campaign");
     }
 
-    // Step 4: Get pending contacts (single contact if contact_id provided, else batch)
-    let contactsQuery = supabase
+    // Step 4: Claim pending contacts atomically by flipping pending -> processing.
+    // This prevents double-drafting when scrape triggers per-contact and the batch runs in parallel.
+    let claimQuery = supabase
       .from("contacts")
-      .select("*")
+      .update({ status: 'processing' })
       .eq("campaign_id", campaign_id)
       .eq("user_id", user_id)
       .eq("status", "pending");
 
     if (contactId) {
-      contactsQuery = contactsQuery.eq("id", contactId);
-    } else {
-      contactsQuery = contactsQuery.limit(100);
+      claimQuery = claimQuery.eq("id", contactId);
     }
 
-    const { data: contacts, error: contactsError } = await contactsQuery;
+    const { data: contacts, error: contactsError } = await claimQuery.select("*");
 
     if (contactsError) {
       throw new Error(`Failed to get contacts: ${contactsError.message}`);
