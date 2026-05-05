@@ -309,35 +309,18 @@ Deno.serve(async (req: Request) => {
     const testModeEnabled = campaign.test_mode ?? false;
     console.log(`Test mode: ${testModeEnabled ? 'ENABLED - emails will go to drafts' : 'DISABLED - emails will go to outbox'}`);
 
-    // Step 1: If no contact_id provided and no contacts exist, start the scrape
+    // Step 1: If no contact_id provided, kick off the scrape (resumes if partial, no-op if locked/complete).
+    // scrape-agents has its own concurrency lock and self-chains one agent at a time.
     if (!contactId) {
-      const { data: existingContacts } = await supabase
-        .from("contacts")
-        .select("id")
-        .eq("campaign_id", campaign_id)
-        .limit(1);
-
-      if (!existingContacts || existingContacts.length === 0) {
-        console.log("No contacts found, triggering scrape-agents (async)...");
-        const scrapeUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/scrape-agents`;
-        fetch(scrapeUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-          },
-          body: JSON.stringify({ campaign_id, user_id }),
-        }).catch((err) => console.error("Failed to trigger scrape-agents:", err));
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "Scraping started. Drafts/emails will be generated as contacts are scraped.",
-            scraping: true,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      const scrapeUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/scrape-agents`;
+      fetch(scrapeUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+        },
+        body: JSON.stringify({ campaign_id, user_id }),
+      }).catch((err) => console.error("Failed to trigger scrape-agents:", err));
     }
 
     // Step 2: Get campaign templates

@@ -596,14 +596,9 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
           };
           const body = JSON.stringify({ campaign_id: campaignId, user_id: userId });
 
-          // Resume/start scraping - scrape-agents will no-op if complete
-          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scrape-agents`, {
-            method: 'POST',
-            headers,
-            body,
-          }).catch(err => console.error('Failed to invoke scrape-agents:', err));
-
-          // Also kick off draft generation for any contacts that were scraped but not yet drafted
+          // Single entry point. process-campaign decides whether to resume scraping
+          // or just draft pending contacts. The DB trigger also invokes this — the
+          // scrape-agents lock + contact claim logic guards against duplicate runs.
           fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-campaign`, {
             method: 'POST',
             headers,

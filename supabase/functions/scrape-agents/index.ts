@@ -49,6 +49,13 @@ async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function releaseLock(supabase: any, campaign_id: string) {
+  await supabase
+    .from("campaigns")
+    .update({ scrape_locked_until: null })
+    .eq("id", campaign_id);
+}
+
 function scheduleSelf(campaign_id: string, user_id: string) {
   const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/scrape-agents`;
   fetch(url, {
@@ -168,20 +175,38 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing campaign_id or user_id");
     }
 
-    // Read campaign state (is_active + scrape progress)
-    const { data: campaign, error: campaignError } = await supabase
+    // Acquire an exclusive lock to prevent concurrent scrape runs for the same campaign.
+    // Only the caller that successfully bumps scrape_locked_until past now() proceeds.
+    const lockUntil = new Date(Date.now() + 30_000).toISOString();
+    const { data: locked, error: lockError } = await supabase
       .from("campaigns")
-      .select("city, is_active, scrape_screen_names, scrape_list_page, scrape_list_complete, scrape_index")
+      .update({ scrape_locked_until: lockUntil })
       .eq("id", campaign_id)
       .eq("user_id", user_id)
+      .or(`scrape_locked_until.is.null,scrape_locked_until.lt.${new Date().toISOString()}`)
+      .select("city, is_active, scrape_screen_names, scrape_list_page, scrape_list_complete, scrape_index")
       .maybeSingle();
 
-    if (campaignError || !campaign) {
-      throw new Error(`Campaign not found: ${campaignError?.message}`);
+    if (lockError) {
+      throw new Error(`Lock acquire failed: ${lockError.message}`);
     }
+
+    if (!locked) {
+      console.log(`Campaign ${campaign_id} scrape already running. Exiting.`);
+      return new Response(
+        JSON.stringify({ success: true, skipped: "locked" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const campaign = locked;
 
     if (!campaign.is_active) {
       console.log(`Campaign ${campaign_id} is inactive. Pausing scrape.`);
+      await supabase
+        .from("campaigns")
+        .update({ scrape_locked_until: null })
+        .eq("id", campaign_id);
       return new Response(
         JSON.stringify({ success: true, paused: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -228,6 +253,7 @@ Deno.serve(async (req: Request) => {
               .update({ scrape_error: `Rate limit on list page ${nextPage}. Will retry.` })
               .eq("id", campaign_id);
             await sleep(RATE_LIMIT_MS * 2);
+            await releaseLock(supabase, campaign_id);
             scheduleSelf(campaign_id, user_id);
             return new Response(
               JSON.stringify({ success: true, rate_limited: true }),
@@ -272,6 +298,7 @@ Deno.serve(async (req: Request) => {
         .eq("id", campaign_id)
         .maybeSingle();
       if (!stillActive?.is_active) {
+        await releaseLock(supabase, campaign_id);
         return new Response(
           JSON.stringify({ success: true, paused: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -279,6 +306,7 @@ Deno.serve(async (req: Request) => {
       }
 
       await sleep(RATE_LIMIT_MS);
+      await releaseLock(supabase, campaign_id);
       scheduleSelf(campaign_id, user_id);
       return new Response(
         JSON.stringify({ success: true, stage: "list", page: listPage, total_agents: screenNames.length }),
@@ -289,6 +317,7 @@ Deno.serve(async (req: Request) => {
     // Step B: Process one agent from the list
     if (scrapeIndex >= screenNames.length) {
       console.log("All agents processed. Scrape complete.");
+      await releaseLock(supabase, campaign_id);
       return new Response(
         JSON.stringify({ success: true, stage: "complete", total_agents: screenNames.length }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -317,6 +346,7 @@ Deno.serve(async (req: Request) => {
           .select("is_active")
           .eq("id", campaign_id)
           .maybeSingle();
+        await releaseLock(supabase, campaign_id);
         if (stillActive?.is_active) {
           scheduleSelf(campaign_id, user_id);
         }
@@ -355,6 +385,7 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
         if (!stillActive?.is_active) {
           console.log("Campaign turned off mid-team-processing. Stopping.");
+          await releaseLock(supabase, campaign_id);
           return new Response(
             JSON.stringify({ success: true, paused: true }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -405,6 +436,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (!stillActive?.is_active) {
       console.log("Campaign turned off. Stopping scrape.");
+      await releaseLock(supabase, campaign_id);
       return new Response(
         JSON.stringify({ success: true, paused: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -413,9 +445,11 @@ Deno.serve(async (req: Request) => {
 
     if (scrapeIndex < screenNames.length) {
       await sleep(RATE_LIMIT_MS);
+      await releaseLock(supabase, campaign_id);
       scheduleSelf(campaign_id, user_id);
     } else {
       console.log("Scrape complete.");
+      await releaseLock(supabase, campaign_id);
     }
 
     return new Response(
