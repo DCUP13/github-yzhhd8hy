@@ -590,9 +590,9 @@ Deno.serve(async (req: Request) => {
     if (emailsToInsert.length > 0) {
       const tableName = testModeEnabled ? "email_drafts" : "email_outbox";
 
-      // Remove status field for drafts (they don't have status column)
+      // email_drafts doesn't have status/skipped columns — strip them in test mode
       const dataToInsert = testModeEnabled
-        ? emailsToInsert.map(({ status, ...rest }) => rest)
+        ? emailsToInsert.map(({ status, skipped, ...rest }) => rest)
         : emailsToInsert;
 
       const { error: insertError } = await supabase
@@ -600,6 +600,7 @@ Deno.serve(async (req: Request) => {
         .insert(dataToInsert);
 
       if (insertError) {
+        console.error(`Failed to insert emails into ${tableName}:`, insertError);
         throw new Error(`Failed to insert emails: ${insertError.message}`);
       }
 
