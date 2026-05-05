@@ -50,10 +50,7 @@ async function sleep(ms: number) {
 }
 
 async function releaseLock(supabase: any, campaign_id: string) {
-  await supabase
-    .from("campaigns")
-    .update({ scrape_locked_until: null })
-    .eq("id", campaign_id);
+  await supabase.rpc("release_scrape_lock", { p_campaign_id: campaign_id });
 }
 
 function scheduleSelf(campaign_id: string, user_id: string) {
@@ -175,23 +172,19 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing campaign_id or user_id");
     }
 
-    // Acquire an exclusive lock to prevent concurrent scrape runs for the same campaign.
-    // Only the caller that successfully bumps scrape_locked_until past now() proceeds.
-    const lockUntil = new Date(Date.now() + 30_000).toISOString();
-    const { data: locked, error: lockError } = await supabase
-      .from("campaigns")
-      .update({ scrape_locked_until: lockUntil })
-      .eq("id", campaign_id)
-      .eq("user_id", user_id)
-      .or(`scrape_locked_until.is.null,scrape_locked_until.lt.${new Date().toISOString()}`)
-      .select("city, is_active, scrape_screen_names, scrape_list_page, scrape_list_complete, scrape_index")
-      .maybeSingle();
+    // Acquire an exclusive lock atomically via RPC (avoids PostgREST schema-cache issues).
+    const { data: lockRows, error: lockError } = await supabase.rpc("acquire_scrape_lock", {
+      p_campaign_id: campaign_id,
+      p_user_id: user_id,
+      p_lock_seconds: 30,
+    });
 
     if (lockError) {
       throw new Error(`Lock acquire failed: ${lockError.message}`);
     }
 
-    if (!locked) {
+    const lockRow = Array.isArray(lockRows) ? lockRows[0] : lockRows;
+    if (!lockRow || !lockRow.locked) {
       console.log(`Campaign ${campaign_id} scrape already running. Exiting.`);
       return new Response(
         JSON.stringify({ success: true, skipped: "locked" }),
@@ -199,7 +192,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const campaign = locked;
+    const campaign = lockRow;
 
     if (!campaign.is_active) {
       console.log(`Campaign ${campaign_id} is inactive. Pausing scrape.`);
