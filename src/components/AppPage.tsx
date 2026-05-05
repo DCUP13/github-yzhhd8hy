@@ -590,14 +590,24 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         const user = await supabase.auth.getUser();
         const userId = user.data.user?.id;
         if (userId) {
-          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-campaign`;
-          fetch(apiUrl, {
+          const headers = {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          };
+          const body = JSON.stringify({ campaign_id: campaignId, user_id: userId });
+
+          // Resume/start scraping - scrape-agents will no-op if complete
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scrape-agents`, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ campaign_id: campaignId, user_id: userId }),
+            headers,
+            body,
+          }).catch(err => console.error('Failed to invoke scrape-agents:', err));
+
+          // Also kick off draft generation for any contacts that were scraped but not yet drafted
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-campaign`, {
+            method: 'POST',
+            headers,
+            body,
           }).catch(err => console.error('Failed to invoke process-campaign:', err));
         }
       }

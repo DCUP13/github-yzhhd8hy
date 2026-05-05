@@ -253,14 +253,17 @@ Deno.serve(async (req: Request) => {
       }
     );
 
-    const requestBody = await req.json() as ProcessCampaignRequest & { skip_scrape?: boolean };
-    const { campaign_id, user_id, skip_scrape: skipScrape } = requestBody;
+    const requestBody = await req.json() as ProcessCampaignRequest & {
+      contact_id?: string;
+      skip_scrape?: boolean;
+    };
+    const { campaign_id, user_id, contact_id: contactId } = requestBody;
 
     if (!campaign_id || !user_id) {
       throw new Error("Missing campaign_id or user_id");
     }
 
-    console.log(`Processing campaign: ${campaign_id}`);
+    console.log(`Processing campaign: ${campaign_id}${contactId ? ` contact: ${contactId}` : ''}`);
 
     // Get campaign details
     const { data: campaign, error: campaignError } = await supabase
@@ -275,46 +278,46 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!campaign.is_active) {
-      throw new Error("Campaign is not active");
+      console.log(`Campaign ${campaign_id} is inactive. Skipping draft generation.`);
+      return new Response(
+        JSON.stringify({ success: true, paused: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Check if test mode is enabled for this campaign
     const testModeEnabled = campaign.test_mode ?? false;
     console.log(`Test mode: ${testModeEnabled ? 'ENABLED - emails will go to drafts' : 'DISABLED - emails will go to outbox'}`);
 
-    // Step 1: Scrape agents if no contacts exist (unless caller says scraping is already done)
-    const { data: existingContacts } = await supabase
-      .from("contacts")
-      .select("id")
-      .eq("campaign_id", campaign_id)
-      .limit(1);
+    // Step 1: If no contact_id provided and no contacts exist, start the scrape
+    if (!contactId) {
+      const { data: existingContacts } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("campaign_id", campaign_id)
+        .limit(1);
 
-    if ((!existingContacts || existingContacts.length === 0) && !skipScrape) {
-      console.log("No contacts found, triggering scrape-agents (async)...");
-
-      const scrapeUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/scrape-agents`;
-      fetch(scrapeUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-        },
-        body: JSON.stringify({ campaign_id, user_id }),
-      }).catch((err) => console.error("Failed to trigger scrape-agents:", err));
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Scraping started. Drafts/emails will be generated once scraping completes.",
-          scraping: true,
-        }),
-        {
+      if (!existingContacts || existingContacts.length === 0) {
+        console.log("No contacts found, triggering scrape-agents (async)...");
+        const scrapeUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/scrape-agents`;
+        fetch(scrapeUrl, {
+          method: "POST",
           headers: {
-            ...corsHeaders,
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
           },
-        }
-      );
+          body: JSON.stringify({ campaign_id, user_id }),
+        }).catch((err) => console.error("Failed to trigger scrape-agents:", err));
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Scraping started. Drafts/emails will be generated as contacts are scraped.",
+            scraping: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Step 2: Get campaign templates
@@ -357,14 +360,21 @@ Deno.serve(async (req: Request) => {
       throw new Error("No email addresses configured for campaign");
     }
 
-    // Step 4: Get pending contacts
-    const { data: contacts, error: contactsError } = await supabase
+    // Step 4: Get pending contacts (single contact if contact_id provided, else batch)
+    let contactsQuery = supabase
       .from("contacts")
       .select("*")
       .eq("campaign_id", campaign_id)
       .eq("user_id", user_id)
-      .eq("status", "pending")
-      .limit(100); // Process 100 at a time
+      .eq("status", "pending");
+
+    if (contactId) {
+      contactsQuery = contactsQuery.eq("id", contactId);
+    } else {
+      contactsQuery = contactsQuery.limit(100);
+    }
+
+    const { data: contacts, error: contactsError } = await contactsQuery;
 
     if (contactsError) {
       throw new Error(`Failed to get contacts: ${contactsError.message}`);
