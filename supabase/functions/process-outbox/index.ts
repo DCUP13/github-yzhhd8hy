@@ -124,11 +124,25 @@ Deno.serve(async (req: Request) => {
 
     for (const email of emailsToProcess) {
       try {
-        // Mark as sending
-        await supabase
+        // Atomically claim the row: only the first caller to flip status from
+        // 'pending' to 'sending' proceeds. Any concurrent invocation updates
+        // zero rows and skips this email, preventing duplicate sends.
+        const { data: claimed, error: claimError } = await supabase
           .from("email_outbox")
           .update({ status: 'sending' })
-          .eq("id", email.id);
+          .eq("id", email.id)
+          .eq("status", "pending")
+          .select("id")
+          .maybeSingle();
+
+        if (claimError) {
+          console.error(`Claim error for ${email.id}:`, claimError);
+          continue;
+        }
+        if (!claimed) {
+          console.log(`Email ${email.id} already claimed by another worker, skipping`);
+          continue;
+        }
 
         // Call send-email edge function
         const sendUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-email`;
