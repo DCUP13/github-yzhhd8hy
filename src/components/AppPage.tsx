@@ -39,6 +39,11 @@ interface Campaign {
   }[];
   emails: EmailWithProvider[];
   lastModified: string;
+  scrapeListPage: number;
+  scrapeListComplete: boolean;
+  scrapeLastPageCount: number;
+  scrapeIndex: number;
+  scrapeTotalAgents: number;
 }
 
 interface AppPageProps {
@@ -126,6 +131,48 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
   useEffect(() => {
     fetchCampaigns();
     fetchTestModeSetting();
+  }, []);
+
+  // Live-poll scrape progress so the campaign list reflects real-time state.
+  useEffect(() => {
+    let cancelled = false;
+
+    const pollProgress = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select('id, scrape_list_page, scrape_list_complete, scrape_last_page_count, scrape_index, scrape_screen_names')
+        .eq('user_id', userData.user.id);
+
+      if (error || !data || cancelled) return;
+
+      const byId: Record<string, any> = {};
+      for (const row of data) byId[row.id] = row;
+
+      setCampaigns((prev) =>
+        prev.map((c) => {
+          const row = byId[c.id];
+          if (!row) return c;
+          const total = Array.isArray(row.scrape_screen_names) ? row.scrape_screen_names.length : 0;
+          return {
+            ...c,
+            scrapeListPage: row.scrape_list_page ?? 0,
+            scrapeListComplete: row.scrape_list_complete ?? false,
+            scrapeLastPageCount: row.scrape_last_page_count ?? 0,
+            scrapeIndex: row.scrape_index ?? 0,
+            scrapeTotalAgents: total,
+          };
+        })
+      );
+    };
+
+    const intervalId = window.setInterval(pollProgress, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -219,7 +266,12 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
           address: ce.email_address,
           smtpProvider: ce.provider
         })),
-        lastModified: campaign.updated_at
+        lastModified: campaign.updated_at,
+        scrapeListPage: campaign.scrape_list_page ?? 0,
+        scrapeListComplete: campaign.scrape_list_complete ?? false,
+        scrapeLastPageCount: campaign.scrape_last_page_count ?? 0,
+        scrapeIndex: campaign.scrape_index ?? 0,
+        scrapeTotalAgents: Array.isArray(campaign.scrape_screen_names) ? campaign.scrape_screen_names.length : 0,
       }));
 
       setCampaigns(transformedCampaigns);
@@ -313,7 +365,12 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
       useSmartFallbacks: true,
       templates: [],
       emails: [],
-      lastModified: new Date().toISOString()
+      lastModified: new Date().toISOString(),
+      scrapeListPage: 0,
+      scrapeListComplete: false,
+      scrapeLastPageCount: 0,
+      scrapeIndex: 0,
+      scrapeTotalAgents: 0,
     };
     setCurrentCampaign(newCampaign);
     setSelectedState('');
@@ -742,6 +799,21 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
+                          <div className="text-right text-xs leading-tight text-gray-500 dark:text-gray-400 max-w-[180px]">
+                            {campaign.scrapeListComplete ? (
+                              <div>
+                                <div>List complete - {campaign.scrapeTotalAgents} agents</div>
+                                <div>Contact {Math.min(campaign.scrapeIndex + 1, campaign.scrapeTotalAgents)} of {campaign.scrapeTotalAgents}</div>
+                              </div>
+                            ) : campaign.scrapeListPage > 0 ? (
+                              <div>
+                                <div>Page {campaign.scrapeListPage} - {campaign.scrapeLastPageCount} new</div>
+                                <div>Contact {Math.min(campaign.scrapeIndex + 1, Math.max(campaign.scrapeTotalAgents, 1))} of {campaign.scrapeTotalAgents}</div>
+                              </div>
+                            ) : (
+                              <div>Not started</div>
+                            )}
+                          </div>
                           <div className="toggle-wrapper">
                             <div className="flex items-center gap-2">
                               <div className="relative inline-block w-11 align-middle select-none">

@@ -226,6 +226,7 @@ Deno.serve(async (req: Request) => {
     let listPage: number = campaign.scrape_list_page ?? 0;
     let listComplete: boolean = campaign.scrape_list_complete ?? false;
     let scrapeIndex: number = campaign.scrape_index ?? 0;
+    let lastPageCount: number = 0;
 
     // Step A: Fetch one page of agent list if the list isn't complete
     if (!listComplete) {
@@ -258,6 +259,7 @@ Deno.serve(async (req: Request) => {
         } else {
           const data = await response.json();
           const professionals: AgentListItem[] = data.professionals || [];
+          let pageCount = 0;
           if (professionals.length === 0) {
             listComplete = true;
           } else {
@@ -266,11 +268,13 @@ Deno.serve(async (req: Request) => {
                 const screenName = agent.profileLink.replace("/profile/", "");
                 if (screenName && !screenNames.includes(screenName)) {
                   screenNames.push(screenName);
+                  pageCount += 1;
                 }
               }
             }
           }
           listPage = nextPage;
+          lastPageCount = pageCount;
         }
       }
 
@@ -280,6 +284,7 @@ Deno.serve(async (req: Request) => {
           scrape_screen_names: screenNames,
           scrape_list_page: listPage,
           scrape_list_complete: listComplete,
+          scrape_last_page_count: lastPageCount,
           scrape_error: "",
         })
         .eq("id", campaign_id);
