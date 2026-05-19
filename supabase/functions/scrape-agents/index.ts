@@ -155,6 +155,15 @@ async function saveContactWithListings(
   return insertedContact.id as string;
 }
 
+async function checkActive(supabase: any, campaign_id: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("campaigns")
+    .select("is_active")
+    .eq("id", campaign_id)
+    .maybeSingle();
+  return !!data?.is_active;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -172,7 +181,7 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing campaign_id or user_id");
     }
 
-    // Acquire an exclusive lock atomically via RPC (avoids PostgREST schema-cache issues).
+    // Acquire exclusive lock
     const { data: lockRows, error: lockError } = await supabase.rpc("acquire_scrape_lock", {
       p_campaign_id: campaign_id,
       p_user_id: user_id,
@@ -185,7 +194,6 @@ Deno.serve(async (req: Request) => {
 
     const lockRow = Array.isArray(lockRows) ? lockRows[0] : lockRows;
     if (!lockRow || !lockRow.locked) {
-      console.log(`Campaign ${campaign_id} scrape already running. Exiting.`);
       return new Response(
         JSON.stringify({ success: true, skipped: "locked" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -195,11 +203,7 @@ Deno.serve(async (req: Request) => {
     const campaign = lockRow;
 
     if (!campaign.is_active) {
-      console.log(`Campaign ${campaign_id} is inactive. Pausing scrape.`);
-      await supabase
-        .from("campaigns")
-        .update({ scrape_locked_until: null })
-        .eq("id", campaign_id);
+      await supabase.from("campaigns").update({ scrape_locked_until: null }).eq("id", campaign_id);
       return new Response(
         JSON.stringify({ success: true, paused: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -226,95 +230,181 @@ Deno.serve(async (req: Request) => {
     let listPage: number = campaign.scrape_list_page ?? 0;
     let listComplete: boolean = campaign.scrape_list_complete ?? false;
     let scrapeIndex: number = campaign.scrape_index ?? 0;
-    let lastPageCount: number = 0;
+    let teamMembers: string[] = Array.isArray(campaign.scrape_team_members)
+      ? (campaign.scrape_team_members as string[])
+      : [];
+    let teamIndex: number = campaign.scrape_team_index ?? 0;
 
-    // Step A: Fetch one page of agent list if the list isn't complete
-    if (!listComplete) {
-      const nextPage = listPage + 1;
-      if (nextPage > maxPages) {
-        listComplete = true;
+    // --- STEP 1: If we have pending team members to process, handle one ---
+    if (teamMembers.length > 0 && teamIndex < teamMembers.length) {
+      const memberScreenName = teamMembers[teamIndex];
+      console.log(`Processing team member ${teamIndex + 1}/${teamMembers.length}: ${memberScreenName}`);
+
+      // Find the team lead's contact_id for linking
+      const currentAgentScreenName = screenNames[scrapeIndex - 1];
+      const { data: leadContact } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("campaign_id", campaign_id)
+        .eq("screen_name", currentAgentScreenName)
+        .maybeSingle();
+
+      const memberUrl = `https://${api_host}/agentDetails?username=${encodeURIComponent(memberScreenName)}`;
+      const memberResp = await fetch(memberUrl, {
+        headers: { "x-rapidapi-key": api_key, "x-rapidapi-host": api_host },
+      });
+
+      if (!memberResp.ok) {
+        if (memberResp.status === 429) {
+          await supabase.from("campaigns").update({
+            scrape_error: `Rate limit on team member ${memberScreenName}. Will retry.`
+          }).eq("id", campaign_id);
+          await sleep(RATE_LIMIT_MS * 3);
+          await releaseLock(supabase, campaign_id);
+          if (await checkActive(supabase, campaign_id)) scheduleSelf(campaign_id, user_id);
+          return new Response(
+            JSON.stringify({ success: true, rate_limited: true }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        console.error(`Failed team member ${memberScreenName}: ${memberResp.status}. Skipping.`);
       } else {
-        console.log(`Fetching agent list page ${nextPage}/${maxPages} for ${location}`);
-        const url = `https://${api_host}/findAgentV2?location=${encodeURIComponent(location)}&page=${nextPage}`;
-        const response = await fetch(url, {
-          headers: { "x-rapidapi-key": api_key, "x-rapidapi-host": api_host },
-        });
-
-        if (!response.ok) {
-          if (response.status === 429) {
-            await supabase
-              .from("campaigns")
-              .update({ scrape_error: `Rate limit on list page ${nextPage}. Will retry.` })
-              .eq("id", campaign_id);
-            await sleep(RATE_LIMIT_MS * 2);
-            await releaseLock(supabase, campaign_id);
-            scheduleSelf(campaign_id, user_id);
-            return new Response(
-              JSON.stringify({ success: true, rate_limited: true }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-          console.error(`List page ${nextPage} failed: ${response.status}. Marking list complete.`);
-          listComplete = true;
-        } else {
-          const data = await response.json();
-          const professionals: AgentListItem[] = data.professionals || [];
-          let pageCount = 0;
-          if (professionals.length === 0) {
-            listComplete = true;
-          } else {
-            for (const agent of professionals) {
-              if (agent.profileLink) {
-                const screenName = agent.profileLink.replace("/profile/", "");
-                if (screenName && !screenNames.includes(screenName)) {
-                  screenNames.push(screenName);
-                  pageCount += 1;
-                }
-              }
-            }
-          }
-          listPage = nextPage;
-          lastPageCount = pageCount;
+        const memberDetails: AgentDetailsResponse = await memberResp.json();
+        const memberContactId = await saveContactWithListings(
+          supabase, user_id, campaign_id, memberScreenName, memberDetails, leadContact?.id || null
+        );
+        if (memberContactId) {
+          scheduleDraft(campaign_id, user_id, memberContactId);
         }
       }
 
-      await supabase
-        .from("campaigns")
-        .update({
-          scrape_screen_names: screenNames,
-          scrape_list_page: listPage,
-          scrape_list_complete: listComplete,
-          scrape_last_page_count: lastPageCount,
-          scrape_error: "",
-        })
-        .eq("id", campaign_id);
+      teamIndex += 1;
+      await supabase.from("campaigns").update({
+        scrape_team_index: teamIndex,
+        scrape_error: "",
+      }).eq("id", campaign_id);
 
-      // Recheck active before continuing
-      const { data: stillActive } = await supabase
-        .from("campaigns")
-        .select("is_active")
-        .eq("id", campaign_id)
-        .maybeSingle();
-      if (!stillActive?.is_active) {
-        await releaseLock(supabase, campaign_id);
-        return new Response(
-          JSON.stringify({ success: true, paused: true }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      // If all team members done, clear team state
+      if (teamIndex >= teamMembers.length) {
+        await supabase.from("campaigns").update({
+          scrape_team_members: [],
+          scrape_team_index: 0,
+        }).eq("id", campaign_id);
       }
 
       await sleep(RATE_LIMIT_MS);
       await releaseLock(supabase, campaign_id);
-      scheduleSelf(campaign_id, user_id);
+      if (await checkActive(supabase, campaign_id)) scheduleSelf(campaign_id, user_id);
       return new Response(
-        JSON.stringify({ success: true, stage: "list", page: listPage, total_agents: screenNames.length }),
+        JSON.stringify({ success: true, stage: "team_member", member: memberScreenName }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Step B: Process one agent from the list
+    // --- STEP 2: If we need a new page of agents, fetch one ---
+    if (!listComplete && scrapeIndex >= screenNames.length) {
+      const nextPage = listPage + 1;
+      if (nextPage > maxPages) {
+        listComplete = true;
+        await supabase.from("campaigns").update({
+          scrape_list_complete: true,
+          scrape_error: "",
+        }).eq("id", campaign_id);
+        await releaseLock(supabase, campaign_id);
+        return new Response(
+          JSON.stringify({ success: true, stage: "complete", total_agents: screenNames.length }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`Fetching agent list page ${nextPage}/${maxPages} for ${location}`);
+      const url = `https://${api_host}/findAgentV2?location=${encodeURIComponent(location)}&page=${nextPage}`;
+      const response = await fetch(url, {
+        headers: { "x-rapidapi-key": api_key, "x-rapidapi-host": api_host },
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          await supabase.from("campaigns").update({
+            scrape_error: `Rate limit on list page ${nextPage}. Will retry.`
+          }).eq("id", campaign_id);
+          await sleep(RATE_LIMIT_MS * 2);
+          await releaseLock(supabase, campaign_id);
+          scheduleSelf(campaign_id, user_id);
+          return new Response(
+            JSON.stringify({ success: true, rate_limited: true }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        console.error(`List page ${nextPage} failed: ${response.status}. Marking list complete.`);
+        listComplete = true;
+        await supabase.from("campaigns").update({
+          scrape_list_complete: true,
+          scrape_list_page: nextPage,
+          scrape_last_page_count: 0,
+          scrape_error: "",
+        }).eq("id", campaign_id);
+        await releaseLock(supabase, campaign_id);
+        return new Response(
+          JSON.stringify({ success: true, stage: "complete", total_agents: screenNames.length }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const data = await response.json();
+      const professionals: AgentListItem[] = data.professionals || [];
+      let pageCount = 0;
+
+      if (professionals.length === 0) {
+        listComplete = true;
+        await supabase.from("campaigns").update({
+          scrape_list_complete: true,
+          scrape_list_page: nextPage,
+          scrape_last_page_count: 0,
+          scrape_error: "",
+        }).eq("id", campaign_id);
+        await releaseLock(supabase, campaign_id);
+        return new Response(
+          JSON.stringify({ success: true, stage: "complete", total_agents: screenNames.length }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      for (const agent of professionals) {
+        if (agent.profileLink) {
+          const sn = agent.profileLink.replace("/profile/", "");
+          if (sn && !screenNames.includes(sn)) {
+            screenNames.push(sn);
+            pageCount += 1;
+          }
+        }
+      }
+
+      listPage = nextPage;
+      await supabase.from("campaigns").update({
+        scrape_screen_names: screenNames,
+        scrape_list_page: listPage,
+        scrape_list_complete: false,
+        scrape_last_page_count: pageCount,
+        scrape_error: "",
+      }).eq("id", campaign_id);
+
+      await sleep(RATE_LIMIT_MS);
+      await releaseLock(supabase, campaign_id);
+      if (await checkActive(supabase, campaign_id)) scheduleSelf(campaign_id, user_id);
+      return new Response(
+        JSON.stringify({ success: true, stage: "list", page: listPage, new_agents: pageCount, total_agents: screenNames.length }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // --- STEP 3: All pages fetched and all agents processed ---
     if (scrapeIndex >= screenNames.length) {
-      console.log("All agents processed. Scrape complete.");
+      listComplete = true;
+      await supabase.from("campaigns").update({
+        scrape_list_complete: true,
+        scrape_error: "",
+      }).eq("id", campaign_id);
       await releaseLock(supabase, campaign_id);
       return new Response(
         JSON.stringify({ success: true, stage: "complete", total_agents: screenNames.length }),
@@ -322,6 +412,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // --- STEP 4: Process one agent from the current page's agents ---
     const screenName = screenNames[scrapeIndex];
     console.log(`Processing agent ${scrapeIndex + 1}/${screenNames.length}: ${screenName}`);
 
@@ -332,22 +423,12 @@ Deno.serve(async (req: Request) => {
 
     if (!detailsResponse.ok) {
       if (detailsResponse.status === 429) {
-        console.error(`Rate limit on agent ${screenName}. Backing off.`);
-        await supabase
-          .from("campaigns")
-          .update({ scrape_error: `Rate limit on agent ${screenName}. Will retry.` })
-          .eq("id", campaign_id);
+        await supabase.from("campaigns").update({
+          scrape_error: `Rate limit on agent ${screenName}. Will retry.`
+        }).eq("id", campaign_id);
         await sleep(RATE_LIMIT_MS * 3);
-        // Recheck active
-        const { data: stillActive } = await supabase
-          .from("campaigns")
-          .select("is_active")
-          .eq("id", campaign_id)
-          .maybeSingle();
         await releaseLock(supabase, campaign_id);
-        if (stillActive?.is_active) {
-          scheduleSelf(campaign_id, user_id);
-        }
+        if (await checkActive(supabase, campaign_id)) scheduleSelf(campaign_id, user_id);
         return new Response(
           JSON.stringify({ success: true, rate_limited: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -357,12 +438,7 @@ Deno.serve(async (req: Request) => {
     } else {
       const agentDetails: AgentDetailsResponse = await detailsResponse.json();
       const contactId = await saveContactWithListings(
-        supabase,
-        user_id,
-        campaign_id,
-        screenName,
-        agentDetails,
-        null
+        supabase, user_id, campaign_id, screenName, agentDetails, null
       );
 
       if (contactId) {
@@ -370,85 +446,30 @@ Deno.serve(async (req: Request) => {
         scheduleDraft(campaign_id, user_id, contactId);
       }
 
-      // Process team members inline (each with its own rate-limited API call)
-      const teamMembers = agentDetails.teamDisplayInformation?.teamLeadInfo?.children || [];
-      for (const member of teamMembers) {
-        if (!member.screenName) continue;
+      // If this agent is a team lead, store their team members for sequential processing
+      const children = agentDetails.teamDisplayInformation?.teamLeadInfo?.children || [];
+      const memberNames = children
+        .map((c) => c.screenName)
+        .filter((sn): sn is string => !!sn && sn !== screenName);
 
-        // Recheck active between sub-calls
-        const { data: stillActive } = await supabase
-          .from("campaigns")
-          .select("is_active")
-          .eq("id", campaign_id)
-          .maybeSingle();
-        if (!stillActive?.is_active) {
-          console.log("Campaign turned off mid-team-processing. Stopping.");
-          await releaseLock(supabase, campaign_id);
-          return new Response(
-            JSON.stringify({ success: true, paused: true }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        await sleep(RATE_LIMIT_MS);
-        const memberUrl = `https://${api_host}/agentDetails?username=${encodeURIComponent(member.screenName)}`;
-        const memberResp = await fetch(memberUrl, {
-          headers: { "x-rapidapi-key": api_key, "x-rapidapi-host": api_host },
-        });
-        if (!memberResp.ok) {
-          if (memberResp.status === 429) {
-            console.error("Rate limit on team member. Backing off.");
-            await sleep(RATE_LIMIT_MS * 2);
-            break;
-          }
-          console.error(`Failed team member ${member.screenName}: ${memberResp.status}`);
-          continue;
-        }
-        const memberDetails: AgentDetailsResponse = await memberResp.json();
-        const memberContactId = await saveContactWithListings(
-          supabase,
-          user_id,
-          campaign_id,
-          member.screenName,
-          memberDetails,
-          contactId
-        );
-        if (memberContactId) {
-          scheduleDraft(campaign_id, user_id, memberContactId);
-        }
+      if (memberNames.length > 0) {
+        await supabase.from("campaigns").update({
+          scrape_team_members: memberNames,
+          scrape_team_index: 0,
+        }).eq("id", campaign_id);
       }
     }
 
-    // Advance index and persist
+    // Advance agent index
     scrapeIndex += 1;
-    await supabase
-      .from("campaigns")
-      .update({ scrape_index: scrapeIndex, scrape_error: "" })
-      .eq("id", campaign_id);
+    await supabase.from("campaigns").update({
+      scrape_index: scrapeIndex,
+      scrape_error: "",
+    }).eq("id", campaign_id);
 
-    // Recheck active before scheduling next step
-    const { data: stillActive } = await supabase
-      .from("campaigns")
-      .select("is_active")
-      .eq("id", campaign_id)
-      .maybeSingle();
-    if (!stillActive?.is_active) {
-      console.log("Campaign turned off. Stopping scrape.");
-      await releaseLock(supabase, campaign_id);
-      return new Response(
-        JSON.stringify({ success: true, paused: true }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (scrapeIndex < screenNames.length) {
-      await sleep(RATE_LIMIT_MS);
-      await releaseLock(supabase, campaign_id);
-      scheduleSelf(campaign_id, user_id);
-    } else {
-      console.log("Scrape complete.");
-      await releaseLock(supabase, campaign_id);
-    }
+    await sleep(RATE_LIMIT_MS);
+    await releaseLock(supabase, campaign_id);
+    if (await checkActive(supabase, campaign_id)) scheduleSelf(campaign_id, user_id);
 
     return new Response(
       JSON.stringify({

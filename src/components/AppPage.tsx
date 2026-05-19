@@ -680,6 +680,8 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
           scrape_list_complete: false,
           scrape_last_page_count: 0,
           scrape_index: 0,
+          scrape_team_members: [],
+          scrape_team_index: 0,
           scrape_error: '',
         })
         .eq('id', campaignId);
