@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutGrid as Layout, Plus, X, MapPin, Mail, FileText, Save, Clock, Server, AlertCircle, Calendar, Phone, User, Building, DollarSign } from 'lucide-react';
+import { LayoutGrid as Layout, Plus, X, MapPin, Mail, FileText, Save, Clock, Server, AlertCircle, Calendar, Phone, User, Building, DollarSign, MoreVertical, RotateCcw } from 'lucide-react';
 import type { Template } from '../features/templates/types';
 import type { EmailEntry } from './Emails';
 import { TemplatesContext } from '../App';
@@ -122,6 +122,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [testModeEnabled, setTestModeEnabled] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const availableEmails: EmailEntry[] = [
     ...sesEmails.map(email => ({ address: email.address, smtpProvider: 'amazon' as const })),
@@ -669,9 +670,39 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
     }
   };
 
+  const handleResetScrape = async (campaignId: string) => {
+    try {
+      const { error } = await supabase
+        .from('campaigns')
+        .update({
+          scrape_screen_names: [],
+          scrape_list_page: 0,
+          scrape_list_complete: false,
+          scrape_last_page_count: 0,
+          scrape_index: 0,
+          scrape_error: '',
+        })
+        .eq('id', campaignId);
+
+      if (error) throw error;
+
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === campaignId
+            ? { ...c, scrapeListPage: 0, scrapeListComplete: false, scrapeLastPageCount: 0, scrapeIndex: 0, scrapeTotalAgents: 0 }
+            : c
+        )
+      );
+      setOpenMenuId(null);
+    } catch (error) {
+      console.error('Error resetting scrape:', error);
+      alert('Failed to reset campaign scrape data.');
+    }
+  };
+
   const handleCampaignClick = (e: React.MouseEvent, campaign: Campaign) => {
     const target = e.target as HTMLElement;
-    if (target.closest('.toggle-wrapper') || target.closest('.delete-button')) {
+    if (target.closest('.toggle-wrapper') || target.closest('.delete-button') || target.closest('.campaign-menu')) {
       return;
     }
 
@@ -703,7 +734,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
 
   return (
     <div className="p-8 bg-white dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         {!currentCampaign ? (
           <>
             <div className="flex items-center justify-between mb-6">
@@ -814,6 +845,37 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                               <div>Not started</div>
                             )}
                           </div>
+                          {campaign.scrapeListComplete && (
+                            <div className="campaign-menu relative">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuId(openMenuId === campaign.id ? null : campaign.id);
+                                }}
+                                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+                              {openMenuId === campaign.id && (
+                                <div className="absolute right-0 top-full mt-1 z-10 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 py-1 min-w-[140px]">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm('Reset scrape data? The campaign will start over from scratch.')) {
+                                        handleResetScrape(campaign.id);
+                                      } else {
+                                        setOpenMenuId(null);
+                                      }
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                                  >
+                                    <RotateCcw className="w-3 h-3" />
+                                    Reset Scrape
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div className="toggle-wrapper">
                             <div className="flex items-center gap-2">
                               <div className="relative inline-block w-11 align-middle select-none">
