@@ -847,8 +847,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                               <div>Not started</div>
                             )}
                           </div>
-                          {campaign.scrapeListComplete && (
-                            <div className="campaign-menu relative">
+                          <div className="campaign-menu relative">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -877,7 +876,6 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                                 </div>
                               )}
                             </div>
-                          )}
                           <div className="toggle-wrapper">
                             <div className="flex items-center gap-2">
                               <div className="relative inline-block w-11 align-middle select-none">
