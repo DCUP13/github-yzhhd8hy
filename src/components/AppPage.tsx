@@ -44,6 +44,8 @@ interface Campaign {
   scrapeLastPageCount: number;
   scrapeIndex: number;
   scrapeTotalAgents: number;
+  scrapeTeamMembers: string[];
+  scrapeTeamIndex: number;
 }
 
 interface AppPageProps {
@@ -144,7 +146,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
 
       const { data, error } = await supabase
         .from('campaigns')
-        .select('id, scrape_list_page, scrape_list_complete, scrape_last_page_count, scrape_index, scrape_screen_names')
+        .select('id, scrape_list_page, scrape_list_complete, scrape_last_page_count, scrape_index, scrape_screen_names, scrape_team_members, scrape_team_index')
         .eq('user_id', userData.user.id);
 
       if (error || !data || cancelled) return;
@@ -164,6 +166,8 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
             scrapeLastPageCount: row.scrape_last_page_count ?? 0,
             scrapeIndex: row.scrape_index ?? 0,
             scrapeTotalAgents: total,
+            scrapeTeamMembers: Array.isArray(row.scrape_team_members) ? row.scrape_team_members : [],
+            scrapeTeamIndex: row.scrape_team_index ?? 0,
           };
         })
       );
@@ -273,6 +277,8 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         scrapeLastPageCount: campaign.scrape_last_page_count ?? 0,
         scrapeIndex: campaign.scrape_index ?? 0,
         scrapeTotalAgents: Array.isArray(campaign.scrape_screen_names) ? campaign.scrape_screen_names.length : 0,
+        scrapeTeamMembers: Array.isArray(campaign.scrape_team_members) ? campaign.scrape_team_members : [],
+        scrapeTeamIndex: campaign.scrape_team_index ?? 0,
       }));
 
       setCampaigns(transformedCampaigns);
@@ -832,16 +838,20 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
-                          <div className="text-right text-xs leading-tight text-gray-500 dark:text-gray-400 max-w-[180px]">
-                            {campaign.scrapeListComplete ? (
+                          <div className="text-right text-xs leading-tight text-gray-500 dark:text-gray-400 max-w-[200px]">
+                            {campaign.scrapeListComplete && campaign.scrapeIndex >= campaign.scrapeTotalAgents ? (
                               <div>
-                                <div>List complete - {campaign.scrapeTotalAgents} agents</div>
-                                <div>Contact {Math.min(campaign.scrapeIndex + 1, campaign.scrapeTotalAgents)} of {campaign.scrapeTotalAgents}</div>
+                                <div>Complete - {campaign.scrapeTotalAgents} agents</div>
+                              </div>
+                            ) : campaign.scrapeTeamMembers.length > 0 && campaign.scrapeTeamIndex < campaign.scrapeTeamMembers.length ? (
+                              <div>
+                                <div>Page {campaign.scrapeListPage} - Agent {campaign.scrapeIndex}/{campaign.scrapeTotalAgents}</div>
+                                <div>Team member {campaign.scrapeTeamIndex + 1} of {campaign.scrapeTeamMembers.length}</div>
                               </div>
                             ) : campaign.scrapeListPage > 0 ? (
                               <div>
                                 <div>Page {campaign.scrapeListPage} - {campaign.scrapeLastPageCount} new</div>
-                                <div>Contact {Math.min(campaign.scrapeIndex + 1, Math.max(campaign.scrapeTotalAgents, 1))} of {campaign.scrapeTotalAgents}</div>
+                                <div>Agent {Math.min(campaign.scrapeIndex + 1, Math.max(campaign.scrapeTotalAgents, 1))} of {campaign.scrapeTotalAgents}</div>
                               </div>
                             ) : (
                               <div>Not started</div>
