@@ -403,10 +403,24 @@ Deno.serve(async (req: Request) => {
     // Get placeholder configurations for data quality validation
     const placeholderConfigs = await getPlaceholderConfigs(supabase, user_id);
 
-    // Step 5: Generate emails for each contact
+    // Step 5: Determine round-robin offset based on existing emails for this campaign
+    // Count emails already created (in both outbox and drafts) to continue the cycle
+    const { count: outboxCount } = await supabase
+      .from("email_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaign_id);
+
+    const { count: draftsCount } = await supabase
+      .from("email_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaign_id);
+
+    const existingEmailCount = (outboxCount || 0) + (draftsCount || 0);
+
+    // Generate emails for each contact
     const emailsToInsert = [];
     const skippedContacts = [];
-    let emailIndex = 0;
+    let emailIndex = existingEmailCount;
 
     for (const contact of contacts) {
       try {
