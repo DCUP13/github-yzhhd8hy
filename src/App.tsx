@@ -1,6 +1,4 @@
 import React, { useState, createContext, useContext, useEffect } from 'react';
-import { Login } from './components/Login';
-import { Register } from './components/Register';
 import { Dashboard } from './components/Dashboard';
 import { AppPage } from './components/AppPage';
 import { Sidebar } from './components/Sidebar';
@@ -16,8 +14,18 @@ import { EmailProvider } from './contexts/EmailContext';
 import { supabase } from './lib/supabase';
 import type { Template } from './features/templates/types';
 import { DashboardProvider } from './contexts/DashboardContext';
+import { HomePage } from './components/public/HomePage';
+import { FeaturesPage } from './components/public/FeaturesPage';
+import { AboutPage } from './components/public/AboutPage';
+import { PricingPage } from './components/public/PricingPage';
+import { ContactPage } from './components/public/ContactPage';
+import { AuthPage } from './components/public/AuthPage';
+import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, RefundPolicy, AcceptableUsePolicy } from './components/public/LegalPages';
 
-type View = 'login' | 'register' | 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram';
+type View = 'home' | 'features' | 'about' | 'pricing' | 'contact' | 'login' | 'register' | 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'privacy' | 'terms' | 'cookies' | 'dpa' | 'refund' | 'aup';
+
+const PUBLIC_VIEWS: View[] = ['home', 'features', 'about', 'pricing', 'contact', 'login', 'register', 'privacy', 'terms', 'cookies', 'dpa', 'refund', 'aup'];
+const APP_VIEWS: View[] = ['dashboard', 'app', 'settings', 'templates', 'emails', 'addresses', 'prompts', 'contacts', 'analytics', 'instagram'];
 
 interface ThemeContextType {
   darkMode: boolean;
@@ -38,7 +46,7 @@ export const TemplatesContext = createContext<{
 });
 
 export default function App() {
-  const [view, setView] = useState<View>('login');
+  const [view, setView] = useState<View>('home');
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -83,18 +91,16 @@ export default function App() {
 
         if (error) {
           console.error('Session error:', error);
-          setView('login');
+          setView('home');
           setIsLoading(false);
           return;
         }
 
         if (session) {
-          console.log('Session found, loading dashboard');
           setView('dashboard');
           await fetchUserSettings(session.user.id);
         } else {
-          console.log('No session, showing login');
-          setView('login');
+          setView('home');
         }
 
         setIsLoading(false);
@@ -109,8 +115,7 @@ export default function App() {
 
     const timeout = setTimeout(() => {
       if (mounted) {
-        console.warn('Auth initialization timeout - forcing login view');
-        setView('login');
+        setView('home');
         setIsLoading(false);
       }
     }, 3000);
@@ -138,7 +143,7 @@ export default function App() {
           }
         })();
       } else if (event === 'SIGNED_OUT') {
-        setView('login');
+        setView('home');
         setDarkMode(false);
       }
     });
@@ -169,7 +174,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (view !== 'login' && view !== 'register') {
+    if (APP_VIEWS.includes(view)) {
       fetchTemplates();
     }
   }, [view]);
@@ -207,13 +212,9 @@ export default function App() {
     }
   };
 
-  const handleLogin = () => {
-    // Don't manually change view - let onAuthStateChange handle it
-  };
-
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    setView('login');
+    setView('home');
   };
 
   if (isLoading) {
@@ -230,7 +231,7 @@ export default function App() {
         <EmailProvider>
           <DashboardProvider>
             <>
-              {view === 'dashboard' || view === 'app' || view === 'settings' || view === 'templates' || view === 'emails' || view === 'addresses' || view === 'prompts' || view === 'contacts' || view === 'analytics' || view === 'instagram' ? (
+              {APP_VIEWS.includes(view) ? (
                 <div className="flex min-h-screen bg-white dark:bg-gray-900">
                   <div className="fixed inset-y-0 left-0 w-64">
                     <Sidebar
@@ -281,18 +282,21 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 w-full max-w-md">
-                    {view === 'login' ? (
-                      <Login
-                        onRegisterClick={() => setView('register')}
-                        onLoginSuccess={handleLogin}
-                      />
-                    ) : (
-                      <Register onLoginClick={() => setView('login')} />
-                    )}
-                  </div>
-                </div>
+                <>
+                  {view === 'home' && <HomePage currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'features' && <FeaturesPage currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'about' && <AboutPage currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'pricing' && <PricingPage currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'contact' && <ContactPage currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'login' && <AuthPage mode="login" currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'register' && <AuthPage mode="register" currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'privacy' && <PrivacyPolicy currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'terms' && <TermsOfService currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'cookies' && <CookiePolicy currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'dpa' && <DataProcessingAgreement currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'refund' && <RefundPolicy currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                  {view === 'aup' && <AcceptableUsePolicy currentPage={view} onNavigate={(p) => setView(p as View)} />}
+                </>
               )}
             </>
           </DashboardProvider>
