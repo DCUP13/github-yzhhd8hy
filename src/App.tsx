@@ -10,12 +10,14 @@ import { Addresses } from './components/Emails';
 import { EmailsInbox } from './components/EmailsInbox';
 import { Prompts } from './components/Prompts';
 import { Contacts } from './components/Contacts';
+import { Analytics } from './components/Analytics';
+import { Instagram } from './components/Instagram';
 import { EmailProvider } from './contexts/EmailContext';
 import { supabase } from './lib/supabase';
 import type { Template } from './features/templates/types';
 import { DashboardProvider } from './contexts/DashboardContext';
 
-type View = 'login' | 'register' | 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts';
+type View = 'login' | 'register' | 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram';
 
 interface ThemeContextType {
   darkMode: boolean;
@@ -228,7 +230,7 @@ export default function App() {
         <EmailProvider>
           <DashboardProvider>
             <>
-              {view === 'dashboard' || view === 'app' || view === 'settings' || view === 'templates' || view === 'emails' || view === 'addresses' || view === 'prompts' || view === 'contacts' ? (
+              {view === 'dashboard' || view === 'app' || view === 'settings' || view === 'templates' || view === 'emails' || view === 'addresses' || view === 'prompts' || view === 'contacts' || view === 'analytics' || view === 'instagram' ? (
                 <div className="flex min-h-screen bg-white dark:bg-gray-900">
                   <div className="fixed inset-y-0 left-0 w-64">
                     <Sidebar
@@ -241,11 +243,13 @@ export default function App() {
                       onAddressesClick={() => setView('addresses')}
                       onPromptsClick={() => setView('prompts')}
                       onContactsClick={() => setView('contacts')}
+                      onAnalyticsClick={() => setView('analytics')}
+                      onInstagramClick={() => setView('instagram')}
                     />
                   </div>
                   <div className="flex-1 ml-64">
                     {view === 'dashboard' && (
-                      <Dashboard onSignOut={handleSignOut} currentView={view} />
+                      <Dashboard onSignOut={handleSignOut} currentView={view} onNavigateAnalytics={() => setView('analytics')} />
                     )}
                     {view === 'app' && (
                       <AppPage onSignOut={handleSignOut} currentView={view} />
@@ -267,6 +271,12 @@ export default function App() {
                     )}
                     {view === 'contacts' && (
                       <Contacts onSignOut={handleSignOut} currentView={view} />
+                    )}
+                    {view === 'analytics' && (
+                      <Analytics onSignOut={handleSignOut} currentView={view} />
+                    )}
+                    {view === 'instagram' && (
+                      <Instagram onSignOut={handleSignOut} currentView={view} />
                     )}
                   </div>
                 </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, Paperclip, Search, RefreshCw, Clock, User, ArrowLeft, Reply, Send, Inbox, Inbox as Outbox, Plus, FileText, ChevronDown, Sparkles } from 'lucide-react';
+import { Mail, Paperclip, Search, RefreshCw, Clock, User, ArrowLeft, Reply, Send, Inbox, Inbox as Outbox, Plus, FileText, ChevronDown, Sparkles, MessageSquare, Eye, MousePointer, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ReplyDialog } from './ReplyDialog';
 import { ComposeEmailDialog } from './ComposeEmailDialog';
@@ -19,6 +19,7 @@ interface Email {
   body: string;
   attachments: any;
   created_at: string;
+  reply_to_sent_id?: string | null;
 }
 
 interface OutboxEmail {
@@ -43,6 +44,14 @@ interface SentEmail {
   attachments: any;
   sent_at: string;
   created_at: string;
+  reply_to_id?: string | null;
+  delivery_status?: string;
+  delivered_at?: string;
+  opened_at?: string;
+  clicked_at?: string;
+  bounced_at?: string;
+  open_count?: number;
+  click_count?: number;
 }
 
 interface DraftEmail {
@@ -55,6 +64,13 @@ interface DraftEmail {
   attachments: any;
   created_at: string;
   updated_at: string;
+}
+
+interface EmailEvent {
+  id: string;
+  event_type: string;
+  event_time: string;
+  recipient: string;
 }
 
 type TabType = 'inbox' | 'outbox' | 'sent' | 'drafts';
@@ -78,7 +94,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [outboxEmails, setOutboxEmails] = useState<OutboxEmail[]>([]);
   const [sentEmails, setSentEmails] = useState<SentEmail[]>([]);
   const [draftEmails, setDraftEmails] = useState<DraftEmail[]>([]);
-  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [selectedEmail, setSelectedEmail] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<TabType>('inbox');
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,6 +106,10 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [isProcessingDrafts, setIsProcessingDrafts] = useState(false);
   const [isGeneratingDrafts, setIsGeneratingDrafts] = useState(false);
   const [viewingAttachment, setViewingAttachment] = useState<{ attachment: any; source: 'inbox' | 'template'; emailId?: string } | null>(null);
+  const [replyCounts, setReplyCounts] = useState<Record<string, number>>({});
+  const [sentEvents, setSentEvents] = useState<Record<string, EmailEvent[]>>({});
+  const [selectedEmailReplies, setSelectedEmailReplies] = useState<Email[]>([]);
+  const [selectedEmailEvents, setSelectedEmailEvents] = useState<EmailEvent[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -161,6 +181,26 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       .order('sent_at', { ascending: false });
     if (error) throw error;
     setSentEmails(data || []);
+
+    // Fetch reply counts: count inbox emails where reply_to_sent_id matches each sent email
+    if (data && data.length > 0) {
+      const sentIds = data.map(e => e.id);
+      const { data: replies, error: replyError } = await supabase
+        .from('emails')
+        .select('reply_to_sent_id')
+        .in('reply_to_sent_id', sentIds)
+        .not('reply_to_sent_id', 'is', null);
+
+      if (!replyError && replies) {
+        const counts: Record<string, number> = {};
+        for (const r of replies) {
+          if (r.reply_to_sent_id) {
+            counts[r.reply_to_sent_id] = (counts[r.reply_to_sent_id] || 0) + 1;
+          }
+        }
+        setReplyCounts(counts);
+      }
+    }
   };
 
   const fetchDraftEmails = async () => {
@@ -171,6 +211,48 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     if (error) throw error;
 
     setDraftEmails(data || []);
+  };
+
+  const fetchSentEmailEvents = async (sentEmailId: string) => {
+    const { data, error } = await supabase
+      .from('email_events')
+      .select('id, event_type, event_time, recipient')
+      .eq('email_sent_id', sentEmailId)
+      .order('event_time', { ascending: true });
+    if (error) {
+      console.error('Error fetching email events:', error);
+      return [];
+    }
+    return data || [];
+  };
+
+  const fetchSentEmailReplies = async (sentEmailId: string) => {
+    const { data, error } = await supabase
+      .from('emails')
+      .select('*')
+      .eq('reply_to_sent_id', sentEmailId)
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.error('Error fetching email replies:', error);
+      return [];
+    }
+    return data || [];
+  };
+
+  const handleSelectEmail = async (email: any) => {
+    setSelectedEmail(email);
+
+    if (activeTab === 'sent') {
+      const [events, replies] = await Promise.all([
+        fetchSentEmailEvents(email.id),
+        fetchSentEmailReplies(email.id),
+      ]);
+      setSelectedEmailEvents(events);
+      setSelectedEmailReplies(replies);
+    } else {
+      setSelectedEmailEvents([]);
+      setSelectedEmailReplies([]);
+    }
   };
 
   const handleSendReply = async (replyData: {
@@ -260,7 +342,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   };
 
   const handleDeleteEmail = async (emailId: string, event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent row click from selecting email
+    event.stopPropagation();
 
     try {
       setIsLoading(true);
@@ -290,7 +372,6 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
 
       if (error) throw error;
 
-      // Refresh the appropriate email list
       if (activeTab === 'inbox') {
         await fetchInboxEmails();
       } else if (activeTab === 'outbox') {
@@ -301,14 +382,13 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
         await fetchDraftEmails();
       }
 
-      // If the deleted email was selected, clear the selection
       if (selectedEmail?.id === emailId) {
         setSelectedEmail(null);
       }
 
       alert('Email deleted successfully');
     } catch (error) {
-      console.error('Error deleting email replacethis:', error);
+      console.error('Error deleting email:', error);
       alert('Failed to delete email. Please try again.');
     } finally {
       setIsLoading(false);
@@ -359,7 +439,6 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       if (deleteError) throw deleteError;
 
       await fetchAllEmails();
-      console.log(`Successfully moved ${draftEmails.length} drafts to outbox`);
     } catch (error) {
       console.error('Error moving drafts to outbox:', error);
       alert(`Failed to move drafts to outbox: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -398,7 +477,6 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
 
       setSelectedEmail(null);
       await fetchDraftEmails();
-      console.log(`Successfully deleted ${count} drafts`);
     } catch (error) {
       console.error('Error deleting all drafts:', error);
       alert(`Failed to delete drafts: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -519,7 +597,6 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
 
   const hasAttachments = (attachments: any) => {
     if (!attachments) return false;
-    // Handle both array and string (if stored as JSON string)
     if (typeof attachments === 'string') {
       try {
         const parsed = JSON.parse(attachments);
@@ -533,7 +610,6 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
 
   const getAttachments = (attachments: any): any[] => {
     if (!attachments) return [];
-    // Handle both array and string (if stored as JSON string)
     if (typeof attachments === 'string') {
       try {
         const parsed = JSON.parse(attachments);
@@ -619,6 +695,10 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     }
   };
 
+  // Count total replies across all sent emails
+  const totalReplyCount = Object.values(replyCounts).reduce((sum, count) => sum + count, 0);
+  const inboxReplyCount = emails.filter(e => e.reply_to_sent_id).length;
+
   if (isLoading) {
     return (
       <div className="p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
@@ -626,6 +706,140 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       </div>
     );
   }
+
+  // Render event indicators for a sent email
+  const renderEventIndicators = (email: SentEmail) => {
+    const indicators: React.ReactNode[] = [];
+
+    if (email.bounced_at) {
+      indicators.push(
+        <span key="bounced" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" title="Bounced">
+          <AlertCircle className="w-3 h-3" />
+        </span>
+      );
+    }
+
+    if (email.delivered_at || email.delivery_status === 'delivered') {
+      indicators.push(
+        <span key="delivered" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" title="Delivered">
+          <CheckCircle className="w-3 h-3" />
+        </span>
+      );
+    }
+
+    if (email.opened_at || (email.open_count ?? 0) > 0) {
+      const openCount = email.open_count ?? 0;
+      indicators.push(
+        <span key="opened" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" title={`Opened ${openCount} time${openCount !== 1 ? 's' : ''}`}>
+          <Eye className="w-3 h-3" />
+          {openCount > 1 && <span>{openCount}</span>}
+        </span>
+      );
+    }
+
+    if (email.clicked_at || (email.click_count ?? 0) > 0) {
+      const clickCount = email.click_count ?? 0;
+      indicators.push(
+        <span key="clicked" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={`Clicked ${clickCount} time${clickCount !== 1 ? 's' : ''}`}>
+          <MousePointer className="w-3 h-3" />
+          {clickCount > 1 && <span>{clickCount}</span>}
+        </span>
+      );
+    }
+
+    const replyCount = replyCounts[email.id] || 0;
+    if (replyCount > 0) {
+      indicators.push(
+        <span key="replies" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title={`${replyCount} repl${replyCount !== 1 ? 'ies' : 'y'}`}>
+          <MessageSquare className="w-3 h-3" />
+          {replyCount}
+        </span>
+      );
+    }
+
+    return indicators.length > 0 ? (
+      <div className="flex items-center gap-1">{indicators}</div>
+    ) : null;
+  };
+
+  // Render the event timeline for a selected sent email
+  const renderEventTimeline = () => {
+    if (selectedEmailEvents.length === 0) {
+      return (
+        <div className="text-sm text-gray-500 dark:text-gray-400 italic">
+          No tracking events recorded yet for this email.
+        </div>
+      );
+    }
+
+    const eventConfig: Record<string, { icon: any; color: string; label: string }> = {
+      delivery: { icon: CheckCircle, color: 'text-green-500', label: 'Delivered' },
+      open: { icon: Eye, color: 'text-blue-500', label: 'Opened' },
+      click: { icon: MousePointer, color: 'text-purple-500', label: 'Clicked' },
+      bounce: { icon: AlertCircle, color: 'text-red-500', label: 'Bounced' },
+      complaint: { icon: AlertCircle, color: 'text-orange-500', label: 'Complaint' },
+      reply: { icon: MessageSquare, color: 'text-amber-500', label: 'Reply received' },
+    };
+
+    return (
+      <div className="space-y-2">
+        {selectedEmailEvents.map((event, index) => {
+          const config = eventConfig[event.event_type] || { icon: Mail, color: 'text-gray-500', label: event.event_type };
+          const Icon = config.icon;
+          return (
+            <div key={event.id} className="flex items-center gap-3">
+              <div className={`flex items-center justify-center w-7 h-7 rounded-full ${config.color} bg-opacity-10`}>
+                <Icon className={`w-4 h-4 ${config.color}`} />
+              </div>
+              <div className="flex-1">
+                <span className="text-sm text-gray-700 dark:text-gray-300">{config.label}</span>
+                {event.recipient && (
+                  <span className="text-xs text-gray-400 ml-2">{event.recipient}</span>
+                )}
+              </div>
+              <span className="text-xs text-gray-400">
+                {new Date(event.event_time).toLocaleString()}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Render the reply thread for a selected sent email
+  const renderReplyThread = () => {
+    if (selectedEmailReplies.length === 0) return null;
+
+    return (
+      <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-amber-500" />
+          Replies ({selectedEmailReplies.length})
+        </h3>
+        <div className="space-y-3">
+          {selectedEmailReplies.map((reply) => (
+            <div key={reply.id} className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 border border-amber-100 dark:border-amber-800/30">
+              <div className="flex items-center gap-2 mb-2">
+                <User className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{reply.sender}</span>
+                <span className="text-xs text-gray-400">
+                  {new Date(reply.created_at).toLocaleString()}
+                </span>
+              </div>
+              <div className="text-sm text-gray-700 dark:text-gray-300">
+                {reply.body ? (
+                  <div dangerouslySetInnerHTML={{ __html: reply.body }} />
+                ) : (
+                  <span className="italic text-gray-400">No content</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
@@ -763,6 +977,12 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     <div className="flex items-center gap-2">
                       <Inbox className="w-4 h-4" />
                       Inbox ({emails.length})
+                      {inboxReplyCount > 0 && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                          <MessageSquare className="w-3 h-3" />
+                          {inboxReplyCount}
+                        </span>
+                      )}
                     </div>
                   </button>
                   <button
@@ -795,6 +1015,12 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     <div className="flex items-center gap-2">
                       <Mail className="w-4 h-4" />
                       Sent ({sentEmails.length})
+                      {totalReplyCount > 0 && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                          <MessageSquare className="w-3 h-3" />
+                          {totalReplyCount}
+                        </span>
+                      )}
                     </div>
                   </button>
                   <button
@@ -849,7 +1075,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   {filteredEmails.map((email) => (
                     <div
                       key={email.id}
-                      onClick={() => setSelectedEmail(email)}
+                      onClick={() => handleSelectEmail(email)}
                       className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                     >
                       <div className="flex items-start justify-between">
@@ -897,6 +1123,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                               (activeTab === 'sent' && hasAttachments((email as SentEmail).attachments))) && (
                               <Paperclip className="w-4 h-4 text-gray-400" />
                             )}
+                            {activeTab === 'sent' && renderEventIndicators(email as SentEmail)}
                           </div>
                           <div className="mb-1">
                             <span className="text-sm font-medium text-gray-900 dark:text-white">
@@ -976,9 +1203,12 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
               </div>
               
               <div className="space-y-3">
-                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {selectedEmail.subject || '(No Subject)'}
-                </h1>
+                <div className="flex items-center gap-4">
+                  <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    {selectedEmail.subject || '(No Subject)'}
+                  </h1>
+                  {activeTab === 'sent' && renderEventIndicators(selectedEmail as SentEmail)}
+                </div>
                 
                 <div className="flex items-center gap-4 text-sm">
                   <div className="flex items-center gap-2">
@@ -1035,6 +1265,20 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   <div className="text-gray-900 dark:text-white">No content available</div>
                 )}
               </div>
+
+              {/* Event timeline for sent emails */}
+              {activeTab === 'sent' && (
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-blue-500" />
+                    Tracking Timeline
+                  </h3>
+                  {renderEventTimeline()}
+                </div>
+              )}
+
+              {/* Reply thread for sent emails */}
+              {activeTab === 'sent' && renderReplyThread()}
 
               {activeTab === 'inbox' && hasAttachments((selectedEmail as Email).attachments) && (
                 <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">

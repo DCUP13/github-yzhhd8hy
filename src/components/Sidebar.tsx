@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users } from 'lucide-react';
+import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram } from 'lucide-react';
 
 interface SidebarProps {
   onSignOut: () => void;
@@ -11,6 +11,8 @@ interface SidebarProps {
   onEmailsClick: () => void;
   onPromptsClick: () => void;
   onContactsClick: () => void;
+  onAnalyticsClick: () => void;
+  onInstagramClick: () => void;
 }
 
 export function Sidebar({
@@ -22,7 +24,9 @@ export function Sidebar({
   onAddressesClick,
   onEmailsClick,
   onPromptsClick,
-  onContactsClick
+  onContactsClick,
+  onAnalyticsClick,
+  onInstagramClick
 }: SidebarProps) {
   return (
     <div className="h-screen w-64 bg-blue-800 dark:bg-gray-800 text-white p-6">
@@ -85,6 +89,22 @@ export function Sidebar({
         >
           <Users className="w-4 h-4" />
           Contacts
+        </button>
+
+        <button
+          onClick={onInstagramClick}
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
+        >
+          <Instagram className="w-4 h-4" />
+          Instagram
+        </button>
+
+        <button
+          onClick={onAnalyticsClick}
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
+        >
+          <BarChart3 className="w-4 h-4" />
+          Analytics
         </button>
 
         <button
