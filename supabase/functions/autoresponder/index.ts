@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
+import OpenAI from "npm:openai@4.28.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,42 +35,25 @@ function fillPlaceholders(content: string, vars: Record<string, string>): string
 }
 
 /**
- * Calls an AI model to generate text from a prompt.
- * Uses the OpenAI-compatible endpoint if an API key is configured, otherwise
- * returns a simple echo so the flow is testable without external deps.
+ * Calls OpenAI's gpt-4o model to generate text from a prompt.
+ * Uses the npm:openai package and the OPENAI_API_KEY edge function secret,
+ * matching the pattern in the generate-template edge function.
  */
 async function callAI(systemPrompt: string, userPrompt: string): Promise<string> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
 
-  if (apiKey) {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.7,
-      }),
-    });
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature: 0.7,
+    max_tokens: 2000,
+  });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`AI call failed (${response.status}): ${errText}`);
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content?.trim() ?? '';
-  }
-
-  // Fallback: echo the prompt so the two-step flow is still testable
-  console.log("OPENAI_API_KEY not set — returning echo fallback");
-  return `[AI fallback] ${userPrompt.slice(0, 200)}`;
+  const raw = completion.choices[0]?.message?.content ?? '';
+  return raw.replace(/^```[a-zA-Z]*\r?\n?/, '').replace(/\r?\n?```$/, '').trim();
 }
 
 /**
