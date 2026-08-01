@@ -1,131 +1,102 @@
 import React from 'react';
 import { PublicLayout } from './PublicLayout';
-import { ArrowRight, Clock, TrendingUp, Users, Layers, Target, Zap } from 'lucide-react';
+import { ArrowRight, Heart, Target, Shield, Users } from 'lucide-react';
+import type { PublicRoute } from '../../lib/router';
 
 interface AboutPageProps {
-  currentPage: string;
-  onNavigate: (page: string) => void;
+  currentRoute: PublicRoute;
+  onNavigate: (route: PublicRoute) => void;
 }
 
-export function AboutPage({ currentPage, onNavigate }: AboutPageProps) {
+export function AboutPage({ currentRoute, onNavigate }: AboutPageProps) {
   const values = [
-    { icon: Clock, title: 'Time Saved', desc: 'Reclaim 15+ hours every week by automating prospecting, email writing, and reply handling.' },
-    { icon: TrendingUp, title: 'Higher Reply Rates', desc: 'AI-personalized emails and instant auto-replies mean prospects hear back before they lose interest.' },
-    { icon: Target, title: 'No More Cold Calling', desc: 'Start warm. Every contact is verified with data-quality scoring before a single email goes out.' },
-    { icon: Layers, title: 'Everything in One Place', desc: 'Email, Instagram, contacts, templates, analytics — one login, one dashboard, zero tool-hopping.' },
+    { icon: Heart, title: 'Every Email Matters', body: 'We believe every email deserves a prompt, thoughtful response. No one should be left waiting.' },
+    { icon: Target, title: 'Time Is Precious', body: 'Your time should go to what matters most — building relationships, not managing inboxes.' },
+    { icon: Shield, title: 'Trust Through Security', body: 'Bank-level encryption and data isolation ensure your communications stay private and secure.' },
+    { icon: Users, title: 'Built for Professionals', body: 'Designed by people who understand the demands of client communication and relationship management.' },
   ];
 
   return (
-    <PublicLayout currentPage={currentPage} onNavigate={onNavigate}>
-      <section className="bg-gradient-to-b from-blue-50 to-white dark:from-gray-950 dark:to-gray-900 py-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-            We Built LoiBlast Because{' '}
-            <span className="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
-              Outreach Shouldn't Be Manual
-            </span>
+    <PublicLayout currentRoute={currentRoute} onNavigate={onNavigate}>
+      <section className="pt-20 pb-14 px-4 sm:px-6 bg-om-cream">
+        <div className="max-w-4xl mx-auto text-center">
+          <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
+            Our Story
+          </p>
+          <h1 className="text-3xl md:text-5xl lg:text-6xl font-display font-semibold text-om-forest-deep mb-6">
+            Transforming Communities,
+            <br />
+            One Email at a Time
           </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">
-            Real estate is a relationship business — but the work of finding those relationships is repetitive, slow, and drains the energy you need for closing. We set out to fix that.
+          <p
+            className="text-xl md:text-2xl text-om-mahogany max-w-3xl mx-auto"
+            style={{ fontFamily: "'EB Garamond', serif" }}
+          >
+            At LoiBlast, we believe that every email matters and every person deserves a prompt, thoughtful response. We're on a mission to ensure no one gets left behind.
           </p>
         </div>
       </section>
 
-      {/* Problem */}
-      <section className="py-20 bg-white dark:bg-gray-900">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-6">The Problem We Saw</h2>
-          <div className="prose prose-lg max-w-none text-gray-600 dark:text-gray-400 leading-relaxed space-y-4">
-            <p>
-              Every real estate professional knows the grind: spend hours scrolling agent directories, copy-pasting contact info into a spreadsheet, writing the same email for the hundredth time, then manually following up with every reply — if you even get to it before the lead goes cold.
+      {/* Mantra */}
+      <section className="py-14 px-4 sm:px-6 bg-om-forest-deep">
+        <div className="max-w-4xl mx-auto">
+          <div className="border border-om-forest rounded-xl p-10 text-center">
+            <p className="text-sm md:text-base text-om-gold font-medium tracking-widest uppercase mb-4">
+              Our Mantra
             </p>
-            <p>
-              The tools on the market only solve part of the problem. Email platforms don't find contacts. CRMs don't write emails. Instagram tools don't talk to your email campaigns. You end up juggling five subscriptions, copying data between them, and still doing the manual work they were supposed to eliminate.
-            </p>
-            <p>
-              We knew there had to be a better way — one platform that handles the entire pipeline from discovery to deal.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Solution */}
-      <section className="py-20 bg-gray-50 dark:bg-gray-950">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-6">Why We Built This</h2>
-          <div className="prose prose-lg max-w-none text-gray-600 dark:text-gray-400 leading-relaxed space-y-4">
-            <p>
-              LoiBlast was built around one principle: automate the boring 80% so agents can focus on the 20% that actually closes deals — the conversations, the negotiations, the relationships.
-            </p>
-            <p>
-              We started by connecting the pieces no one else had connected. Contact discovery feeds directly into campaign building. Campaigns send through multiple providers with automatic rotation. Replies come back into a unified inbox where AI analyzes and responds in two steps. Instagram engagement sits alongside email so no lead slips through.
-            </p>
-            <p>
-              The result isn't just another email tool or another CRM. It's an end-to-end AI outreach pipeline — and it runs while you sleep.
+            <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-parchment mb-4">
+              "No One Left Behind, No Email Unanswered"
+            </h2>
+            <p
+              className="text-om-tan text-lg md:text-xl"
+              style={{ fontFamily: "'EB Garamond', serif" }}
+            >
+              We're committed to helping you maintain your reputation by ensuring every email receives the attention it deserves, delivered with care and efficiency.
             </p>
           </div>
         </div>
       </section>
 
-      {/* What Makes Us Different */}
-      <section className="py-20 bg-white dark:bg-gray-900">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-8">What Makes Us Different</h2>
-          <div className="space-y-6">
-            {[
-              {
-                title: 'Standalone Email Tools',
-                problem: 'They send emails — but they don\'t find your contacts. You still buy lead lists or scrape manually.',
-                solution: 'LoiBlast scrapes fresh agent contacts across all 50 states and feeds them directly into your campaigns.',
-              },
-              {
-                title: 'Standalone CRMs',
-                problem: 'They store contacts — but they don\'t write emails, auto-respond, or track opens and clicks.',
-                solution: 'LoiBlast is a CRM, an email platform, an auto-responder, and an analytics suite in one dashboard.',
-              },
-              {
-                title: 'Standalone Instagram Tools',
-                problem: 'They manage social — but they\'re completely disconnected from your email outreach.',
-                solution: 'LoiBlast unifies email and Instagram engagement in one inbox so no lead falls through the cracks.',
-              },
-            ].map((item, i) => (
-              <div key={i} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-6 border border-gray-100 dark:border-gray-700">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-red-600 dark:text-red-400 font-bold text-sm">{i + 1}</span>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{item.title}</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                      <span className="font-medium text-gray-700 dark:text-gray-300">The gap:</span> {item.problem}
-                    </p>
-                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                      <span className="font-medium text-blue-600 dark:text-blue-400">LoiBlast:</span> {item.solution}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
+      {/* Mission */}
+      <section className="py-14 px-4 sm:px-6 bg-om-cream">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-forest-deep mb-3">
+              Our Mission
+            </h2>
+            <p className="text-om-mahogany" style={{ fontFamily: "'EB Garamond', serif" }}>
+              Why we do what we do
+            </p>
+          </div>
+          <div className="bg-om-parchment border border-om-tan p-10 rounded-xl">
+            <p
+              className="text-lg md:text-xl text-om-mahogany leading-relaxed text-center"
+              style={{ fontFamily: "'EB Garamond', serif" }}
+            >
+              We built LoiBlast because we saw professionals drowning in email, losing leads to slow responses, and sacrificing their evenings to keep up. We knew AI could solve this — not by replacing the human touch, but by handling the repetitive work so you can focus on what only you can do: building relationships and closing deals. Our mission is to give you your time back while making every conversation better.
+            </p>
           </div>
         </div>
       </section>
 
       {/* Values */}
-      <section className="py-20 bg-gray-50 dark:bg-gray-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-14 px-4 sm:px-6 bg-om-parchment">
+        <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">What You Get</h2>
+            <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-forest-deep mb-4">
+              What Drives Us
+            </h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {values.map((value, i) => {
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {values.map((value) => {
               const Icon = value.icon;
               return (
-                <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
-                    <Icon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                <div key={value.title} className="bg-om-cream border border-om-tan rounded-xl p-6 text-center">
+                  <div className="w-12 h-12 rounded-lg bg-om-parchment border border-om-tan/30 flex items-center justify-center mx-auto mb-4">
+                    <Icon className="w-6 h-6 text-om-gold" />
                   </div>
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">{value.title}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{value.desc}</p>
+                  <h3 className="text-lg font-display font-semibold text-om-forest-deep mb-2">{value.title}</h3>
+                  <p className="text-sm text-om-brown" style={{ fontFamily: "'EB Garamond', serif" }}>{value.body}</p>
                 </div>
               );
             })}
@@ -133,21 +104,20 @@ export function AboutPage({ currentPage, onNavigate }: AboutPageProps) {
         </div>
       </section>
 
-      <section className="py-20 bg-gradient-to-r from-blue-600 to-blue-500">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Zap className="w-6 h-6 text-white" fill="white" />
-            <h2 className="text-3xl font-bold text-white">Join the Outreach Revolution</h2>
-          </div>
-          <p className="text-lg text-blue-50 mb-8">
+      <section className="py-14 px-4 sm:px-6 bg-om-forest">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-parchment mb-6">
+            Join the Revolution
+          </h2>
+          <p className="text-lg md:text-xl text-om-tan mb-8" style={{ fontFamily: "'EB Garamond', serif" }}>
             Stop doing manual work that AI can handle. Start your free account today.
           </p>
           <button
             onClick={() => onNavigate('register')}
-            className="inline-flex items-center gap-2 px-8 py-3.5 text-base font-semibold text-blue-600 bg-white hover:bg-blue-50 rounded-xl shadow-lg transition-all hover:-translate-y-0.5"
+            className="inline-flex items-center gap-2 px-8 py-3.5 bg-om-gold text-om-forest-deep hover:bg-om-gold-dark hover:text-om-cream font-bold transition-colors rounded"
           >
             Get Started Free
-            <ArrowRight className="w-5 h-5" />
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </section>

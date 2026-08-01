@@ -2,13 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   opacity: 1;
   transition: none;
 }
 
-html {
-  scroll-behavior: smooth;
+.font-body {
+  font-family: 'EB Garamond', Georgia, serif;
+}
+
+.font-display {
+  font-family: 'Playfair Display', Georgia, serif;
 }
 
 @keyframes fadeInUp {

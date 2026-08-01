@@ -1,126 +1,113 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Zap } from 'lucide-react';
+import type { PublicRoute } from '../../lib/router';
+import { getRoutePath } from '../../lib/router';
 
 interface NavbarProps {
-  currentPage: string;
-  onNavigate: (page: string) => void;
+  currentRoute: PublicRoute;
+  onNavigate: (route: PublicRoute) => void;
 }
 
-export function Navbar({ currentPage, onNavigate }: NavbarProps) {
-  const [scrolled, setScrolled] = useState(false);
+export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    setMobileOpen(false);
+  }, [currentRoute]);
 
-  const navLinks = [
-    { label: 'Features', page: 'features' },
-    { label: 'About', page: 'about' },
-    { label: 'Pricing', page: 'pricing' },
-    { label: 'Contact', page: 'contact' },
+  const navLinks: { label: string; route: PublicRoute; gold?: boolean }[] = [
+    { label: 'Features', route: 'features' },
+    { label: 'Pricing', route: 'pricing' },
+    { label: 'Quiz', route: 'quiz', gold: true },
+    { label: 'About', route: 'about' },
+    { label: 'Security', route: 'security' },
   ];
 
-  const handleNav = (page: string) => {
-    onNavigate(page);
+  const handleNav = (route: PublicRoute) => {
+    onNavigate(route);
     setMobileOpen(false);
   };
 
+  const isActive = (route: PublicRoute) => currentRoute === route;
+
   return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-800'
-          : 'bg-transparent'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <button
-            onClick={() => handleNav('home')}
-            className="flex items-center gap-2 group"
-          >
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
-              <Zap className="w-5 h-5 text-white" fill="white" />
-            </div>
-            <span className="text-lg font-bold text-gray-900 dark:text-white">
-              LoiBlast
-            </span>
-          </button>
+    <header className="fixed top-0 left-0 right-0 bg-om-forest-deep/95 backdrop-blur-md border-b border-om-forest z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+        <button
+          onClick={() => handleNav('home')}
+          className="flex items-center gap-2"
+        >
+          <Zap className="w-7 h-7 text-om-gold" fill="currentColor" />
+          <span className="text-base md:text-lg font-display font-semibold text-om-parchment tracking-wide">
+            LoiBlast
+          </span>
+        </button>
 
-          <div className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => (
-              <button
-                key={link.page}
-                onClick={() => handleNav(link.page)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  currentPage === link.page
-                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-                }`}
-              >
-                {link.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="hidden md:flex items-center gap-3">
-            <button
-              onClick={() => handleNav('login')}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => handleNav('register')}
-              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5"
-            >
-              Get Started Free
-            </button>
-          </div>
-
-          <button
-            className="md:hidden p-2 text-gray-700 dark:text-gray-300"
-            onClick={() => setMobileOpen(!mobileOpen)}
-          >
-            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-        </div>
-      </div>
-
-      {mobileOpen && (
-        <div className="md:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 py-4 space-y-2 shadow-lg">
+        <nav className="hidden md:flex items-center gap-8 text-base md:text-lg text-om-tan">
           {navLinks.map((link) => (
             <button
-              key={link.page}
-              onClick={() => handleNav(link.page)}
-              className={`block w-full text-left px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                currentPage === link.page
-                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              key={link.route}
+              onClick={() => handleNav(link.route)}
+              className={`hover:text-om-parchment transition-colors ${link.gold ? 'text-om-gold' : ''} ${
+                isActive(link.route) ? 'text-om-parchment' : ''
               }`}
             >
               {link.label}
             </button>
           ))}
-          <div className="pt-2 border-t border-gray-200 dark:border-gray-800 flex flex-col gap-2">
+        </nav>
+
+        <div className="hidden md:flex items-center gap-3">
+          <button
+            onClick={() => handleNav('login')}
+            className="px-6 py-2.5 text-om-tan hover:text-om-parchment text-base md:text-lg font-medium transition-colors"
+          >
+            Sign In
+          </button>
+          <button
+            onClick={() => handleNav('register')}
+            className="px-6 py-2.5 border border-om-gold text-om-gold hover:bg-om-gold hover:text-om-forest-deep text-base md:text-lg font-medium transition-colors rounded"
+          >
+            Get Started
+          </button>
+        </div>
+
+        <button
+          className="md:hidden p-2 text-om-tan hover:text-om-parchment transition-colors"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label="Toggle menu"
+        >
+          {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {mobileOpen && (
+        <div className="md:hidden bg-om-forest-deep border-t border-om-forest px-6 py-4 flex flex-col gap-4">
+          {navLinks.map((link) => (
+            <button
+              key={link.route}
+              onClick={() => handleNav(link.route)}
+              className={`text-left text-base ${link.gold ? 'text-om-gold' : 'text-om-tan'} hover:text-om-parchment transition-colors py-1`}
+            >
+              {link.label}
+            </button>
+          ))}
+          <div className="border-t border-om-forest pt-4 flex flex-col gap-3">
             <button
               onClick={() => handleNav('login')}
-              className="px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 text-left rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="text-left text-base text-om-tan hover:text-om-parchment font-medium transition-colors"
             >
               Sign In
             </button>
             <button
               onClick={() => handleNav('register')}
-              className="px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+              className="text-left text-base text-om-gold border border-om-gold px-6 py-2.5 rounded transition-colors hover:bg-om-gold hover:text-om-forest-deep"
             >
-              Get Started Free
+              Get Started
             </button>
           </div>
         </div>
       )}
-    </nav>
+    </header>
   );
 }

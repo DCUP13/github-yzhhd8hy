@@ -1,22 +1,23 @@
 import React, { useEffect } from 'react';
 import { Navbar } from './Navbar';
 import { Footer } from './Footer';
+import type { PublicRoute } from '../../lib/router';
 
 interface PublicLayoutProps {
   children: React.ReactNode;
-  currentPage: string;
-  onNavigate: (page: string) => void;
+  currentRoute: PublicRoute;
+  onNavigate: (route: PublicRoute) => void;
 }
 
-export function PublicLayout({ children, currentPage, onNavigate }: PublicLayoutProps) {
+export function PublicLayout({ children, currentRoute, onNavigate }: PublicLayoutProps) {
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [currentPage]);
+  }, [currentRoute]);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 flex flex-col">
-      <Navbar currentPage={currentPage} onNavigate={onNavigate} />
-      <main className="flex-1 pt-16">{children}</main>
+    <div className="min-h-screen bg-om-cream font-body flex flex-col">
+      <Navbar currentRoute={currentRoute} onNavigate={onNavigate} />
+      <main className="flex-1 pt-20">{children}</main>
       <Footer onNavigate={onNavigate} />
     </div>
   );

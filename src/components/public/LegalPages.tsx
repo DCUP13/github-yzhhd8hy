@@ -1,19 +1,20 @@
 import React from 'react';
 import { LegalPage } from './LegalPage';
+import type { PublicRoute } from '../../lib/router';
 
 interface LegalPagesProps {
-  currentPage: string;
-  onNavigate: (page: string) => void;
+  currentRoute: PublicRoute;
+  onNavigate: (route: PublicRoute) => void;
 }
 
 const P = ({ children }: { children: React.ReactNode }) => <p>{children}</p>;
 
-export function PrivacyPolicy({ currentPage, onNavigate }: LegalPagesProps) {
+export function PrivacyPolicy({ currentRoute, onNavigate }: LegalPagesProps) {
   return (
     <LegalPage
       title="Privacy Policy"
       lastUpdated="July 30, 2026"
-      currentPage={currentPage}
+      currentRoute={currentRoute}
       onNavigate={onNavigate}
       sections={[
         { heading: '1. Introduction', body: <P>LoiBlast ("we", "us", or "our") respects your privacy and is committed to protecting your personal data. This Privacy Policy explains how we collect, use, and disclose your information when you use our platform and services. By using LoiBlast, you agree to the practices described in this policy.</P> },
@@ -43,12 +44,12 @@ export function PrivacyPolicy({ currentPage, onNavigate }: LegalPagesProps) {
   );
 }
 
-export function TermsOfService({ currentPage, onNavigate }: LegalPagesProps) {
+export function TermsOfService({ currentRoute, onNavigate }: LegalPagesProps) {
   return (
     <LegalPage
       title="Terms of Service"
       lastUpdated="July 30, 2026"
-      currentPage={currentPage}
+      currentRoute={currentRoute}
       onNavigate={onNavigate}
       sections={[
         { heading: '1. Acceptance of Terms', body: <P>By creating an account or using LoiBlast ("the Service"), you agree to be bound by these Terms of Service and our Privacy Policy. If you do not agree, do not use the Service.</P> },
@@ -75,12 +76,12 @@ export function TermsOfService({ currentPage, onNavigate }: LegalPagesProps) {
   );
 }
 
-export function CookiePolicy({ currentPage, onNavigate }: LegalPagesProps) {
+export function CookiePolicy({ currentRoute, onNavigate }: LegalPagesProps) {
   return (
     <LegalPage
       title="Cookie Policy"
       lastUpdated="July 30, 2026"
-      currentPage={currentPage}
+      currentRoute={currentRoute}
       onNavigate={onNavigate}
       sections={[
         { heading: '1. What Are Cookies', body: <P>Cookies are small text files stored on your device when you visit a website. They allow the website to remember your actions and preferences over a period of time, so you don't have to re-enter them every time you visit.</P> },
@@ -98,12 +99,12 @@ export function CookiePolicy({ currentPage, onNavigate }: LegalPagesProps) {
   );
 }
 
-export function DataProcessingAgreement({ currentPage, onNavigate }: LegalPagesProps) {
+export function DataProcessingAgreement({ currentRoute, onNavigate }: LegalPagesProps) {
   return (
     <LegalPage
       title="Data Processing Agreement"
       lastUpdated="July 30, 2026"
-      currentPage={currentPage}
+      currentRoute={currentRoute}
       onNavigate={onNavigate}
       sections={[
         { heading: '1. Purpose and Scope', body: <P>This Data Processing Agreement ("DPA") forms part of the Terms of Service and governs LoiBlast's processing of personal data on behalf of its users ("Controllers"). LoiBlast acts as a Data Processor, and the user acts as a Data Controller.</P> },
@@ -123,12 +124,12 @@ export function DataProcessingAgreement({ currentPage, onNavigate }: LegalPagesP
   );
 }
 
-export function RefundPolicy({ currentPage, onNavigate }: LegalPagesProps) {
+export function RefundPolicy({ currentRoute, onNavigate }: LegalPagesProps) {
   return (
     <LegalPage
       title="Refund Policy"
       lastUpdated="July 30, 2026"
-      currentPage={currentPage}
+      currentRoute={currentRoute}
       onNavigate={onNavigate}
       sections={[
         { heading: '1. Free Trial', body: <P>LoiBlast offers a free tier that allows you to explore the platform before subscribing to a paid plan. We encourage you to use the free tier thoroughly before upgrading to ensure the Service meets your needs.</P> },
@@ -146,12 +147,12 @@ export function RefundPolicy({ currentPage, onNavigate }: LegalPagesProps) {
   );
 }
 
-export function AcceptableUsePolicy({ currentPage, onNavigate }: LegalPagesProps) {
+export function AcceptableUsePolicy({ currentRoute, onNavigate }: LegalPagesProps) {
   return (
     <LegalPage
       title="Acceptable Use Policy"
       lastUpdated="July 30, 2026"
-      currentPage={currentPage}
+      currentRoute={currentRoute}
       onNavigate={onNavigate}
       sections={[
         { heading: '1. Overview', body: <P>This Acceptable Use Policy ("AUP") describes prohibited uses of LoiBlast. By using the Service, you agree to comply with this AUP. Violations may result in account suspension or termination.</P> },
@@ -178,6 +179,31 @@ export function AcceptableUsePolicy({ currentPage, onNavigate }: LegalPagesProps
         { heading: '4. Contact Data', body: <P>You are responsible for ensuring that the contact data you scrape, upload, or email through the Service is obtained lawfully and that your use of such data complies with all applicable privacy laws, including GDPR and CCPA.</P> },
         { heading: '5. Enforcement', body: <P>We reserve the right to investigate suspected violations and to suspend or terminate accounts that violate this AUP. We may also report illegal activities to law enforcement authorities where required by law.</P> },
         { heading: '6. Reporting Violations', body: <P>To report a violation of this AUP, contact us at support@loiblast.com. Please include details of the violation and any supporting evidence.</P> },
+      ]}
+    />
+  );
+}
+
+export function AccessibilityADA({ currentRoute, onNavigate }: LegalPagesProps) {
+  return (
+    <LegalPage
+      title="Accessibility (ADA)"
+      lastUpdated="July 30, 2026"
+      currentRoute={currentRoute}
+      onNavigate={onNavigate}
+      sections={[
+        { heading: '1. Our Commitment', body: <P>LoiBlast is committed to making our platform accessible to everyone, including individuals with disabilities. We strive to comply with the Americans with Disabilities Act (ADA) and the Web Content Accessibility Guidelines (WCAG) 2.1 Level AA.</P> },
+        { heading: '2. Measures We Take', body: <>
+          <P>We take the following measures to ensure accessibility:</P>
+          <P>1. Our interface is designed to be navigable by keyboard alone, without requiring a mouse.</P>
+          <P>2. We maintain sufficient color contrast between text and background elements.</P>
+          <P>3. Interactive elements have visible focus states for keyboard users.</P>
+          <P>4. Forms are labelled properly and are compatible with screen readers.</P>
+          <P>5. Our layout is responsive and works across devices and screen sizes.</P>
+        </> },
+        { heading: '3. Known Limitations', body: <P>While we strive for full accessibility, some third-party integrations and embedded content may not fully conform to accessibility standards. We are continuously working to improve and address any gaps.</P> },
+        { heading: '4. Feedback', body: <P>If you encounter any accessibility barriers or have suggestions for improvement, please contact us at support@loiblast.com. We take accessibility feedback seriously and will work to address issues promptly.</P> },
+        { heading: '5. Ongoing Efforts', body: <P>Accessibility is an ongoing effort. We regularly review our platform, train our team on accessibility best practices, and update our standards as technology and guidelines evolve.</P> },
       ]}
     />
   );

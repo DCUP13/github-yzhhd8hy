@@ -14,18 +14,18 @@ import { EmailProvider } from './contexts/EmailContext';
 import { supabase } from './lib/supabase';
 import type { Template } from './features/templates/types';
 import { DashboardProvider } from './contexts/DashboardContext';
+import { useRouter, type PublicRoute } from './lib/router';
 import { HomePage } from './components/public/HomePage';
 import { FeaturesPage } from './components/public/FeaturesPage';
 import { AboutPage } from './components/public/AboutPage';
 import { PricingPage } from './components/public/PricingPage';
+import { QuizPage } from './components/public/QuizPage';
+import { SecurityPage } from './components/public/SecurityPage';
 import { ContactPage } from './components/public/ContactPage';
 import { AuthPage } from './components/public/AuthPage';
-import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, RefundPolicy, AcceptableUsePolicy } from './components/public/LegalPages';
+import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, RefundPolicy, AcceptableUsePolicy, AccessibilityADA } from './components/public/LegalPages';
 
-type View = 'home' | 'features' | 'about' | 'pricing' | 'contact' | 'login' | 'register' | 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'privacy' | 'terms' | 'cookies' | 'dpa' | 'refund' | 'aup';
-
-const PUBLIC_VIEWS: View[] = ['home', 'features', 'about', 'pricing', 'contact', 'login', 'register', 'privacy', 'terms', 'cookies', 'dpa', 'refund', 'aup'];
-const APP_VIEWS: View[] = ['dashboard', 'app', 'settings', 'templates', 'emails', 'addresses', 'prompts', 'contacts', 'analytics', 'instagram'];
+type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram';
 
 interface ThemeContextType {
   darkMode: boolean;
@@ -46,7 +46,8 @@ export const TemplatesContext = createContext<{
 });
 
 export default function App() {
-  const [view, setView] = useState<View>('home');
+  const { route: publicRoute, navigate } = useRouter();
+  const [appView, setAppView] = useState<AppView | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -84,30 +85,25 @@ export default function App() {
 
     const initializeAuth = async () => {
       try {
-        console.log('Initializing auth...');
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (!mounted) return;
 
         if (error) {
           console.error('Session error:', error);
-          setView('home');
           setIsLoading(false);
           return;
         }
 
         if (session) {
-          setView('dashboard');
+          setAppView('dashboard');
           await fetchUserSettings(session.user.id);
-        } else {
-          setView('home');
         }
 
         setIsLoading(false);
       } catch (error) {
         console.error('Auth initialization failed:', error);
         if (mounted) {
-          setView('login');
           setIsLoading(false);
         }
       }
@@ -115,26 +111,20 @@ export default function App() {
 
     const timeout = setTimeout(() => {
       if (mounted) {
-        setView('home');
         setIsLoading(false);
       }
     }, 3000);
 
     initializeAuth();
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-
-      // Ignore INITIAL_SESSION event to prevent double-firing
       if (event === 'INITIAL_SESSION') return;
 
-      console.log('Auth state change:', event);
-
       if (event === 'SIGNED_IN' && session) {
-        setView('dashboard');
+        setAppView('dashboard');
         (async () => {
           try {
             await fetchUserSettings(session.user.id);
@@ -143,8 +133,9 @@ export default function App() {
           }
         })();
       } else if (event === 'SIGNED_OUT') {
-        setView('home');
+        setAppView(null);
         setDarkMode(false);
+        navigate('home');
       }
     });
 
@@ -174,10 +165,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (APP_VIEWS.includes(view)) {
+    if (appView) {
       fetchTemplates();
     }
-  }, [view]);
+  }, [appView]);
 
   useEffect(() => {
     if (darkMode) {
@@ -214,94 +205,100 @@ export default function App() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    setView('home');
+    setAppView(null);
+    navigate('home');
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-om-cream flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-om-gold border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  return (
-    <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
-      <TemplatesContext.Provider value={{ templates, fetchTemplates }}>
-        <EmailProvider>
-          <DashboardProvider>
-            <>
-              {APP_VIEWS.includes(view) ? (
-                <div className="flex min-h-screen bg-white dark:bg-gray-900">
-                  <div className="fixed inset-y-0 left-0 w-64">
-                    <Sidebar
-                      onSignOut={handleSignOut}
-                      onHomeClick={() => setView('dashboard')}
-                      onAppClick={() => setView('app')}
-                      onSettingsClick={() => setView('settings')}
-                      onTemplatesClick={() => setView('templates')}
-                      onEmailsClick={() => setView('emails')}
-                      onAddressesClick={() => setView('addresses')}
-                      onPromptsClick={() => setView('prompts')}
-                      onContactsClick={() => setView('contacts')}
-                      onAnalyticsClick={() => setView('analytics')}
-                      onInstagramClick={() => setView('instagram')}
-                    />
-                  </div>
-                  <div className="flex-1 ml-64">
-                    {view === 'dashboard' && (
-                      <Dashboard onSignOut={handleSignOut} currentView={view} onNavigateAnalytics={() => setView('analytics')} />
-                    )}
-                    {view === 'app' && (
-                      <AppPage onSignOut={handleSignOut} currentView={view} />
-                    )}
-                    {view === 'settings' && (
-                      <Settings onSignOut={handleSignOut} currentView={view} />
-                    )}
-                    {view === 'templates' && (
-                      <TemplatesPage onSignOut={handleSignOut} currentView={view} />
-                    )}
-                    {view === 'emails' && (
-                      <EmailsInbox onSignOut={handleSignOut} currentView={view} />
-                    )}
-                    {view === 'addresses' && (
-                      <Addresses onSignOut={handleSignOut} currentView={view} />
-                    )}
-                    {view === 'prompts' && (
-                      <Prompts onSignOut={handleSignOut} currentView={view} />
-                    )}
-                    {view === 'contacts' && (
-                      <Contacts onSignOut={handleSignOut} currentView={view} />
-                    )}
-                    {view === 'analytics' && (
-                      <Analytics onSignOut={handleSignOut} currentView={view} />
-                    )}
-                    {view === 'instagram' && (
-                      <Instagram onSignOut={handleSignOut} currentView={view} />
-                    )}
-                  </div>
+  // Signed-in app
+  if (appView) {
+    return (
+      <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
+        <TemplatesContext.Provider value={{ templates, fetchTemplates }}>
+          <EmailProvider>
+            <DashboardProvider>
+              <div className="flex min-h-screen bg-white dark:bg-gray-900">
+                <div className="fixed inset-y-0 left-0 w-64">
+                  <Sidebar
+                    onSignOut={handleSignOut}
+                    onHomeClick={() => setAppView('dashboard')}
+                    onAppClick={() => setAppView('app')}
+                    onSettingsClick={() => setAppView('settings')}
+                    onTemplatesClick={() => setAppView('templates')}
+                    onEmailsClick={() => setAppView('emails')}
+                    onAddressesClick={() => setAppView('addresses')}
+                    onPromptsClick={() => setAppView('prompts')}
+                    onContactsClick={() => setAppView('contacts')}
+                    onAnalyticsClick={() => setAppView('analytics')}
+                    onInstagramClick={() => setAppView('instagram')}
+                  />
                 </div>
-              ) : (
-                <>
-                  {view === 'home' && <HomePage currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'features' && <FeaturesPage currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'about' && <AboutPage currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'pricing' && <PricingPage currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'contact' && <ContactPage currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'login' && <AuthPage mode="login" currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'register' && <AuthPage mode="register" currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'privacy' && <PrivacyPolicy currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'terms' && <TermsOfService currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'cookies' && <CookiePolicy currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'dpa' && <DataProcessingAgreement currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'refund' && <RefundPolicy currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                  {view === 'aup' && <AcceptableUsePolicy currentPage={view} onNavigate={(p) => setView(p as View)} />}
-                </>
-              )}
-            </>
-          </DashboardProvider>
-        </EmailProvider>
-      </TemplatesContext.Provider>
-    </ThemeContext.Provider>
-  );
+                <div className="flex-1 ml-64">
+                  {appView === 'dashboard' && (
+                    <Dashboard onSignOut={handleSignOut} currentView={appView} onNavigateAnalytics={() => setAppView('analytics')} />
+                  )}
+                  {appView === 'app' && (
+                    <AppPage onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'settings' && (
+                    <Settings onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'templates' && (
+                    <TemplatesPage onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'emails' && (
+                    <EmailsInbox onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'addresses' && (
+                    <Addresses onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'prompts' && (
+                    <Prompts onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'contacts' && (
+                    <Contacts onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'analytics' && (
+                    <Analytics onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'instagram' && (
+                    <Instagram onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                </div>
+              </div>
+            </DashboardProvider>
+          </EmailProvider>
+        </TemplatesContext.Provider>
+      </ThemeContext.Provider>
+    );
+  }
+
+  // Public marketing site with URL routing
+  const renderPublicPage = () => {
+    switch (publicRoute) {
+      case 'home': return <HomePage currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'features': return <FeaturesPage currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'pricing': return <PricingPage currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'quiz': return <QuizPage currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'about': return <AboutPage currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'security': return <SecurityPage currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'contact': return <ContactPage currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'login': return <AuthPage mode="login" currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'register': return <AuthPage mode="register" currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'privacy': return <PrivacyPolicy currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'terms': return <TermsOfService currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'cookies': return <CookiePolicy currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'ada': return <AccessibilityADA currentRoute={publicRoute} onNavigate={navigate} />;
+      default: return <HomePage currentRoute={publicRoute} onNavigate={navigate} />;
+    }
+  };
+
+  return renderPublicPage();
 }
