@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { File, Plus, Upload as UploadIcon, Info, Sparkles } from 'lucide-react';
+import { File, Plus, Upload as UploadIcon, Info, Sparkles, Share2, Copy, Globe } from 'lucide-react';
 import { TemplateList } from './components/TemplateList';
 import { TemplateEditor } from './components/TemplateEditor';
 import type { Template } from './types';
@@ -7,6 +7,7 @@ import { exportAsHTML, exportAsPDF, exportAsDOCX } from './utils/exportUtils';
 import { createTemplateFromFile } from './utils/importUtils';
 import { htmlToDocxJsonContent } from './utils/docxConvert';
 import { supabase } from '../../lib/supabase';
+import { ShareDialog } from '../../components/ShareDialog';
 
 interface TemplatesPageProps {
   onSignOut: () => void;
@@ -71,16 +72,69 @@ const PLACEHOLDER_SECTIONS: PlaceholderSection[] = [
   },
 ];
 
-export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
+export function TemplatesPage({ onSignOut: _onSignOut, currentView: _currentView }: TemplatesPageProps) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [currentTemplate, setCurrentTemplate] = useState<Template | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const templateFileRef = useRef<HTMLInputElement>(null);
+  const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
+  const [sharedTemplates, setSharedTemplates] = useState<Template[]>([]);
 
   // Fetch templates when component mounts
   useEffect(() => {
     fetchTemplates();
+    fetchSharedTemplates();
   }, []);
+
+  const fetchSharedTemplates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('shared_items')
+        .select('item_id')
+        .eq('item_type', 'template');
+
+      if (error || !data) return;
+      const sharedIds = data.map((d: any) => d.item_id);
+      if (sharedIds.length === 0) return;
+
+      const { data: sharedData, error: sharedError } = await supabase
+        .from('templates')
+        .select('*')
+        .in('id', sharedIds)
+        .order('updated_at', { ascending: false });
+
+      if (sharedError || !sharedData) return;
+      setSharedTemplates(sharedData.map((t: any) => ({ ...t, lastModified: t.updated_at })));
+    } catch (err) {
+      console.error('Error fetching shared templates:', err);
+    }
+  };
+
+  const handleCopyShared = async (template: Template) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('templates')
+        .insert({
+          name: `${template.name} (Copy)`,
+          content: template.content,
+          format: template.format,
+          imported: false,
+          user_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      await fetchTemplates();
+      alert('Template copied to your account.');
+    } catch (err) {
+      console.error('Error copying template:', err);
+      alert('Failed to copy template.');
+    }
+  };
 
   const fetchTemplates = async () => {
     try {
@@ -387,12 +441,47 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
             onCancel={() => setCurrentTemplate(null)}
           />
         ) : (
-          <TemplateList
-            templates={templates}
-            onEdit={handleEditTemplate}
-            onDelete={handleDeleteTemplate}
-            onExport={handleExportTemplate}
-          />
+          <>
+            <TemplateList
+              templates={templates}
+              onEdit={handleEditTemplate}
+              onDelete={handleDeleteTemplate}
+              onExport={handleExportTemplate}
+              onShare={(template) => setShareTarget({ id: template.id, name: template.name || 'Untitled' })}
+            />
+
+            {sharedTemplates.length > 0 && (
+              <div className="mt-8">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-blue-500" />
+                  Shared With You ({sharedTemplates.length})
+                </h2>
+                <div className="space-y-3">
+                  {sharedTemplates.map((template) => (
+                    <div
+                      key={template.id}
+                      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <File className="w-5 h-5 text-blue-500" />
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900 dark:text-white">{template.name || 'Untitled'}</h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">.{template.format}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleCopyShared(template)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        Add to my account
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -403,6 +492,16 @@ export function TemplatesPage({ onSignOut, currentView }: TemplatesPageProps) {
         accept=".json,.html,.docx,.pdf"
         className="hidden"
       />
+
+      {shareTarget && (
+        <ShareDialog
+          isOpen={true}
+          onClose={() => setShareTarget(null)}
+          itemType="template"
+          itemId={shareTarget.id}
+          itemName={shareTarget.name}
+        />
+      )}
     </div>
   );
 }

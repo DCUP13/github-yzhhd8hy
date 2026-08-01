@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram } from 'lucide-react';
+import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram, Building2 } from 'lucide-react';
 
 interface SidebarProps {
   onSignOut: () => void;
@@ -13,6 +13,9 @@ interface SidebarProps {
   onContactsClick: () => void;
   onAnalyticsClick: () => void;
   onInstagramClick: () => void;
+  onTeamClick: () => void;
+  onOrgAdminClick?: () => void;
+  isSuperAdmin?: boolean;
 }
 
 export function Sidebar({
@@ -26,7 +29,10 @@ export function Sidebar({
   onPromptsClick,
   onContactsClick,
   onAnalyticsClick,
-  onInstagramClick
+  onInstagramClick,
+  onTeamClick,
+  onOrgAdminClick,
+  isSuperAdmin
 }: SidebarProps) {
   return (
     <div className="h-screen w-64 bg-blue-800 dark:bg-gray-800 text-white p-6">
@@ -90,6 +96,24 @@ export function Sidebar({
           <Users className="w-4 h-4" />
           Contacts
         </button>
+
+        <button
+          onClick={onTeamClick}
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
+        >
+          <Users className="w-4 h-4" />
+          Team
+        </button>
+
+        {isSuperAdmin && onOrgAdminClick && (
+          <button
+            onClick={onOrgAdminClick}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Building2 className="w-4 h-4" />
+            Organizations
+          </button>
+        )}
 
         <button
           onClick={onInstagramClick}

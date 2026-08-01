@@ -162,10 +162,10 @@ export function PricingPage({ currentRoute, onNavigate }: PricingPageProps) {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={() => onNavigate('quiz')}
+              onClick={() => onNavigate('contact')}
               className="px-8 py-3.5 bg-om-gold text-om-forest-deep hover:bg-om-gold-dark hover:text-om-cream font-bold transition-colors rounded"
             >
-              Get Started Free
+              Contact Us
             </button>
             <button
               onClick={() => onNavigate('contact')}

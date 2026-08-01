@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Server, Mail, BarChart3, Instagram as InstagramIcon } from 'lucide-react';
+import { Server, Mail, BarChart3, Instagram as InstagramIcon, Key } from 'lucide-react';
 import { GeneralTab } from './settings/GeneralTab';
 import { AmazonTab } from './settings/AmazonTab';
 import { GoogleTab } from './settings/GoogleTab';
 import { RapidAPITab } from './settings/RapidAPITab';
 import { DataQualityTab } from './settings/DataQualityTab';
 import { InstagramTab } from './settings/InstagramTab';
+import { UserTab } from './settings/UserTab';
 import type { EmailSettings, GeneralSettings } from './settings/types';
 import { supabase } from '../lib/supabase';
 
@@ -14,10 +15,13 @@ interface SettingsProps {
   currentView: string;
 }
 
-type SettingsTab = 'general' | 'amazon' | 'google' | 'rapid-api' | 'data-quality' | 'instagram';
+type SettingsTab = 'user' | 'general' | 'amazon' | 'google' | 'rapid-api' | 'data-quality' | 'instagram';
 
-export function Settings({ onSignOut, currentView }: SettingsProps) {
+export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [userEmail, setUserEmail] = useState('');
+  const [orgName, setOrgName] = useState('');
+  const [userRole, setUserRole] = useState('member');
   const [settings, setSettings] = useState<GeneralSettings>({
     notifications: true,
     twoFactorAuth: false,
@@ -40,7 +44,34 @@ export function Settings({ onSignOut, currentView }: SettingsProps) {
 
   useEffect(() => {
     fetchSettings();
+    fetchUserProfile();
   }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      setUserEmail(session.user.email || '');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      if (profile) setUserRole(profile.role || 'member');
+
+      const { data: orgData } = await supabase
+        .from('organizations')
+        .select('name')
+        .maybeSingle();
+
+      if (orgData) setOrgName(orgData.name);
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    }
+  };
 
   const createDefaultSettings = async () => {
     try {
@@ -159,6 +190,7 @@ export function Settings({ onSignOut, currentView }: SettingsProps) {
   };
 
   const tabs = [
+    { id: 'user', label: 'User', icon: Key },
     { id: 'general', label: 'General', icon: Server },
     { id: 'data-quality', label: 'Data Quality', icon: BarChart3 },
     { id: 'amazon', label: 'Amazon SES', icon: Server },
@@ -201,6 +233,14 @@ export function Settings({ onSignOut, currentView }: SettingsProps) {
           </div>
 
           <div className="p-6">
+            {activeTab === 'user' && (
+              <UserTab
+                userEmail={userEmail}
+                orgName={orgName}
+                userRole={userRole}
+              />
+            )}
+
             {activeTab === 'general' && (
               <GeneralTab
                 settings={settings}

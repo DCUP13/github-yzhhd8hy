@@ -165,14 +165,14 @@ export function ContactPage({ currentRoute, onNavigate }: ContactPageProps) {
                 </div>
                 <h3 className="text-base font-display font-semibold text-om-forest-deep">Book a Demo</h3>
               </div>
-              <p className="text-sm text-om-brown mb-3" style={{ fontFamily: "'EB Garamond', serif" }}>
+              <p className="text-sm text-om-brown" style={{ fontFamily: "'EB Garamond', serif" }}>
                 Want a guided walkthrough? Schedule a personalized demo with our team.
               </p>
               <button
-                onClick={() => onNavigate('register')}
+                onClick={() => onNavigate('contact')}
                 className="text-sm font-medium text-om-gold hover:text-om-gold-dark transition-colors"
               >
-                Get started instead &rarr;
+                Contact us &rarr;
               </button>
             </div>
 
@@ -185,6 +185,15 @@ export function ContactPage({ currentRoute, onNavigate }: ContactPageProps) {
               </div>
               <p className="text-sm text-om-brown" style={{ fontFamily: "'EB Garamond', serif" }}>
                 We respond to all inquiries within one business day. Most messages are answered much faster.
+              </p>
+            </div>
+
+            <div className="bg-om-gold/10 border border-om-gold/40 rounded-xl p-6">
+              <h3 className="text-base font-display font-semibold text-om-forest-deep mb-2">
+                Account Creation
+              </h3>
+              <p className="text-sm text-om-brown" style={{ fontFamily: "'EB Garamond', serif" }}>
+                New accounts are created by invitation only. Contact us to get set up — we'll create your organization and send you an invitation with your login details.
               </p>
             </div>
           </div>

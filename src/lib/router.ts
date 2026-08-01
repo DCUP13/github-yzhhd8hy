@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 export type PublicRoute =
   | 'home' | 'features' | 'pricing' | 'quiz' | 'about' | 'security'
-  | 'login' | 'register' | 'contact'
+  | 'login' | 'contact'
   | 'privacy' | 'terms' | 'cookies' | 'ada';
 
 const ROUTE_PATHS: Record<PublicRoute, string> = {
@@ -13,7 +13,6 @@ const ROUTE_PATHS: Record<PublicRoute, string> = {
   about: '/about',
   security: '/security',
   login: '/login',
-  register: '/register',
   contact: '/contact',
   privacy: '/privacy',
   terms: '/terms',

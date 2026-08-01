@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Building2, Mail, Phone, MapPin, Home, ChevronRight, X, Award, User, Trash2, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Users, Search, Building2, Mail, Phone, MapPin, Home, ChevronRight, X, Award, User, Trash2, ChevronDown, ArrowLeft, Share2, Globe, Copy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ContactQualityBadge } from './ContactQualityBadge';
+import { ShareDialog } from './ShareDialog';
 
 interface Contact {
   id: string;
@@ -46,7 +47,7 @@ interface ContactsProps {
   currentView: string;
 }
 
-export function Contacts({ onSignOut, currentView }: ContactsProps) {
+export function Contacts({ onSignOut: _onSignOut, currentView: _currentView }: ContactsProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,10 +59,68 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
   const [navigationStack, setNavigationStack] = useState<Contact[]>([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
+  const [sharedContacts, setSharedContacts] = useState<Contact[]>([]);
 
   useEffect(() => {
     fetchContacts();
+    fetchSharedContacts();
   }, []);
+
+  const fetchSharedContacts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('shared_items')
+        .select('item_id')
+        .eq('item_type', 'contact');
+
+      if (error || !data) return;
+      const sharedIds = data.map((d: any) => d.item_id);
+      if (sharedIds.length === 0) return;
+
+      const { data: sharedData, error: sharedError } = await supabase
+        .from('contacts')
+        .select('*')
+        .in('id', sharedIds)
+        .order('created_at', { ascending: false });
+
+      if (sharedError || !sharedData) return;
+      setSharedContacts(sharedData);
+    } catch (err) {
+      console.error('Error fetching shared contacts:', err);
+    }
+  };
+
+  const handleCopySharedContact = async (contact: Contact) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('contacts')
+        .insert({
+          name: contact.name,
+          email: contact.email,
+          screen_name: contact.screen_name,
+          phone: contact.phone,
+          phone_cell: contact.phone_cell,
+          phone_brokerage: contact.phone_brokerage,
+          phone_business: contact.phone_business,
+          business_name: contact.business_name,
+          profile_url: contact.profile_url,
+          is_team_lead: contact.is_team_lead,
+          status: contact.status,
+          user_id: user.id,
+        });
+
+      if (error) throw error;
+      await fetchContacts();
+      alert('Contact copied to your account.');
+    } catch (err) {
+      console.error('Error copying contact:', err);
+      alert('Failed to copy contact.');
+    }
+  };
 
 
   const fetchContacts = async () => {
@@ -667,6 +726,50 @@ export function Contacts({ onSignOut, currentView }: ContactsProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {sharedContacts.length > 0 && !selectedContact && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-blue-500" />
+            Shared With You ({sharedContacts.length})
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sharedContacts.map((contact) => (
+              <div
+                key={contact.id}
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
+                    <User className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">{contact.name || contact.email || 'Unknown'}</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{contact.business_name || 'No business'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleCopySharedContact(contact)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Add to my account
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {shareTarget && (
+        <ShareDialog
+          isOpen={true}
+          onClose={() => setShareTarget(null)}
+          itemType="contact"
+          itemId={shareTarget.id}
+          itemName={shareTarget.name}
+        />
       )}
     </div>
   );

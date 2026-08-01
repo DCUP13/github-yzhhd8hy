@@ -65,7 +65,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
             Sign In
           </button>
           <button
-            onClick={() => handleNav('quiz')}
+            onClick={() => handleNav('contact')}
             className="px-6 py-2.5 border border-om-gold text-om-gold hover:bg-om-gold hover:text-om-forest-deep text-base md:text-lg font-medium transition-colors rounded"
           >
             Get Started

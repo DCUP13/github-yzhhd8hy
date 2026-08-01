@@ -171,10 +171,10 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
               We take security seriously so you can focus on your outreach, not your infrastructure. Every layer of LoiBlast — from the database to the email queue to the AI pipeline — is designed with protection in mind.
             </p>
             <button
-              onClick={() => onNavigate('quiz')}
+              onClick={() => onNavigate('contact')}
               className="inline-flex items-center gap-2 px-8 py-3.5 bg-om-gold text-om-forest-deep hover:bg-om-gold-dark hover:text-om-cream font-bold transition-colors rounded"
             >
-              Get Started Free
+              Contact Us
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

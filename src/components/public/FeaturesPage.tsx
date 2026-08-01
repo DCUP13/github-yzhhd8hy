@@ -230,10 +230,10 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
             Get started free and see the difference automated outreach makes.
           </p>
           <button
-            onClick={() => onNavigate('quiz')}
+            onClick={() => onNavigate('contact')}
             className="inline-flex items-center gap-2 px-8 py-3.5 bg-om-gold text-om-forest-deep hover:bg-om-gold-dark hover:text-om-cream font-bold transition-colors rounded"
           >
-            Get Started Free
+            Contact Us
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

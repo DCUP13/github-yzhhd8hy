@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutGrid as Layout, Plus, X, MapPin, Mail, FileText, Save, Clock, Server, AlertCircle, Calendar, Phone, User, Building, DollarSign, MoreVertical, RotateCcw } from 'lucide-react';
+import { LayoutGrid as Layout, Plus, X, MapPin, Mail, FileText, Save, Clock, Server, AlertCircle, Calendar, Phone, User, Building, DollarSign, MoreVertical, RotateCcw, Share2 } from 'lucide-react';
 import type { Template } from '../features/templates/types';
 import type { EmailEntry } from './Emails';
 import { TemplatesContext } from '../App';
 import { useEmails } from '../contexts/EmailContext';
 import { supabase } from '../lib/supabase';
 import { CampaignDataQuality } from './CampaignDataQuality';
+import { ShareDialog } from './ShareDialog';
 
 interface EmailWithProvider extends EmailEntry {
   smtpProvider: 'amazon' | 'gmail';
@@ -125,6 +126,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [testModeEnabled, setTestModeEnabled] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
 
   const availableEmails: EmailEntry[] = [
     ...sesEmails.map(email => ({ address: email.address, smtpProvider: 'amazon' as const })),
@@ -872,6 +874,17 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      setShareTarget({ id: campaign.id, name: campaign.name });
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                                  >
+                                    <Share2 className="w-3 h-3" />
+                                    Share
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       if (window.confirm('Reset scrape data? The campaign will start over from scratch.')) {
                                         handleResetScrape(campaign.id);
                                       } else {
@@ -1450,6 +1463,16 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
           </div>
         )}
       </div>
+
+      {shareTarget && (
+        <ShareDialog
+          isOpen={true}
+          onClose={() => setShareTarget(null)}
+          itemType="campaign"
+          itemId={shareTarget.id}
+          itemName={shareTarget.name}
+        />
+      )}
     </div>
   );
 }

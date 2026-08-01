@@ -70,10 +70,10 @@ export function QuizPage({ currentRoute, onNavigate }: QuizPageProps) {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
-                onClick={() => onNavigate('register')}
+                onClick={() => onNavigate('contact')}
                 className="px-8 py-3.5 bg-om-forest text-om-cream hover:bg-om-forest-dark font-medium transition-colors rounded inline-flex items-center justify-center gap-2"
               >
-                Get Started
+                Get In Touch
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button

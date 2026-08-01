@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { File, Download, X, ArrowUpDown, ArrowDown, ArrowUp, FileText, FileType2, Lock, Eye } from 'lucide-react';
+import { File, Download, X, ArrowUpDown, ArrowDown, ArrowUp, FileText, FileType2, Lock, Eye, Share2 } from 'lucide-react';
 import type { Template } from '../types';
 import { PreviewDialog } from './PreviewDialog';
 
@@ -8,6 +8,7 @@ interface TemplateListProps {
   onEdit: (template: Template) => void;
   onDelete: (id: string) => void;
   onExport: (template: Template) => void;
+  onShare?: (template: Template) => void;
 }
 
 type SortField = 'name' | 'lastModified';
@@ -19,7 +20,7 @@ const formatIcons: Record<string, { icon: React.ElementType; color: string }> = 
   pdf: { icon: File, color: 'text-red-500' }
 };
 
-export function TemplateList({ templates, onEdit, onDelete, onExport }: TemplateListProps) {
+export function TemplateList({ templates, onEdit, onDelete, onExport, onShare }: TemplateListProps) {
   const [sortField, setSortField] = useState<SortField>('lastModified');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
@@ -157,6 +158,18 @@ export function TemplateList({ templates, onEdit, onDelete, onExport }: Template
                       title="Preview template"
                     >
                       <Eye className="w-5 h-5" />
+                    </button>
+                  )}
+                  {onShare && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShare(template);
+                      }}
+                      className="p-2 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                      title="Share template"
+                    >
+                      <Share2 className="w-5 h-5" />
                     </button>
                   )}
                   <button

@@ -10,6 +10,8 @@ import { Prompts } from './components/Prompts';
 import { Contacts } from './components/Contacts';
 import { Analytics } from './components/Analytics';
 import { Instagram } from './components/Instagram';
+import { TeamPage } from './components/TeamPage';
+import { OrgAdminPage } from './components/OrgAdminPage';
 import { EmailProvider } from './contexts/EmailContext';
 import { supabase } from './lib/supabase';
 import type { Template } from './features/templates/types';
@@ -25,7 +27,7 @@ import { ContactPage } from './components/public/ContactPage';
 import { AuthPage } from './components/public/AuthPage';
 import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, RefundPolicy, AcceptableUsePolicy, AccessibilityADA } from './components/public/LegalPages';
 
-type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram';
+type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'team' | 'organizations';
 
 interface ThemeContextType {
   darkMode: boolean;
@@ -51,6 +53,28 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  const fetchUserRole = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching user role:', error);
+        return;
+      }
+
+      if (data?.role === 'super_admin') {
+        setIsSuperAdmin(true);
+      }
+    } catch (error) {
+      console.error('Error fetching user role:', error);
+    }
+  };
 
   const fetchUserSettings = async (userId?: string) => {
     try {
@@ -98,6 +122,7 @@ export default function App() {
         if (session) {
           setAppView('dashboard');
           await fetchUserSettings(session.user.id);
+          await fetchUserRole(session.user.id);
         }
 
         setIsLoading(false);
@@ -128,6 +153,7 @@ export default function App() {
         (async () => {
           try {
             await fetchUserSettings(session.user.id);
+            await fetchUserRole(session.user.id);
           } catch (error) {
             console.error('Auth state change error:', error);
           }
@@ -135,6 +161,7 @@ export default function App() {
       } else if (event === 'SIGNED_OUT') {
         setAppView(null);
         setDarkMode(false);
+        setIsSuperAdmin(false);
         navigate('home');
       }
     });
@@ -238,6 +265,9 @@ export default function App() {
                     onContactsClick={() => setAppView('contacts')}
                     onAnalyticsClick={() => setAppView('analytics')}
                     onInstagramClick={() => setAppView('instagram')}
+                    onTeamClick={() => setAppView('team')}
+                    onOrgAdminClick={() => setAppView('organizations')}
+                    isSuperAdmin={isSuperAdmin}
                   />
                 </div>
                 <div className="flex-1 ml-64">
@@ -271,6 +301,12 @@ export default function App() {
                   {appView === 'instagram' && (
                     <Instagram onSignOut={handleSignOut} currentView={appView} />
                   )}
+                  {appView === 'team' && (
+                    <TeamPage onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'organizations' && isSuperAdmin && (
+                    <OrgAdminPage onSignOut={handleSignOut} currentView={appView} />
+                  )}
                 </div>
               </div>
             </DashboardProvider>
@@ -290,8 +326,7 @@ export default function App() {
       case 'about': return <AboutPage currentRoute={publicRoute} onNavigate={navigate} />;
       case 'security': return <SecurityPage currentRoute={publicRoute} onNavigate={navigate} />;
       case 'contact': return <ContactPage currentRoute={publicRoute} onNavigate={navigate} />;
-      case 'login': return <AuthPage mode="login" currentRoute={publicRoute} onNavigate={navigate} />;
-      case 'register': return <AuthPage mode="register" currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'login': return <AuthPage currentRoute={publicRoute} onNavigate={navigate} />;
       case 'privacy': return <PrivacyPolicy currentRoute={publicRoute} onNavigate={navigate} />;
       case 'terms': return <TermsOfService currentRoute={publicRoute} onNavigate={navigate} />;
       case 'cookies': return <CookiePolicy currentRoute={publicRoute} onNavigate={navigate} />;
