@@ -59,12 +59,21 @@ export function AuthPage({ mode, currentRoute, onNavigate }: AuthPageProps) {
     }
   };
 
-  const benefits = [
-    'AI-powered email automation',
-    'Save 15+ hours every week',
-    'Never miss a follow-up',
-    'Bank-level security',
+  const loginBenefits = [
+    'Your scraped leads and campaigns are waiting',
+    'AI auto-responder active on your connected domains',
+    'Email analytics and reply tracking at a glance',
+    'Pick up right where you left off',
   ];
+
+  const registerBenefits = [
+    'Scrape real estate agent leads from Zillow',
+    'Send personalized email campaigns through Gmail or SES',
+    'AI-powered auto-responses to inbound replies',
+    'Track opens, clicks, bounces, and replies',
+  ];
+
+  const benefits = isLogin ? loginBenefits : registerBenefits;
 
   return (
     <PublicLayout currentRoute={currentRoute} onNavigate={onNavigate}>
@@ -73,15 +82,15 @@ export function AuthPage({ mode, currentRoute, onNavigate }: AuthPageProps) {
           {/* Left side */}
           <div className="hidden lg:block">
             <h1 className="text-3xl md:text-4xl font-display font-bold text-om-forest-deep mb-4">
-              {isLogin ? 'Welcome Back.' : 'Start Automating Today.'}
+              {isLogin ? 'Welcome Back.' : 'Start Closing More Deals.'}
             </h1>
             <p
               className="text-lg text-om-mahogany mb-8 leading-relaxed"
               style={{ fontFamily: "'EB Garamond', serif" }}
             >
               {isLogin
-                ? 'Sign in to access your dashboard, campaigns, and AI auto-responder. Your inbox is waiting.'
-                : 'Create your free account and see the difference AI-powered automation makes. No credit card required.'}
+                ? 'Sign in to access your leads, campaigns, and AI auto-responder. Your outreach pipeline is waiting.'
+                : 'Create your free account and start scraping leads, building campaigns, and automating your outreach. No credit card required.'}
             </p>
             <ul className="space-y-3">
               {benefits.map((benefit) => (
@@ -217,12 +226,14 @@ export function AuthPage({ mode, currentRoute, onNavigate }: AuthPageProps) {
             </form>
 
             <div className="mt-6 text-center">
-              <button
-                onClick={() => onNavigate(isLogin ? 'register' : 'login')}
-                className="text-sm text-om-gold hover:text-om-gold-dark font-medium transition-colors"
-              >
-                {isLogin ? "Don't have an account? Sign up free" : 'Already have an account? Sign in'}
-              </button>
+              {!isLogin && (
+                <button
+                  onClick={() => onNavigate('login')}
+                  className="text-sm text-om-gold hover:text-om-gold-dark font-medium transition-colors"
+                >
+                  Already have an account? Sign in
+                </button>
+              )}
             </div>
           </div>
         </div>

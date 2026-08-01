@@ -1,8 +1,9 @@
 import React from 'react';
 import { PublicLayout } from './PublicLayout';
 import {
-  Zap, Calendar, Users, ArrowRight, Bot, FileText, BarChart3,
-  Shield, Send, Mail, Clock, TrendingUp, CheckCircle2
+  Zap, ArrowRight, Search, Mail, Bot, BarChart3,
+  Users, Send, FileText, Clock, TrendingUp, CheckCircle2,
+  Instagram, Shield
 } from 'lucide-react';
 import type { PublicRoute } from '../../lib/router';
 
@@ -13,25 +14,25 @@ interface HomePageProps {
 
 export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
   const platformPreview = [
-    { icon: Zap, label: 'Automated Responses', sub: 'AI handles 85% of inquiries', iconColor: 'text-om-gold' },
-    { icon: Calendar, label: 'Calendar Sync', sub: 'Never miss an appointment', iconColor: 'text-om-forest' },
-    { icon: Users, label: 'CRM Integration', sub: 'Track every interaction', iconColor: 'text-om-mahogany' },
+    { icon: Search, label: 'Lead Scraping', sub: 'Scrape agent contacts from Zillow', iconColor: 'text-om-gold' },
+    { icon: Send, label: 'Campaign Automation', sub: 'Time-windowed, throttled email sending', iconColor: 'text-om-forest' },
+    { icon: Bot, label: 'AI Autoresponder', sub: 'GPT-4o powered reply generation', iconColor: 'text-om-mahogany' },
   ];
 
   const stats = [
-    { title: '85% Automated', body: 'AI handles the majority of your email responses, ensuring no lead goes cold.' },
-    { title: '3x More Leads Converted', body: 'Never miss a follow-up. Automated reminders and smart categorisation keep you on top of every opportunity.' },
-    { title: '15+ Hours Saved Weekly', body: 'Focus on high-value activities while automation handles routine tasks and email management.' },
-    { title: 'Zero Missed Appointments', body: 'Calendar sync and automated reminders ensure you\'re always prepared and on time.' },
+    { title: '500+ Leads Per Scrape', body: 'Pull real estate agent contacts directly from Zillow with one click. Names, emails, phone numbers, and brokerage details.' },
+    { title: '1,440 Emails Per Day', body: 'Send through Amazon SES with per-sender daily limits. Route through multiple Gmail accounts for even higher volume.' },
+    { title: '85% Reply Automation', body: 'AI auto-responder handles inbound replies using your custom prompts. Two-step mode for complex responses.' },
+    { title: 'Full Pipeline Tracking', body: 'Delivery, open, click, bounce, and reply rates tracked per sender. Know exactly what works.' },
   ];
 
   const features = [
-    { icon: Bot, title: 'Smart Autoresponder', body: 'AI-powered automatic responses that understand context and tone. Set up custom rules for different types of emails and let the system handle routine communications while you focus on what matters.' },
-    { icon: FileText, title: 'Draft Generation', body: 'Automatically generate email drafts based on incoming messages. Review and send with one click, or customise as needed. Save hours on email composition with AI assistance.' },
-    { icon: Mail, title: 'Email Templates', body: 'Create, save, and reuse professional email templates. Rich text editor with drag-and-drop support, image handling, and export to PDF or DOCX. Perfect for standardised communications.' },
-    { icon: Zap, title: 'Custom Prompts', body: 'Define your own AI prompts to guide how emails are processed and responded to. Tailor the automation to match your business voice and requirements perfectly.' },
-    { icon: Send, title: 'Reply Tracking', body: 'Track which emails have been replied to and which are still pending. Never miss a follow-up with automatic tracking of all your email conversations.' },
-    { icon: BarChart3, title: 'Smart Notifications', body: 'Get notified about important emails only. Intelligent filtering ensures you\'re alerted to priority messages while routine communications are handled automatically.' },
+    { icon: Search, title: 'Zillow Lead Scraping', body: 'Scrape real estate agent listings from Zillow\'s API. Bulk-harvest contacts with names, profile URLs, and brokerage info in minutes.' },
+    { icon: Users, title: 'Contact Enrichment', body: 'Fetch detailed agent profiles to extract email addresses, phone numbers, and business names. Property listings linked to each contact.' },
+    { icon: FileText, title: 'Template Builder', body: 'Create HTML, DOCX, or PDF templates with merge variables for contact data, listing details, and campaign terms. AI-generated templates available.' },
+    { icon: Zap, title: 'Campaign Scheduling', body: 'Set send time windows, per-campaign delays between emails, and test mode for preview drafts. Smart fallbacks for missing data.' },
+    { icon: Bot, title: 'AI Autoresponder', body: 'GPT-4o generates contextually relevant replies to inbound emails. Single or two-step prompt modes. Per-domain enablement.' },
+    { icon: BarChart3, title: 'Analytics Dashboard', body: 'Track delivery, open, click, bounce, and reply rates. Per-sender breakdowns. Time-period filtering for performance trends.' },
   ];
 
   return (
@@ -41,16 +42,16 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
           <div className="text-center lg:text-left">
             <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
-              AI-Powered Email Automation
+              AI-Powered Real Estate Outreach
             </p>
             <h1 className="text-3xl md:text-5xl lg:text-6xl font-display font-semibold text-om-forest-deep leading-tight mb-6">
-              Transform Your Email Management
+              Automate Your Agent Outreach
             </h1>
             <p
               className="text-xl md:text-2xl text-om-mahogany mb-10 leading-relaxed"
               style={{ fontFamily: "'EB Garamond', serif" }}
             >
-              Automate responses, manage clients, and sync your calendar. Save hours every day with AI-powered email automation that learns from your business.
+              Scrape leads from Zillow, build personalized email campaigns with smart merge fields, send through Gmail or Amazon SES, and let AI auto-respond to replies. Save hours every day.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
               <button
@@ -122,13 +123,13 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
               Features
             </p>
             <h2 className="text-3xl md:text-5xl font-display font-semibold text-om-forest-deep mb-6">
-              Everything You Need
+              From Lead to Reply, Automated
             </h2>
             <p
               className="text-xl text-om-mahogany max-w-2xl mx-auto"
               style={{ fontFamily: "'EB Garamond', serif" }}
             >
-              Powerful tools to automate your workflow and grow your business.
+              Every step of your outreach pipeline in one platform.
             </p>
           </div>
 
@@ -167,17 +168,51 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
         </div>
       </section>
 
+      {/* How It Works */}
+      <section className="py-14 px-4 sm:px-6 bg-om-parchment">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
+              How It Works
+            </p>
+            <h2 className="text-3xl md:text-5xl font-display font-semibold text-om-forest-deep mb-6">
+              Four Steps to Automated Outreach
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-4 gap-6">
+            {[
+              { num: '1', icon: Search, title: 'Scrape Leads', body: 'Pull agent contacts from Zillow with one click.' },
+              { num: '2', icon: FileText, title: 'Build Campaign', body: 'Create templates with merge fields. Preview in test mode.' },
+              { num: '3', icon: Send, title: 'Send Emails', body: 'Throttled sending through Gmail or SES. Time-windowed delivery.' },
+              { num: '4', icon: Bot, title: 'Auto-Respond', body: 'AI handles replies. Track opens, clicks, and responses.' },
+            ].map((step) => {
+              const Icon = step.icon;
+              return (
+                <div key={step.num} className="bg-om-cream border border-om-tan rounded-xl p-6 text-center relative">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-om-gold text-om-forest-deep font-display font-bold flex items-center justify-center text-sm">
+                    {step.num}
+                  </div>
+                  <Icon className="w-8 h-8 text-om-forest mx-auto mb-4 mt-2" />
+                  <h3 className="text-lg font-display font-semibold text-om-forest-deep mb-2">{step.title}</h3>
+                  <p className="text-sm text-om-brown" style={{ fontFamily: "'EB Garamond', serif" }}>{step.body}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-14 px-4 sm:px-6 bg-om-forest">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-parchment mb-6">
-            Ready to Transform Your Email Management?
+            Ready to Automate Your Outreach?
           </h2>
           <p
             className="text-lg md:text-xl text-om-tan mb-8"
             style={{ fontFamily: "'EB Garamond', serif" }}
           >
-            Join the professionals who've automated their workflow with LoiBlast.
+            Join real estate professionals who've automated their lead pipeline with LoiBlast.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
