@@ -150,7 +150,7 @@ export function AboutPage({ currentRoute, onNavigate }: AboutPageProps) {
             Stop doing manual outreach that AI can handle. Start your free account today.
           </p>
           <button
-            onClick={() => onNavigate('register')}
+            onClick={() => onNavigate('quiz')}
             className="inline-flex items-center gap-2 px-8 py-3.5 bg-om-gold text-om-forest-deep hover:bg-om-gold-dark hover:text-om-cream font-bold transition-colors rounded"
           >
             Get Started Free

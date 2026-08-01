@@ -65,7 +65,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
             Sign In
           </button>
           <button
-            onClick={() => handleNav('register')}
+            onClick={() => handleNav('quiz')}
             className="px-6 py-2.5 border border-om-gold text-om-gold hover:bg-om-gold hover:text-om-forest-deep text-base md:text-lg font-medium transition-colors rounded"
           >
             Get Started
@@ -100,7 +100,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
               Sign In
             </button>
             <button
-              onClick={() => handleNav('register')}
+              onClick={() => handleNav('quiz')}
               className="text-left text-base text-om-gold border border-om-gold px-6 py-2.5 rounded transition-colors hover:bg-om-gold hover:text-om-forest-deep"
             >
               Get Started

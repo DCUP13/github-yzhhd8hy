@@ -55,7 +55,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
               <button
-                onClick={() => onNavigate('register')}
+                onClick={() => onNavigate('quiz')}
                 className="px-8 py-3.5 bg-om-forest text-om-cream hover:bg-om-forest-dark font-medium transition-colors rounded flex items-center justify-center gap-2 shadow-sm"
               >
                 Get Started
@@ -216,7 +216,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={() => onNavigate('register')}
+              onClick={() => onNavigate('quiz')}
               className="px-8 py-3.5 bg-om-gold text-om-forest-deep hover:bg-om-gold-dark hover:text-om-cream font-bold transition-colors rounded"
             >
               Get Started Free

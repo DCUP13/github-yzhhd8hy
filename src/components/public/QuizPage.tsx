@@ -28,27 +28,6 @@ const quizQuestions: QuizQuestion[] = [
       { text: 'Be present with my family again.', identity: 'someone who remembers what matters' },
     ],
   },
-  {
-    question: 'How much of your day disappears into your inbox?',
-    options: [
-      { text: "Too much. I'm scared to count.", identity: 'someone ready for a change' },
-      { text: 'A few hours, but it feels like all day.', identity: 'someone who feels the drain' },
-    ],
-  },
-  {
-    question: 'What would "inbox zero" actually mean for you?',
-    options: [
-      { text: 'Peace of mind. Finally.', identity: 'someone seeking clarity' },
-      { text: 'More time to grow the business.', identity: 'someone focused on growth' },
-    ],
-  },
-  {
-    question: 'Last one. Are you ready to let AI handle the repetitive 80%?',
-    options: [
-      { text: "Yes. I've been waiting for this.", identity: 'someone ready to act' },
-      { text: 'Show me how it works first.', identity: 'someone who wants proof' },
-    ],
-  },
 ];
 
 export function QuizPage({ currentRoute, onNavigate }: QuizPageProps) {
