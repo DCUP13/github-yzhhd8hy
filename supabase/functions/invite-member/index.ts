@@ -73,14 +73,35 @@ Deno.serve(async (req: Request) => {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!profile || profile.role !== "super_admin") {
+    const isOwner = profile?.role === "super_admin";
+
+    const { email, role, organization_id } = (await req.json()) as InviteRequest;
+
+    let isManager = false;
+    if (!isOwner) {
+      const { data: membership } = await supabase
+        .from("organization_members")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("organization_id", organization_id)
+        .eq("status", "active")
+        .maybeSingle();
+      isManager = membership?.role === "manager";
+    }
+
+    if (!isOwner && !isManager) {
       return new Response(
-        JSON.stringify({ error: "Only the platform owner can send invitations" }),
+        JSON.stringify({ error: "Only the platform owner or organization managers can send invitations" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { email, role, organization_id } = (await req.json()) as InviteRequest;
+    if (isManager && role === "manager") {
+      return new Response(
+        JSON.stringify({ error: "Managers can only invite members, not other managers" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!email || !role || !organization_id) {
       return new Response(
@@ -116,13 +137,6 @@ Deno.serve(async (req: Request) => {
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const { data: existingMember } = await supabase
-      .from("organization_members")
-      .select("id")
-      .eq("organization_id", organization_id)
-      .eq("user_id", user.id)
-      .maybeSingle();
 
     const token = generateToken();
     const expiresAt = new Date();

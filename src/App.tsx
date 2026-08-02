@@ -11,7 +11,7 @@ import { Contacts } from './components/Contacts';
 import { Analytics } from './components/Analytics';
 import { Instagram } from './components/Instagram';
 import { TeamPage } from './components/TeamPage';
-import { OrgAdminPage } from './components/OrgAdminPage';
+import { SupportPage } from './components/SupportPage';
 import { EmailProvider } from './contexts/EmailContext';
 import { supabase } from './lib/supabase';
 import type { Template } from './features/templates/types';
@@ -27,7 +27,7 @@ import { ContactPage } from './components/public/ContactPage';
 import { AuthPage } from './components/public/AuthPage';
 import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, RefundPolicy, AcceptableUsePolicy, AccessibilityADA } from './components/public/LegalPages';
 
-type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'team' | 'organizations';
+type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'team' | 'support' | 'member-settings';
 
 interface ThemeContextType {
   darkMode: boolean;
@@ -54,6 +54,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [managingMemberId, setManagingMemberId] = useState<string | undefined>(undefined);
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -257,7 +258,7 @@ export default function App() {
                     onSignOut={handleSignOut}
                     onHomeClick={() => setAppView('dashboard')}
                     onAppClick={() => setAppView('app')}
-                    onSettingsClick={() => setAppView('settings')}
+                    onSettingsClick={() => { setManagingMemberId(undefined); setAppView('settings'); }}
                     onTemplatesClick={() => setAppView('templates')}
                     onEmailsClick={() => setAppView('emails')}
                     onAddressesClick={() => setAppView('addresses')}
@@ -266,7 +267,7 @@ export default function App() {
                     onAnalyticsClick={() => setAppView('analytics')}
                     onInstagramClick={() => setAppView('instagram')}
                     onTeamClick={() => setAppView('team')}
-                    onOrgAdminClick={() => setAppView('organizations')}
+                    onSupportClick={() => setAppView('support')}
                     isSuperAdmin={isSuperAdmin}
                   />
                 </div>
@@ -279,6 +280,14 @@ export default function App() {
                   )}
                   {appView === 'settings' && (
                     <Settings onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'member-settings' && managingMemberId && (
+                    <Settings
+                      onSignOut={handleSignOut}
+                      currentView={appView}
+                      memberUserId={managingMemberId}
+                      onBackToTeam={() => setAppView('team')}
+                    />
                   )}
                   {appView === 'templates' && (
                     <TemplatesPage onSignOut={handleSignOut} currentView={appView} />
@@ -302,10 +311,18 @@ export default function App() {
                     <Instagram onSignOut={handleSignOut} currentView={appView} />
                   )}
                   {appView === 'team' && (
-                    <TeamPage onSignOut={handleSignOut} currentView={appView} />
+                    <TeamPage
+                      onSignOut={handleSignOut}
+                      currentView={appView}
+                      isSuperAdmin={isSuperAdmin}
+                      onManageMemberSettings={(userId) => {
+                        setManagingMemberId(userId);
+                        setAppView('member-settings');
+                      }}
+                    />
                   )}
-                  {appView === 'organizations' && isSuperAdmin && (
-                    <OrgAdminPage onSignOut={handleSignOut} currentView={appView} />
+                  {appView === 'support' && (
+                    <SupportPage onSignOut={handleSignOut} currentView={appView} isSuperAdmin={isSuperAdmin} />
                   )}
                 </div>
               </div>

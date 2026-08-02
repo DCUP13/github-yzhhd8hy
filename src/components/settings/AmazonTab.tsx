@@ -2,93 +2,58 @@ import React, { useState, useEffect } from 'react';
 import { Server, Mail, Send, X, AlertCircle, Globe, Plus } from 'lucide-react';
 import { useEmails } from '../../contexts/EmailContext';
 import { Toggle } from './Toggle';
-import type { EmailSettings, SESEmail } from './types';
+import type { SESEmail } from './types';
 import { supabase } from '../../lib/supabase';
 
 interface AmazonTabProps {
-  emailSettings: EmailSettings;
-  onEmailSettingChange: (key: keyof EmailSettings, value: string) => void;
-  onSaveEmailSettings: (e: React.FormEvent) => void;
-  isSaving: boolean;
-  saveSuccess: boolean;
+  userId?: string;
 }
 
-export function AmazonTab({ 
-  emailSettings, 
-  onEmailSettingChange, 
-  onSaveEmailSettings,
-  isSaving,
-  saveSuccess 
-}: AmazonTabProps) {
+export function AmazonTab({ userId }: AmazonTabProps) {
   const { sesEmails, setSesEmails } = useEmails();
-  const [showPassword, setShowPassword] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [localSaveSuccess, setLocalSaveSuccess] = useState(false);
-  const [dailyLimit, setDailyLimit] = useState(1440); // Default to 1440 emails per day
+  const [dailyLimit, setDailyLimit] = useState(1440);
   const [domains, setDomains] = useState<string[]>([]);
   const [newDomain, setNewDomain] = useState('');
   const [domainError, setDomainError] = useState('');
   const [domainSettings, setDomainSettings] = useState<Record<string, { autoresponderEnabled: boolean }>>({});
 
   useEffect(() => {
-    fetchSESSettings();
     fetchSESEmails();
     fetchSESDomains();
   }, []);
 
-  const fetchSESSettings = async () => {
-    try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
-        setIsLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('amazon_ses_settings')
-        .select('*')
-        .eq('user_id', user.data.user.id)
-        .maybeSingle();
-
-      // Only throw error if it's not a "no rows returned" error
-      if (error && error.code !== 'PGRST116') throw error;
-
-      if (data) {
-        onEmailSettingChange('smtpUsername', data.smtp_username);
-        onEmailSettingChange('smtpPassword', data.smtp_password);
-        onEmailSettingChange('smtpPort', data.smtp_port);
-        onEmailSettingChange('smtpServer', data.smtp_server);
-      }
-    } catch (error) {
-      console.error('Error fetching SES settings:', error);
-    }
+  const getCurrentUserId = async (): Promise<string | null> => {
+    if (userId) return userId;
+    const user = await supabase.auth.getUser();
+    return user.data.user?.id || null;
   };
 
   const fetchSESDomains = async () => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) return;
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) return;
 
       const { data, error } = await supabase
         .from('amazon_ses_domains')
         .select('domain, autoresponder_enabled')
-        .eq('user_id', user.data.user.id)
+        .eq('user_id', currentUserId)
         .order('domain', { ascending: true });
 
       if (error) throw error;
-      
+
       const domainsData = data || [];
       setDomains(domainsData.map(d => d.domain));
-      
+
       const settings = domainsData.reduce((acc, domain) => {
         acc[domain.domain] = {
           autoresponderEnabled: domain.autoresponder_enabled || false
         };
         return acc;
       }, {} as Record<string, { autoresponderEnabled: boolean }>);
-      
+
       setDomainSettings(settings);
     } catch (error) {
       console.error('Error fetching SES domains:', error);
@@ -97,8 +62,8 @@ export function AmazonTab({
 
   const fetchSESEmails = async () => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
         setIsLoading(false);
         return;
       }
@@ -106,12 +71,12 @@ export function AmazonTab({
       const { data, error } = await supabase
         .from('amazon_ses_emails')
         .select('*')
-        .eq('user_id', user.data.user.id)
-        .order('address', { ascending: true }); // Sort alphabetically
+        .eq('user_id', currentUserId)
+        .order('address', { ascending: true });
 
       if (error) throw error;
 
-      setSesEmails(data?.map(email => ({ 
+      setSesEmails(data?.map(email => ({
         address: email.address,
         dailyLimit: email.daily_limit
       })) || []);
@@ -126,45 +91,13 @@ export function AmazonTab({
     return email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
   };
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
-        throw new Error('User not authenticated');
-      }
-
-      const { error } = await supabase
-        .from('amazon_ses_settings')
-        .upsert({
-          user_id: user.data.user.id,
-          smtp_username: emailSettings.smtpUsername,
-          smtp_password: emailSettings.smtpPassword,
-          smtp_port: emailSettings.smtpPort,
-          smtp_server: emailSettings.smtpServer,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
-        });
-
-      if (error) throw error;
-
-      setLocalSaveSuccess(true);
-      setTimeout(() => setLocalSaveSuccess(false), 3000);
-    } catch (error) {
-      console.error('Error saving SES settings:', error);
-      alert('Failed to save settings. Please try again.');
-    }
-  };
-
   const validateDomain = (domain: string) => {
     return domain.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])*$/);
   };
 
   const handleAddDomain = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateDomain(newDomain)) {
       setDomainError('Please enter a valid domain name');
       return;
@@ -176,21 +109,21 @@ export function AmazonTab({
     }
 
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
         throw new Error('User not authenticated');
       }
 
       const { error } = await supabase
         .from('amazon_ses_domains')
         .insert({
-          user_id: user.data.user.id,
+          user_id: currentUserId,
           domain: newDomain,
           autoresponder_enabled: false
         });
 
       if (error) {
-        if (error.code === '23505') { // Unique violation
+        if (error.code === '23505') {
           setDomainError('This domain is already registered');
           return;
         }
@@ -212,15 +145,15 @@ export function AmazonTab({
 
   const handleRemoveDomain = async (domain: string) => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
         throw new Error('User not authenticated');
       }
 
       const { error } = await supabase
         .from('amazon_ses_domains')
         .delete()
-        .eq('user_id', user.data.user.id)
+        .eq('user_id', currentUserId)
         .eq('domain', domain);
 
       if (error) throw error;
@@ -239,18 +172,18 @@ export function AmazonTab({
 
   const handleToggleAutoresponder = async (domain: string, enabled: boolean) => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
         throw new Error('User not authenticated');
       }
 
       const { error } = await supabase
         .from('amazon_ses_domains')
-        .update({ 
+        .update({
           autoresponder_enabled: enabled,
           updated_at: new Date().toISOString()
         })
-        .eq('user_id', user.data.user.id)
+        .eq('user_id', currentUserId)
         .eq('domain', domain);
 
       if (error) throw error;
@@ -267,7 +200,7 @@ export function AmazonTab({
 
   const handleAddSESEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateEmail(newEmail)) {
       setEmailError('Please enter a valid email address');
       return;
@@ -279,34 +212,34 @@ export function AmazonTab({
     }
 
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
         throw new Error('User not authenticated');
       }
 
       const { error } = await supabase
         .from('amazon_ses_emails')
         .insert({
-          user_id: user.data.user.id,
+          user_id: currentUserId,
           address: newEmail,
           daily_limit: dailyLimit
         });
 
       if (error) {
-        if (error.code === '23505') { // Unique violation
+        if (error.code === '23505') {
           setEmailError('This email is already registered');
           return;
         }
         throw error;
       }
 
-      setSesEmails([...sesEmails, { 
+      setSesEmails([...sesEmails, {
         address: newEmail,
         dailyLimit
-      }].sort((a, b) => a.address.localeCompare(b.address))); // Sort after adding
+      }].sort((a, b) => a.address.localeCompare(b.address)));
       setNewEmail('');
       setEmailError('');
-      setDailyLimit(1440); // Reset to default
+      setDailyLimit(1440);
     } catch (error) {
       console.error('Error adding SES email:', error);
       alert('Failed to add email. Please try again.');
@@ -315,15 +248,15 @@ export function AmazonTab({
 
   const handleRemoveSESEmail = async (address: string) => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
         throw new Error('User not authenticated');
       }
 
       const { error } = await supabase
         .from('amazon_ses_emails')
         .delete()
-        .eq('user_id', user.data.user.id)
+        .eq('user_id', currentUserId)
         .eq('address', address);
 
       if (error) throw error;
@@ -337,24 +270,24 @@ export function AmazonTab({
 
   const handleUpdateDailyLimit = async (email: SESEmail, newLimit: number) => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
         throw new Error('User not authenticated');
       }
 
       const { error } = await supabase
         .from('amazon_ses_emails')
-        .update({ 
+        .update({
           daily_limit: newLimit,
           updated_at: new Date().toISOString()
         })
-        .eq('user_id', user.data.user.id)
+        .eq('user_id', currentUserId)
         .eq('address', email.address);
 
       if (error) throw error;
 
-      setSesEmails(prev => prev.map(e => 
-        e.address === email.address 
+      setSesEmails(prev => prev.map(e =>
+        e.address === email.address
           ? { ...e, dailyLimit: newLimit }
           : e
       ));
@@ -365,23 +298,23 @@ export function AmazonTab({
   };
 
   const handleTestEmail = async (email: SESEmail) => {
-    setSesEmails(prev => prev.map(e => 
-      e.address === email.address 
+    setSesEmails(prev => prev.map(e =>
+      e.address === email.address
         ? { ...e, testing: true }
         : e
     ));
 
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
-      setSesEmails(prev => prev.map(e => 
-        e.address === email.address 
+      setSesEmails(prev => prev.map(e =>
+        e.address === email.address
           ? { ...e, testing: false }
           : e
       ));
       alert('Test email sent successfully!');
     } catch (error) {
-      setSesEmails(prev => prev.map(e => 
-        e.address === email.address 
+      setSesEmails(prev => prev.map(e =>
+        e.address === email.address
           ? { ...e, testing: false }
           : e
       ));
@@ -401,119 +334,22 @@ export function AmazonTab({
     <div>
       <div className="flex items-center gap-3 mb-6">
         <Server className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-        <h2 className="text-lg font-medium text-gray-900 dark:text-white">Amazon SES Configuration</h2>
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">Amazon SES</h2>
       </div>
 
-      <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 mb-6">
+      <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-6">
         <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+          <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-500 mt-0.5" />
           <div>
-            <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-              Email Sending Best Practices
+            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
+              Amazon SES Configuration
             </h3>
-            <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
-              While Amazon SES allows for high daily sending limits (50,000+ emails), it's recommended to distribute your sending volume across multiple email addresses. For optimal deliverability and to maintain a healthy sender reputation, we recommend:
+            <p className="mt-1 text-sm text-blue-700 dark:text-blue-400">
+              Your Amazon SES credentials are managed securely by the platform. Configure your verified sending domains and sender email addresses below. For optimal deliverability, distribute sending volume across multiple addresses with a warm-up period.
             </p>
-            <ul className="mt-2 ml-4 text-sm text-yellow-700 dark:text-yellow-400 list-disc space-y-1">
-              <li>Start with a warm-up period for new email addresses</li>
-              <li>Limit to around 20-30 emails per day per address during initial warm-up</li>
-              <li>Gradually increase volume based on successful delivery metrics</li>
-              <li>Monitor bounce rates and spam complaints closely</li>
-              <li>Use multiple verified email addresses to distribute sending load</li>
-            </ul>
           </div>
         </div>
       </div>
-      
-      <form onSubmit={handleSaveSettings} className="space-y-4">
-        <div>
-          <label htmlFor="smtpUsername" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            SMTP Username
-          </label>
-          <input
-            type="text"
-            id="smtpUsername"
-            value={emailSettings.smtpUsername}
-            onChange={(e) => onEmailSettingChange('smtpUsername', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="Enter SMTP username"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="smtpPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            SMTP Password
-          </label>
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              id="smtpPassword"
-              value={emailSettings.smtpPassword}
-              onChange={(e) => onEmailSettingChange('smtpPassword', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white pr-10"
-              placeholder="Enter SMTP password"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            >
-              {showPassword ? 'Hide' : 'Show'}
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="smtpPort" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            SMTP Port
-          </label>
-          <input
-            type="text"
-            id="smtpPort"
-            value={emailSettings.smtpPort}
-            onChange={(e) => onEmailSettingChange('smtpPort', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="Enter SMTP port"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="smtpServer" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            SMTP Server
-          </label>
-          <input
-            type="text"
-            id="smtpServer"
-            value={emailSettings.smtpServer}
-            onChange={(e) => onEmailSettingChange('smtpServer', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="Enter SMTP server"
-            required
-          />
-        </div>
-
-        <div className="flex items-center justify-end gap-4 pt-4">
-          {localSaveSuccess && (
-            <span className="text-sm text-green-600 dark:text-green-400">
-              Settings saved successfully!
-            </span>
-          )}
-          <button
-            type="submit"
-            disabled={isSaving}
-            className={`px-4 py-2 rounded-lg text-sm font-medium text-white ${
-              isSaving 
-                ? 'bg-blue-400 cursor-wait' 
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            {isSaving ? 'Saving...' : 'Save Settings'}
-          </button>
-        </div>
-      </form>
 
       {/* SES Domains Section */}
       <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">

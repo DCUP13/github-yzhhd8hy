@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Server, Mail, BarChart3, Instagram as InstagramIcon, Key } from 'lucide-react';
+import { Server, Mail, BarChart3, Instagram as InstagramIcon, Key, ArrowLeft } from 'lucide-react';
 import { GeneralTab } from './settings/GeneralTab';
 import { AmazonTab } from './settings/AmazonTab';
 import { GoogleTab } from './settings/GoogleTab';
@@ -7,21 +7,25 @@ import { RapidAPITab } from './settings/RapidAPITab';
 import { DataQualityTab } from './settings/DataQualityTab';
 import { InstagramTab } from './settings/InstagramTab';
 import { UserTab } from './settings/UserTab';
-import type { EmailSettings, GeneralSettings } from './settings/types';
+import type { GeneralSettings } from './settings/types';
 import { supabase } from '../lib/supabase';
 
 interface SettingsProps {
   onSignOut: () => void;
   currentView: string;
+  memberUserId?: string;
+  onBackToTeam?: () => void;
 }
 
 type SettingsTab = 'user' | 'general' | 'amazon' | 'google' | 'rapid-api' | 'data-quality' | 'instagram';
 
-export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: SettingsProps) {
+export function Settings({ onSignOut: _onSignOut, currentView: _currentView, memberUserId, onBackToTeam }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [userEmail, setUserEmail] = useState('');
   const [orgName, setOrgName] = useState('');
   const [userRole, setUserRole] = useState('member');
+  const isManagingMember = !!memberUserId;
+
   const [settings, setSettings] = useState<GeneralSettings>({
     notifications: true,
     twoFactorAuth: false,
@@ -32,23 +36,43 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  const [emailSettings, setEmailSettings] = useState<EmailSettings>({
-    smtpUsername: '',
-    smtpPassword: '',
-    smtpPort: '587',
-    smtpServer: 'email-smtp.us-east-1.amazonaws.com',
-  });
-
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-
   useEffect(() => {
     fetchSettings();
     fetchUserProfile();
-  }, []);
+  }, [memberUserId]);
 
   const fetchUserProfile = async () => {
     try {
+      if (isManagingMember) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('email, role')
+          .eq('id', memberUserId)
+          .maybeSingle();
+
+        if (profile) {
+          setUserEmail(profile.email || '');
+          setUserRole(profile.role || 'member');
+        }
+
+        const { data: memberData } = await supabase
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', memberUserId)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (memberData) {
+          const { data: orgData } = await supabase
+            .from('organizations')
+            .select('name')
+            .eq('id', memberData.organization_id)
+            .maybeSingle();
+          if (orgData) setOrgName(orgData.name);
+        }
+        return;
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
@@ -75,13 +99,17 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
 
   const createDefaultSettings = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      let targetUserId = memberUserId;
+      if (!targetUserId) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+        targetUserId = session.user.id;
+      }
 
       const { error } = await supabase
         .from('user_settings')
         .insert({
-          user_id: session.user.id,
+          user_id: targetUserId,
           notifications: true,
           two_factor_auth: false,
           newsletter: false,
@@ -99,15 +127,19 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
 
   const fetchSettings = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        throw new Error('User not authenticated');
+      let targetUserId = memberUserId;
+      if (!targetUserId) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
+          throw new Error('User not authenticated');
+        }
+        targetUserId = session.user.id;
       }
 
       const { data, error } = await supabase
         .from('user_settings')
         .select('*')
-        .eq('user_id', session.user.id)
+        .eq('user_id', targetUserId)
         .maybeSingle();
 
       if (error) throw error;
@@ -121,7 +153,7 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
           debugging: data.debugging,
           cleanUpLoi: data.clean_up_loi || false
         });
-      } else {
+      } else if (!isManagingMember) {
         await createDefaultSettings();
       }
     } catch (error) {
@@ -133,9 +165,13 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
 
   const handleToggle = async (setting: keyof GeneralSettings) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        throw new Error('User not authenticated');
+      let targetUserId = memberUserId;
+      if (!targetUserId) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
+          throw new Error('User not authenticated');
+        }
+        targetUserId = session.user.id;
       }
 
       const newSettings = {
@@ -156,7 +192,7 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
       const { error } = await supabase
         .from('user_settings')
         .update(dbSettings)
-        .eq('user_id', session.user.id);
+        .eq('user_id', targetUserId);
 
       if (error) throw error;
 
@@ -167,36 +203,14 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
     }
   };
 
-  const handleEmailSettingChange = (key: keyof EmailSettings, value: string) => {
-    setEmailSettings(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
-
-  const handleSaveEmailSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error) {
-      alert('Failed to save email settings. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const tabs = [
-    { id: 'user', label: 'User', icon: Key },
-    { id: 'general', label: 'General', icon: Server },
-    { id: 'data-quality', label: 'Data Quality', icon: BarChart3 },
-    { id: 'amazon', label: 'Amazon SES', icon: Server },
-    { id: 'google', label: 'Google SMTP', icon: Mail },
-    { id: 'rapid-api', label: 'Rapid API', icon: Server },
-    { id: 'instagram', label: 'Instagram', icon: InstagramIcon }
+    ...(isManagingMember ? [] : [{ id: 'user' as const, label: 'User', icon: Key }]),
+    { id: 'general' as const, label: 'General', icon: Server },
+    { id: 'data-quality' as const, label: 'Data Quality', icon: BarChart3 },
+    { id: 'amazon' as const, label: 'Amazon SES', icon: Server },
+    { id: 'google' as const, label: 'Google SMTP', icon: Mail },
+    { id: 'rapid-api' as const, label: 'Rapid API', icon: Server },
+    { id: 'instagram' as const, label: 'Instagram', icon: InstagramIcon }
   ];
 
   if (isLoading) {
@@ -210,16 +224,31 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
   return (
     <div className="p-8 bg-gray-50 dark:bg-gray-900 min-h-screen">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Settings</h1>
-        
+        {isManagingMember && onBackToTeam && (
+          <button
+            onClick={onBackToTeam}
+            className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Team
+          </button>
+        )}
+
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          {isManagingMember ? `Manage ${userEmail}` : 'Settings'}
+        </h1>
+        {isManagingMember && orgName && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{orgName}</p>
+        )}
+
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
           <div className="border-b border-gray-200 dark:border-gray-700">
-            <nav className="flex">
+            <nav className="flex overflow-x-auto">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as SettingsTab)}
-                  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 ${
+                  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
@@ -251,13 +280,7 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
             {activeTab === 'data-quality' && <DataQualityTab />}
 
             {activeTab === 'amazon' && (
-              <AmazonTab
-                emailSettings={emailSettings}
-                onEmailSettingChange={handleEmailSettingChange}
-                onSaveEmailSettings={handleSaveEmailSettings}
-                isSaving={isSaving}
-                saveSuccess={saveSuccess}
-              />
+              <AmazonTab userId={memberUserId} />
             )}
 
             {activeTab === 'google' && <GoogleTab />}
@@ -269,7 +292,9 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView }: S
         </div>
 
         <div className="mt-6 text-sm text-gray-500 dark:text-gray-400 text-center">
-          Settings are automatically saved when you toggle them
+          {isManagingMember
+            ? 'Changes are saved automatically'
+            : 'Settings are automatically saved when you toggle them'}
         </div>
       </div>
     </div>
