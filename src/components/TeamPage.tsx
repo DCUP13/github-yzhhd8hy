@@ -1278,5 +1278,4 @@ function OrgDetails({
   );
 }
 
-
 export { TeamPage }
