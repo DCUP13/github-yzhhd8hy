@@ -26,6 +26,7 @@ import { SecurityPage } from './components/public/SecurityPage';
 import { ContactPage } from './components/public/ContactPage';
 import { AuthPage } from './components/public/AuthPage';
 import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, RefundPolicy, AcceptableUsePolicy, AccessibilityADA } from './components/public/LegalPages';
+import { NotFoundPage } from './components/public/NotFoundPage';
 
 type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'team' | 'support' | 'member-settings';
 
@@ -348,7 +349,8 @@ export default function App() {
       case 'terms': return <TermsOfService currentRoute={publicRoute} onNavigate={navigate} />;
       case 'cookies': return <CookiePolicy currentRoute={publicRoute} onNavigate={navigate} />;
       case 'ada': return <AccessibilityADA currentRoute={publicRoute} onNavigate={navigate} />;
-      default: return <HomePage currentRoute={publicRoute} onNavigate={navigate} />;
+      case 'not-found': return <NotFoundPage currentRoute={publicRoute} onNavigate={navigate} />;
+      default: return <NotFoundPage currentRoute={publicRoute} onNavigate={navigate} />;
     }
   };
 

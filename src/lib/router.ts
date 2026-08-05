@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 export type PublicRoute =
   | 'home' | 'features' | 'pricing' | 'quiz' | 'about' | 'security'
   | 'login' | 'contact'
-  | 'privacy' | 'terms' | 'cookies' | 'ada';
+  | 'privacy' | 'terms' | 'cookies' | 'ada'
+  | 'not-found';
 
 const ROUTE_PATHS: Record<PublicRoute, string> = {
   home: '/',
@@ -18,6 +19,7 @@ const ROUTE_PATHS: Record<PublicRoute, string> = {
   terms: '/terms',
   cookies: '/cookies',
   ada: '/ada',
+  'not-found': '/404',
 };
 
 const PATH_TO_ROUTE: Record<string, PublicRoute> = Object.entries(ROUTE_PATHS).reduce(
@@ -30,30 +32,28 @@ export function getRoutePath(route: PublicRoute): string {
 }
 
 export function pathToRoute(path: string): PublicRoute {
-  return PATH_TO_ROUTE[path] ?? 'home';
+  return PATH_TO_ROUTE[path] ?? 'not-found';
 }
 
-function getHashPath(): string {
-  const hash = window.location.hash.replace(/^#/, '');
-  return hash || '/';
+function getCurrentPath(): string {
+  return window.location.pathname || '/';
 }
 
 export function useRouter() {
-  const [route, setRoute] = useState<PublicRoute>(() => pathToRoute(getHashPath()));
+  const [route, setRoute] = useState<PublicRoute>(() => pathToRoute(getCurrentPath()));
 
   useEffect(() => {
-    const onHashChange = () => {
-      setRoute(pathToRoute(getHashPath()));
+    const onPopState = () => {
+      setRoute(pathToRoute(getCurrentPath()));
     };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   const navigate = useCallback((newRoute: PublicRoute) => {
     const path = getRoutePath(newRoute);
-    const newHash = '#' + path;
-    if (window.location.hash !== newHash) {
-      window.location.hash = newHash;
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, '', path);
       setRoute(newRoute);
       window.scrollTo(0, 0);
     }
