@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Instagram as InstagramIcon, MessageSquare, Send, Plus, Trash2, RefreshCw, Zap, Clock, User, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Instagram as InstagramIcon, MessageSquare, Send, Plus, Trash2, RefreshCw, Zap, Clock, User, Image as ImageIcon, Share2, Users, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface InstagramProps {
@@ -45,7 +45,7 @@ interface IgAccount {
   connected: boolean;
 }
 
-type TabType = 'inbox' | 'posts' | 'rules';
+type TabType = 'inbox' | 'posts' | 'rules' | 'sharing';
 
 export function Instagram({ onSignOut, currentView }: InstagramProps) {
   const [activeTab, setActiveTab] = useState<TabType>('inbox');
@@ -56,8 +56,12 @@ export function Instagram({ onSignOut, currentView }: InstagramProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [showPostModal, setShowPostModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [newRule, setNewRule] = useState({ trigger_keyword: '', reply_text: '', media_id: '' });
   const [newPost, setNewPost] = useState({ caption: '', scheduled_for: '' });
+  const [shares, setShares] = useState<Array<{ id: string; shared_with_user_id: string; permissions: Record<string, boolean>; created_at: string; profile?: { email: string } | null }>>([]);
+  const [sharedAccounts, setSharedAccounts] = useState<Array<{ id: string; username: string | null; user_id: string; ownerEmail?: string }>>([]);
+  const [orgMembers, setOrgMembers] = useState<Array<{ user_id: string; email: string; role: string }>>([]);
 
   useEffect(() => {
     fetchData();
@@ -79,6 +83,69 @@ export function Instagram({ onSignOut, currentView }: InstagramProps) {
       if (!rulesRes.error) setRules(rulesRes.data || []);
       if (!postsRes.error) setPosts(postsRes.data || []);
       if (!accountRes.error) setAccount(accountRes.data || null);
+
+      // Fetch shares for this account
+      if (accountRes.data) {
+        const { data: sharesData } = await supabase
+          .from('instagram_account_shares')
+          .select('id, shared_with_user_id, permissions, created_at')
+          .eq('account_id', accountRes.data.id);
+
+        if (sharesData) {
+          const memberIds = sharesData.map(s => s.shared_with_user_id);
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .in('id', memberIds);
+          const profileMap = new Map((profiles || []).map((p: any) => [p.id, p.email]));
+          setShares(sharesData.map(s => ({ ...s, profile: { email: profileMap.get(s.shared_with_user_id) || 'Unknown' } })));
+        }
+      }
+
+      // Fetch accounts shared WITH me
+      const { data: sharedWithMe } = await supabase
+        .from('instagram_account_shares')
+        .select('account_id')
+        .eq('shared_with_user_id', user.id);
+
+      if (sharedWithMe && sharedWithMe.length > 0) {
+        const accountIds = sharedWithMe.map(s => s.account_id);
+        const { data: sharedAccts } = await supabase
+          .from('instagram_accounts')
+          .select('id, username, user_id')
+          .in('id', accountIds);
+
+        if (sharedAccts) {
+          const ownerIds = sharedAccts.map(a => a.user_id);
+          const { data: ownerProfiles } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .in('id', ownerIds);
+          const ownerMap = new Map((ownerProfiles || []).map((p: any) => [p.id, p.email]));
+          setSharedAccounts(sharedAccts.map(a => ({ ...a, ownerEmail: ownerMap.get(a.user_id) || 'Unknown' })));
+        }
+      }
+
+      // Fetch org members for sharing dropdown
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (membership) {
+        const { data: members } = await supabase
+          .from('organization_members')
+          .select('user_id, role, profiles!inner(email)')
+          .eq('organization_id', membership.organization_id)
+          .eq('status', 'active')
+          .neq('user_id', user.id);
+
+        if (members) {
+          setOrgMembers(members.map((m: any) => ({ user_id: m.user_id, email: m.profiles?.email || 'Unknown', role: m.role })));
+        }
+      }
     } catch (error) {
       console.error('Error fetching Instagram data:', error);
     } finally {
@@ -409,6 +476,100 @@ export function Instagram({ onSignOut, currentView }: InstagramProps) {
           </div>
         )}
 
+        {/* Sharing tab */}
+        {activeTab === 'sharing' && account?.connected && (
+          <div className="space-y-6">
+            {/* Share with teammate */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Share2 className="w-5 h-5 text-pink-500" />
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Share with Teammates</h3>
+                </div>
+                {orgMembers.length > 0 && (
+                  <button
+                    onClick={() => setShowShareModal(true)}
+                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add Share
+                  </button>
+                )}
+              </div>
+              {orgMembers.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  You need to be part of an organization with other members to share your Instagram account.
+                </p>
+              ) : shares.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  You haven't shared your Instagram account with anyone yet. Click "Add Share" to let teammates view your inbox, collaborate on replies, and help manage posts.
+                </p>
+              ) : (
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {shares.map((share) => (
+                    <div key={share.id} className="flex items-center justify-between py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
+                          <User className="w-4 h-4 text-blue-500" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{share.profile?.email || 'Unknown'}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {share.permissions?.reply ? 'Can reply' : 'View only'}
+                            {share.permissions?.post ? ' · Can post' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          await supabase.from('instagram_account_shares').delete().eq('id', share.id);
+                          await fetchData();
+                        }}
+                        className="p-1.5 text-red-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                        title="Revoke access"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Accounts shared with me */}
+            {sharedAccounts.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Users className="w-5 h-5 text-blue-500" />
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Shared With You</h3>
+                </div>
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {sharedAccounts.map((acct) => (
+                    <div key={acct.id} className="flex items-center gap-3 py-3">
+                      <div className="p-2 rounded-lg bg-pink-100 dark:bg-pink-900/20">
+                        <InstagramIcon className="w-4 h-4 text-pink-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">@{acct.username || 'unknown'}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Shared by {acct.ownerEmail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Share Modal */}
+        {showShareModal && (
+          <ShareModal
+            accountId={account?.id || ''}
+            orgMembers={orgMembers}
+            onClose={() => setShowShareModal(false)}
+            onShared={() => { setShowShareModal(false); fetchData(); }}
+          />
+        )}
+
         {/* New Rule Modal */}
         {showRuleModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -495,6 +656,135 @@ export function Instagram({ onSignOut, currentView }: InstagramProps) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ShareModal({ accountId, orgMembers, onClose, onShared }: {
+  accountId: string;
+  orgMembers: Array<{ user_id: string; email: string; role: string }>;
+  onClose: () => void;
+  onShared: () => void;
+}) {
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [permissions, setPermissions] = useState({ view: true, reply: false, post: false });
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleShare = async () => {
+    if (!selectedUserId) {
+      setError('Select a teammate to share with');
+      return;
+    }
+    setIsSaving(true);
+    setError('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (!membership) throw new Error('Not part of an organization');
+
+      const { error: insertError } = await supabase
+        .from('instagram_account_shares')
+        .insert({
+          account_id: accountId,
+          shared_with_user_id: selectedUserId,
+          shared_by_user_id: user.id,
+          organization_id: membership.organization_id,
+          permissions,
+        });
+
+      if (insertError) {
+        if (insertError.code === '23505') {
+          throw new Error('This account is already shared with this teammate');
+        }
+        throw insertError;
+      }
+
+      onShared();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to share account');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Share Instagram Account</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Teammate</label>
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="">Select a teammate...</option>
+              {orgMembers.map(m => (
+                <option key={m.user_id} value={m.user_id}>{m.email} ({m.role})</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Permissions</label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input type="checkbox" checked={permissions.view} disabled className="rounded border-gray-300 text-pink-600" />
+                View inbox and posts
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={permissions.reply}
+                  onChange={(e) => setPermissions(prev => ({ ...prev, reply: e.target.checked }))}
+                  className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                />
+                Reply to messages and comments
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={permissions.post}
+                  onChange={(e) => setPermissions(prev => ({ ...prev, post: e.target.checked }))}
+                  className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                />
+                Create and publish posts
+              </label>
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-500">{error}</p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 mt-6">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
+          <button
+            onClick={handleShare}
+            disabled={isSaving}
+            className="px-4 py-2 text-sm font-medium rounded-lg text-white bg-pink-600 hover:bg-pink-700 disabled:opacity-50"
+          >
+            {isSaving ? 'Sharing...' : 'Share'}
+          </button>
+        </div>
       </div>
     </div>
   );

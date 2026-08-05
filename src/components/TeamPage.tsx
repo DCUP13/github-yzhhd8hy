@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Users, UserPlus, Mail, Trash2, Crown, Shield, User as UserIcon,
   Loader2, AlertCircle, CheckCircle2, Building2, Plus, Send,
-  ChevronRight, Settings as SettingsIcon, MessageSquare, X, Search, Instagram as InstagramIcon
+  ChevronRight, Settings as SettingsIcon, MessageSquare, X, Search, Instagram as InstagramIcon,
+  Linkedin, Eye, EyeOff, KeyRound, UserCog
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -54,17 +55,17 @@ interface TeamPageProps {
   onSignOut: () => void;
   currentView: string;
   isSuperAdmin: boolean;
-  onManageMemberSettings: (userId: string) => void;
 }
 
 type Tab = 'messages' | 'organization';
 
-export function TeamPage({ onSignOut: _onSignOut, currentView: _currentView, isSuperAdmin, onManageMemberSettings }: TeamPageProps) {
+export function TeamPage({ onSignOut: _onSignOut, currentView: _currentView, isSuperAdmin }: TeamPageProps) {
   const [activeTab, setActiveTab] = useState<Tab>('organization');
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; role: string } | null>(null);
   const [userOrgRole, setUserOrgRole] = useState<string | null>(null);
   const [userOrgId, setUserOrgId] = useState<string | null>(null);
+  const [selectedMember, setSelectedMember] = useState<OrgMember | null>(null);
 
   useEffect(() => {
     const initUser = async () => {
@@ -169,10 +170,35 @@ export function TeamPage({ onSignOut: _onSignOut, currentView: _currentView, isS
             isSuperAdmin={isSuperAdmin}
             userOrgRole={userOrgRole}
             userOrgId={userOrgId}
-            onManageMemberSettings={onManageMemberSettings}
+            onViewDetails={(member) => setSelectedMember(member)}
           />
         )}
       </div>
+
+      {selectedMember && currentUser && (
+        <MemberDetailsModal
+          member={selectedMember}
+          currentUser={currentUser}
+          isSuperAdmin={isSuperAdmin}
+          userOrgRole={userOrgRole}
+          onClose={() => setSelectedMember(null)}
+          onToggleFeature={async (userId, feature, enabled) => {
+            try {
+              const { error: rpcError } = await supabase.rpc('set_user_feature_flags', {
+                p_target_user: userId,
+                p_flags: { [feature]: enabled },
+              });
+              if (rpcError) throw rpcError;
+              setSelectedMember(prev => prev ? {
+                ...prev,
+                feature_flags: { ...(prev.feature_flags || {}), [feature]: enabled }
+              } : null);
+            } catch (err) {
+              console.error('Error toggling feature:', err);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -611,12 +637,12 @@ function MessagesTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId }: {
 // Organization Tab — adaptive by role
 // ============================================================
 
-function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, onManageMemberSettings }: {
+function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, onViewDetails }: {
   currentUser: { id: string; email: string; role: string };
   isSuperAdmin: boolean;
   userOrgRole: string | null;
   userOrgId: string | null;
-  onManageMemberSettings: (userId: string) => void;
+  onViewDetails: (member: OrgMember) => void;
 }) {
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
@@ -1081,7 +1107,7 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
                 onRemoveMember={handleRemoveMember}
                 onRevokeInvite={handleRevokeInvite}
                 onDeleteOrg={handleDeleteOrg}
-                onManageMemberSettings={onManageMemberSettings}
+                onViewDetails={onViewDetails}
                 onToggleFeature={handleToggleFeature}
                 getRoleIcon={getRoleIcon}
                 getRoleColor={getRoleColor}
@@ -1111,7 +1137,7 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
             onRemoveMember={handleRemoveMember}
             onRevokeInvite={handleRevokeInvite}
             onDeleteOrg={handleDeleteOrg}
-            onManageMemberSettings={onManageMemberSettings}
+            onViewDetails={onViewDetails}
             onToggleFeature={handleToggleFeature}
             getRoleIcon={getRoleIcon}
           getRoleColor={getRoleColor}
@@ -1136,7 +1162,7 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
 function OrgDetails({
   org, members, invitations, canInvite, canInviteManagers, canManageSettings, canDeleteOrg,
   inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteFlags, setInviteFlags, isInviting,
-  onInvite, onRemoveMember, onRevokeInvite, onDeleteOrg, onManageMemberSettings, onToggleFeature,
+  onInvite, onRemoveMember, onRevokeInvite, onDeleteOrg, onViewDetails, onToggleFeature,
   getRoleIcon, getRoleColor
 }: {
   org: Organization;
@@ -1157,7 +1183,7 @@ function OrgDetails({
   onRemoveMember: (memberId: string, memberEmail: string) => void;
   onRevokeInvite: (inviteId: string, inviteEmail: string) => void;
   onDeleteOrg: (orgId: string, orgName: string) => void;
-  onManageMemberSettings: (userId: string) => void;
+  onViewDetails: (member: OrgMember) => void;
   onToggleFeature: (userId: string, feature: string, enabled: boolean) => void;
   getRoleIcon: (role: string) => typeof Crown;
   getRoleColor: (role: string) => string;
@@ -1270,11 +1296,11 @@ function OrgDetails({
                       )}
                       {canManageSettings && (
                         <button
-                          onClick={() => onManageMemberSettings(member.user_id)}
+                          onClick={() => onViewDetails(member)}
                           className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
-                          title="Manage settings"
+                          title="View details"
                         >
-                          <SettingsIcon className="w-4 h-4" />
+                          <UserCog className="w-4 h-4" />
                         </button>
                       )}
                       {member.role !== 'owner' && (
@@ -1335,6 +1361,305 @@ function OrgDetails({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// MemberDetailsModal — opens when "View Details" is clicked
+// Shows member info + Integration Access tab (Instagram, LinkedIn)
+// ============================================================
+
+type MemberModalTab = 'overview' | 'integrations';
+
+function MemberDetailsModal({
+  member,
+  currentUser,
+  isSuperAdmin,
+  userOrgRole,
+  onClose,
+  onToggleFeature,
+}: {
+  member: OrgMember;
+  currentUser: { id: string; email: string; role: string };
+  isSuperAdmin: boolean;
+  userOrgRole: string | null;
+  onClose: () => void;
+  onToggleFeature: (userId: string, feature: string, enabled: boolean) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<MemberModalTab>('overview');
+  const [igAccount, setIgAccount] = useState<{ id: string; username: string | null; connected: boolean } | null>(null);
+  const [igShares, setIgShares] = useState<Array<{ id: string; shared_with_user_id: string; permissions: Record<string, boolean>; profile_email?: string }>>([]);
+  const [orgMembers, setOrgMembers] = useState<Array<{ user_id: string; email: string }>>([]);
+  const [showShareForm, setShowShareForm] = useState(false);
+  const [shareTarget, setShareTarget] = useState('');
+  const [sharePerms, setSharePerms] = useState({ view: true, reply: false, post: false });
+
+  const canManage = isSuperAdmin || userOrgRole === 'owner' || userOrgRole === 'manager';
+
+  useEffect(() => {
+    fetchMemberIgData();
+  }, [member.user_id]);
+
+  const fetchMemberIgData = async () => {
+    try {
+      const { data: acct } = await supabase
+        .from('instagram_accounts')
+        .select('id, username, connected')
+        .eq('user_id', member.user_id)
+        .maybeSingle();
+
+      if (acct) {
+        setIgAccount(acct);
+        const { data: shares } = await supabase
+          .from('instagram_account_shares')
+          .select('id, shared_with_user_id, permissions')
+          .eq('account_id', acct.id);
+        if (shares && shares.length > 0) {
+          const ids = shares.map(s => s.shared_with_user_id);
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .in('id', ids);
+          const emailMap = new Map((profiles || []).map((p: any) => [p.id, p.email]));
+          setIgShares(shares.map(s => ({ ...s, profile_email: emailMap.get(s.shared_with_user_id) || 'Unknown' })));
+        } else {
+          setIgShares([]);
+        }
+      }
+
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', currentUser.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (membership) {
+        const { data: members } = await supabase
+          .from('organization_members')
+          .select('user_id, profiles!inner(email)')
+          .eq('organization_id', membership.organization_id)
+          .eq('status', 'active')
+          .neq('user_id', member.user_id);
+        if (members) {
+          setOrgMembers(members.map((m: any) => ({ user_id: m.user_id, email: m.profiles?.email || 'Unknown' })));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching member IG data:', err);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!igAccount || !shareTarget) return;
+    try {
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', currentUser.id)
+        .eq('status', 'active')
+        .maybeSingle();
+      if (!membership) return;
+
+      const { error } = await supabase
+        .from('instagram_account_shares')
+        .insert({
+          account_id: igAccount.id,
+          shared_with_user_id: shareTarget,
+          shared_by_user_id: currentUser.id,
+          organization_id: membership.organization_id,
+          permissions: sharePerms,
+        });
+      if (error) {
+        if (error.code === '23505') {
+          alert('This account is already shared with this teammate');
+        } else {
+          throw error;
+        }
+      }
+      setShowShareForm(false);
+      setShareTarget('');
+      setSharePerms({ view: true, reply: false, post: false });
+      fetchMemberIgData();
+    } catch (err) {
+      console.error('Error sharing account:', err);
+      alert('Failed to share account');
+    }
+  };
+
+  const handleRevokeShare = async (shareId: string) => {
+    await supabase.from('instagram_account_shares').delete().eq('id', shareId);
+    fetchMemberIgData();
+  };
+
+  const RoleIcon = member.role === 'owner' ? Crown : member.role === 'manager' ? Shield : UserIcon;
+  const roleColor = member.role === 'owner' ? 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/20' : member.role === 'manager' ? 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700';
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${roleColor}`}>
+              <RoleIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{member.email}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{member.role}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex border-b border-gray-200 dark:border-gray-700 px-6">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`py-3 px-4 text-sm font-medium border-b-2 ${activeTab === 'overview' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+          >
+            Overview
+          </button>
+          {canManage && (
+            <button
+              onClick={() => setActiveTab('integrations')}
+              className={`py-3 px-4 text-sm font-medium border-b-2 ${activeTab === 'integrations' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+            >
+              Integration Access
+            </button>
+          )}
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'overview' && (
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">Email</span>
+                <span className="text-gray-900 dark:text-white font-medium">{member.email}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">Role</span>
+                <span className="text-gray-900 dark:text-white font-medium capitalize">{member.role}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">Joined</span>
+                <span className="text-gray-900 dark:text-white font-medium">{new Date(member.created_at).toLocaleDateString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">Instagram connected</span>
+                <span className={`font-medium ${igAccount?.connected ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
+                  {igAccount?.connected ? `@${igAccount.username || 'yes'}` : 'No'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'integrations' && canManage && (
+            <div className="space-y-6">
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-pink-100 dark:bg-pink-900/20">
+                      <InstagramIcon className="w-4 h-4 text-pink-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">Instagram</h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {igAccount?.connected ? `Connected as @${igAccount.username || 'unknown'}` : 'Not connected'}
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={member.feature_flags?.instagram || false}
+                      onChange={(e) => onToggleFeature(member.user_id, 'instagram', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer dark:peer-focus:ring-pink-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-500"></div>
+                  </label>
+                </div>
+
+                {igAccount?.connected && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Shared with teammates</p>
+                      {orgMembers.length > 0 && (
+                        <button
+                          onClick={() => setShowShareForm(!showShareForm)}
+                          className="text-xs text-pink-600 dark:text-pink-400 hover:underline"
+                        >
+                          {showShareForm ? 'Cancel' : '+ Add'}
+                        </button>
+                      )}
+                    </div>
+
+                    {showShareForm && (
+                      <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2">
+                        <select
+                          value={shareTarget}
+                          onChange={e => setShareTarget(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="">Select teammate...</option>
+                          {orgMembers.map(m => (
+                            <option key={m.user_id} value={m.user_id}>{m.email}</option>
+                          ))}
+                        </select>
+                        <div className="flex gap-3 text-xs text-gray-600 dark:text-gray-300">
+                          <label className="flex items-center gap-1"><input type="checkbox" checked={sharePerms.reply} onChange={e => setSharePerms(p => ({ ...p, reply: e.target.checked }))} className="rounded text-pink-600" /> Reply</label>
+                          <label className="flex items-center gap-1"><input type="checkbox" checked={sharePerms.post} onChange={e => setSharePerms(p => ({ ...p, post: e.target.checked }))} className="rounded text-pink-600" /> Post</label>
+                        </div>
+                        <button
+                          onClick={handleShare}
+                          disabled={!shareTarget}
+                          className="w-full px-3 py-1.5 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 disabled:opacity-50 rounded-lg"
+                        >
+                          Share Account
+                        </button>
+                      </div>
+                    )}
+
+                    {igShares.length === 0 ? (
+                      <p className="text-xs text-gray-400">Not shared with anyone.</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {igShares.map(s => (
+                          <div key={s.id} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 dark:text-gray-300">{s.profile_email}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-400">{s.permissions?.reply ? 'Reply' : 'View'}{s.permissions?.post ? ' + Post' : ''}</span>
+                              <button onClick={() => handleRevokeShare(s.id)} className="text-red-400 hover:text-red-500">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 opacity-60">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
+                      <Linkedin className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">LinkedIn</h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Coming soon</p>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Planned</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

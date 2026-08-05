@@ -29,7 +29,7 @@ import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, R
 import { NotFoundPage } from './components/public/NotFoundPage';
 import { Lock as LockIcon } from 'lucide-react';
 
-type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'team' | 'support' | 'member-settings';
+type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'team' | 'support';
 
 interface ThemeContextType {
   darkMode: boolean;
@@ -81,7 +81,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [managingMemberId, setManagingMemberId] = useState<string | undefined>(undefined);
+
   const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({ instagram: false, linkedin: false });
 
   const fetchUserRole = async (userId: string) => {
@@ -318,14 +318,6 @@ export default function App() {
                   {appView === 'settings' && (
                     <Settings onSignOut={handleSignOut} currentView={appView} />
                   )}
-                  {appView === 'member-settings' && managingMemberId && (
-                    <Settings
-                      onSignOut={handleSignOut}
-                      currentView={appView}
-                      memberUserId={managingMemberId}
-                      onBackToTeam={() => setAppView('team')}
-                    />
-                  )}
                   {appView === 'templates' && (
                     <TemplatesPage onSignOut={handleSignOut} currentView={appView} />
                   )}
@@ -356,10 +348,6 @@ export default function App() {
                       onSignOut={handleSignOut}
                       currentView={appView}
                       isSuperAdmin={isSuperAdmin}
-                      onManageMemberSettings={(userId) => {
-                        setManagingMemberId(userId);
-                        setAppView('member-settings');
-                      }}
                     />
                   )}
                   {appView === 'support' && (

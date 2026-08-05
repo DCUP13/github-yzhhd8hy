@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Instagram as InstagramIcon, Check, AlertCircle, Link2, ExternalLink } from 'lucide-react';
+import { Instagram as InstagramIcon, Check, AlertCircle, Link2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export function InstagramTab() {
@@ -10,6 +10,8 @@ export function InstagramTab() {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [hasExistingToken, setHasExistingToken] = useState(false);
 
   useEffect(() => {
     fetchAccount();
@@ -37,6 +39,7 @@ export function InstagramTab() {
         setUsername(data.username || '');
         setAccessToken(data.access_token || '');
         setConnected(data.connected || false);
+        setHasExistingToken(!!data.access_token);
       }
     } catch (error) {
       console.error('Error fetching Instagram account:', error);
@@ -75,10 +78,11 @@ export function InstagramTab() {
       }
 
       setConnected(!!(igUserId && accessToken));
+      setHasExistingToken(!!accessToken);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
-      console.error('Error saving Instagram account:', error);
+      console.error('Error saving Instagram settings:', error);
       alert('Failed to save Instagram settings');
     } finally {
       setIsSaving(false);
@@ -97,11 +101,14 @@ export function InstagramTab() {
       }
       setConnected(false);
       setAccessToken('');
+      setHasExistingToken(false);
     } catch (error) {
       console.error('Error disconnecting:', error);
       alert('Failed to disconnect');
     }
   };
+
+  const displayToken = hasExistingToken && !showToken ? '••••••••••••••••' : accessToken;
 
   return (
     <div className="space-y-6">
@@ -126,20 +133,17 @@ export function InstagramTab() {
         </div>
       </div>
 
-      {/* Webhook URL info */}
+      {/* Webhook info */}
       <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
         <div className="flex items-start gap-3">
           <Link2 className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
           <div className="flex-1">
-            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1">Webhook URL</h4>
+            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1">Webhook Setup</h4>
             <p className="text-xs text-gray-600 dark:text-gray-300 mb-2">
-              Paste this URL into your Meta App dashboard under Products &gt; Webhooks. When Meta verifies it, your function will respond to the verification challenge automatically.
+              Your webhook URL and verification token are configured on the server side. Contact your platform administrator if you need the webhook address for your Meta App dashboard.
             </p>
-            <code className="block text-xs bg-white dark:bg-gray-800 rounded px-3 py-2 text-blue-600 dark:text-blue-400 break-all">
-              {import.meta.env.VITE_SUPABASE_URL}/functions/v1/instagram-webhook
-            </code>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              The verify token is set as a secret on your edge function. When Meta asks for a Verify Token during webhook setup, enter: <code className="px-1 bg-white dark:bg-gray-800 rounded">bolt_instagram_verify</code>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Once your webhook is verified by Meta, incoming comments, messages, and mentions will appear in your Instagram inbox automatically.
             </p>
           </div>
         </div>
@@ -180,15 +184,30 @@ export function InstagramTab() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Long-Lived Access Token
           </label>
-          <textarea
-            value={accessToken}
-            onChange={(e) => setAccessToken(e.target.value)}
-            rows={3}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
-            placeholder="Paste your long-lived access token from Meta"
-          />
+          <div className="relative">
+            <textarea
+              value={displayToken}
+              onChange={(e) => {
+                setAccessToken(e.target.value);
+                setHasExistingToken(false);
+              }}
+              rows={3}
+              className="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
+              placeholder="Paste your long-lived access token from Meta"
+            />
+            {hasExistingToken && (
+              <button
+                type="button"
+                onClick={() => setShowToken(!showToken)}
+                className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                title={showToken ? 'Hide token' : 'Show token'}
+              >
+                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            )}
+          </div>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Generate a long-lived token in your Meta App dashboard. This is used to publish posts and reply to comments.
+            Generate a long-lived token in your Meta App dashboard. This is used to publish posts and reply to comments. For security, the token is hidden once saved.
           </p>
         </div>
       </div>
@@ -224,7 +243,7 @@ export function InstagramTab() {
         <ol className="space-y-1 text-xs text-gray-500 dark:text-gray-400 list-decimal list-inside">
           <li>Create a Meta app at developers.facebook.com and add the Instagram Graph API product.</li>
           <li>Subscribe your Instagram Business or Creator account to the app.</li>
-          <li>Add the webhook URL shown above and use the verify token provided.</li>
+          <li>Configure the webhook in your Meta App dashboard using the server-side verify token.</li>
           <li>Subscribe to the fields: comments, messages, and mentions.</li>
           <li>Generate a long-lived access token and paste it above.</li>
         </ol>
