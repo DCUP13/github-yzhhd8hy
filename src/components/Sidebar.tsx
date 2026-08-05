@@ -1,5 +1,6 @@
 import React from 'react';
 import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram, Headphones } from 'lucide-react';
+import type { FeatureFlags } from '../App';
 
 interface SidebarProps {
   onSignOut: () => void;
@@ -16,6 +17,7 @@ interface SidebarProps {
   onTeamClick: () => void;
   onSupportClick: () => void;
   isSuperAdmin?: boolean;
+  featureFlags?: FeatureFlags;
 }
 
 export function Sidebar({
@@ -32,7 +34,8 @@ export function Sidebar({
   onInstagramClick,
   onTeamClick,
   onSupportClick,
-  isSuperAdmin
+  isSuperAdmin,
+  featureFlags
 }: SidebarProps) {
   return (
     <div className="h-screen w-64 bg-blue-800 dark:bg-gray-800 text-white p-6 flex flex-col">
@@ -105,13 +108,15 @@ export function Sidebar({
           Team
         </button>
 
-        <button
-          onClick={onInstagramClick}
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
-        >
-          <Instagram className="w-4 h-4" />
-          Instagram
-        </button>
+        {(featureFlags?.instagram || isSuperAdmin) && (
+          <button
+            onClick={onInstagramClick}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Instagram className="w-4 h-4" />
+            Instagram
+          </button>
+        )}
 
         <button
           onClick={onAnalyticsClick}

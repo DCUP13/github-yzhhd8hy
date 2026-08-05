@@ -27,6 +27,7 @@ import { ContactPage } from './components/public/ContactPage';
 import { AuthPage } from './components/public/AuthPage';
 import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, RefundPolicy, AcceptableUsePolicy, AccessibilityADA } from './components/public/LegalPages';
 import { NotFoundPage } from './components/public/NotFoundPage';
+import { Lock as LockIcon } from 'lucide-react';
 
 type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'team' | 'support' | 'member-settings';
 
@@ -48,6 +49,31 @@ export const TemplatesContext = createContext<{
   fetchTemplates: async () => {},
 });
 
+export type FeatureFlags = { instagram: boolean; linkedin: boolean };
+
+export const FeatureFlagsContext = createContext<FeatureFlags>({
+  instagram: false,
+  linkedin: false,
+});
+
+function FeatureNotEnabled({ featureName }: { featureName: string }) {
+  return (
+    <div className="flex-1 p-8 bg-white dark:bg-gray-900 flex items-center justify-center">
+      <div className="text-center max-w-md">
+        <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-800 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+          <LockIcon className="w-8 h-8 text-gray-400" />
+        </div>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+          {featureName} is not enabled
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          This feature hasn't been enabled for your account. Please contact your account owner to request access.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const { route: publicRoute, navigate } = useRouter();
   const [appView, setAppView] = useState<AppView | null>(null);
@@ -56,12 +82,13 @@ export default function App() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [managingMemberId, setManagingMemberId] = useState<string | undefined>(undefined);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({ instagram: false, linkedin: false });
 
   const fetchUserRole = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, feature_flags')
         .eq('id', userId)
         .maybeSingle();
 
@@ -72,6 +99,13 @@ export default function App() {
 
       if (data?.role === 'super_admin') {
         setIsSuperAdmin(true);
+        setFeatureFlags({ instagram: true, linkedin: true });
+      } else {
+        const flags = data?.feature_flags as Record<string, boolean> | null;
+        setFeatureFlags({
+          instagram: !!flags?.instagram,
+          linkedin: !!flags?.linkedin,
+        });
       }
     } catch (error) {
       console.error('Error fetching user role:', error);
@@ -251,6 +285,7 @@ export default function App() {
     return (
       <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
         <TemplatesContext.Provider value={{ templates, fetchTemplates }}>
+          <FeatureFlagsContext.Provider value={featureFlags}>
           <EmailProvider>
             <DashboardProvider>
               <div className="flex min-h-screen bg-white dark:bg-gray-900">
@@ -270,6 +305,7 @@ export default function App() {
                     onTeamClick={() => setAppView('team')}
                     onSupportClick={() => setAppView('support')}
                     isSuperAdmin={isSuperAdmin}
+                    featureFlags={featureFlags}
                   />
                 </div>
                 <div className="flex-1 ml-64">
@@ -309,7 +345,11 @@ export default function App() {
                     <Analytics onSignOut={handleSignOut} currentView={appView} />
                   )}
                   {appView === 'instagram' && (
-                    <Instagram onSignOut={handleSignOut} currentView={appView} />
+                    isSuperAdmin || featureFlags.instagram ? (
+                      <Instagram onSignOut={handleSignOut} currentView={appView} />
+                    ) : (
+                      <FeatureNotEnabled featureName="Instagram" />
+                    )
                   )}
                   {appView === 'team' && (
                     <TeamPage
@@ -329,6 +369,7 @@ export default function App() {
               </div>
             </DashboardProvider>
           </EmailProvider>
+          </FeatureFlagsContext.Provider>
         </TemplatesContext.Provider>
       </ThemeContext.Provider>
     );

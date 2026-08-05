@@ -11,6 +11,7 @@ interface InviteRequest {
   email: string;
   role: "manager" | "member";
   organization_id: string;
+  feature_flags?: Record<string, boolean>;
 }
 
 function generateToken(): string {
@@ -75,7 +76,7 @@ Deno.serve(async (req: Request) => {
 
     const isOwner = profile?.role === "super_admin";
 
-    const { email, role, organization_id } = (await req.json()) as InviteRequest;
+    const { email, role, organization_id, feature_flags } = (await req.json()) as InviteRequest;
 
     let isManager = false;
     if (!isOwner) {
@@ -211,6 +212,25 @@ Deno.serve(async (req: Request) => {
         .from("invitations")
         .update({ status: "accepted", accepted_at: new Date().toISOString() })
         .eq("token", token);
+
+      // Apply feature flags to existing user if provided
+      if (feature_flags && typeof feature_flags === "object") {
+        const cleanFlags: Record<string, boolean> = {};
+        for (const key of Object.keys(feature_flags)) {
+          if (key === "instagram" || key === "linkedin") {
+            cleanFlags[key] = !!feature_flags[key];
+          }
+        }
+        if (Object.keys(cleanFlags).length > 0) {
+          const { error: flagError } = await supabase
+            .from("profiles")
+            .update({ feature_flags: cleanFlags })
+            .eq("id", existingUser.id);
+          if (flagError) {
+            console.error("Failed to set feature flags:", flagError);
+          }
+        }
+      }
     } else {
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
         email: email.toLowerCase(),
@@ -238,6 +258,25 @@ Deno.serve(async (req: Request) => {
           .from("invitations")
           .update({ status: "accepted", accepted_at: new Date().toISOString() })
           .eq("token", token);
+
+        // Apply feature flags if provided (only whitelisted keys are stored)
+        if (feature_flags && typeof feature_flags === "object") {
+          const cleanFlags: Record<string, boolean> = {};
+          for (const key of Object.keys(feature_flags)) {
+            if (key === "instagram" || key === "linkedin") {
+              cleanFlags[key] = !!feature_flags[key];
+            }
+          }
+          if (Object.keys(cleanFlags).length > 0) {
+            const { error: flagError } = await supabase
+              .from("profiles")
+              .update({ feature_flags: cleanFlags })
+              .eq("id", newUser.user.id);
+            if (flagError) {
+              console.error("Failed to set feature flags:", flagError);
+            }
+          }
+        }
       }
     }
 

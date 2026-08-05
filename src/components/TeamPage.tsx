@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Users, UserPlus, Mail, Trash2, Crown, Shield, User as UserIcon,
   Loader2, AlertCircle, CheckCircle2, Building2, Plus, Send,
-  ChevronRight, Settings as SettingsIcon, MessageSquare, X, Search
+  ChevronRight, Settings as SettingsIcon, MessageSquare, X, Search, Instagram as InstagramIcon
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -19,6 +19,7 @@ interface OrgMember {
   status: string;
   created_at: string;
   profiles: { email: string } | null;
+  feature_flags?: Record<string, boolean> | null;
 }
 
 interface Invitation {
@@ -628,6 +629,7 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
   const [newOrgName, setNewOrgName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'manager' | 'member'>('member');
+  const [inviteFlags, setInviteFlags] = useState<Record<string, boolean>>({ instagram: false });
   const [isInviting, setIsInviting] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -690,14 +692,15 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
         .from('organization_members')
         .select(`
           id, user_id, role, status, created_at,
-          profiles!inner(email)
+          profiles!inner(email, feature_flags)
         `)
         .eq('organization_id', org.id)
         .order('created_at', { ascending: true });
 
       setMembers((memberData || []).map((m: any) => ({
         id: m.id, user_id: m.user_id, role: m.role, status: m.status,
-        created_at: m.created_at, profiles: m.profiles
+        created_at: m.created_at, profiles: m.profiles ? { email: m.profiles.email } : null,
+        feature_flags: m.profiles?.feature_flags || {}
       })));
 
       const { data: inviteData } = await supabase
@@ -765,6 +768,7 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
           email: inviteEmail.trim().toLowerCase(),
           role: inviteRole,
           organization_id: selectedOrg.id,
+          feature_flags: inviteFlags,
         }),
       });
 
@@ -776,11 +780,32 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
 
       setSuccess(`Invitation sent to ${inviteEmail.trim()}. ${result.message || ''}`);
       setInviteEmail('');
+      setInviteFlags({ instagram: false });
       loadOrgDetails(selectedOrg);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send invitation');
     } finally {
       setIsInviting(false);
+    }
+  };
+
+  const handleToggleFeature = async (userId: string, feature: string, enabled: boolean) => {
+    setError('');
+    setSuccess('');
+    try {
+      const { error: rpcError } = await supabase.rpc('set_user_feature_flags', {
+        p_target_user: userId,
+        p_flags: { [feature]: enabled },
+      });
+      if (rpcError) throw rpcError;
+
+      setMembers(prev => prev.map(m => m.user_id === userId ? {
+        ...m,
+        feature_flags: { ...(m.feature_flags || {}), [feature]: enabled }
+      } : m));
+      setSuccess(`${feature === 'instagram' ? 'Instagram' : feature} ${enabled ? 'enabled' : 'disabled'} for this member.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update feature access');
     }
   };
 
@@ -1049,12 +1074,15 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
                 setInviteEmail={setInviteEmail}
                 inviteRole={inviteRole}
                 setInviteRole={setInviteRole}
+                inviteFlags={inviteFlags}
+                setInviteFlags={setInviteFlags}
                 isInviting={isInviting}
                 onInvite={handleInvite}
                 onRemoveMember={handleRemoveMember}
                 onRevokeInvite={handleRevokeInvite}
                 onDeleteOrg={handleDeleteOrg}
                 onManageMemberSettings={onManageMemberSettings}
+                onToggleFeature={handleToggleFeature}
                 getRoleIcon={getRoleIcon}
                 getRoleColor={getRoleColor}
               />
@@ -1076,12 +1104,15 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
             setInviteEmail={setInviteEmail}
             inviteRole={inviteRole}
             setInviteRole={setInviteRole}
+            inviteFlags={inviteFlags}
+            setInviteFlags={setInviteFlags}
             isInviting={isInviting}
             onInvite={handleInvite}
             onRemoveMember={handleRemoveMember}
             onRevokeInvite={handleRevokeInvite}
             onDeleteOrg={handleDeleteOrg}
             onManageMemberSettings={onManageMemberSettings}
+            onToggleFeature={handleToggleFeature}
             getRoleIcon={getRoleIcon}
           getRoleColor={getRoleColor}
           />
@@ -1104,8 +1135,8 @@ function OrganizationTab({ currentUser, isSuperAdmin, userOrgRole, userOrgId, on
 
 function OrgDetails({
   org, members, invitations, canInvite, canInviteManagers, canManageSettings, canDeleteOrg,
-  inviteEmail, setInviteEmail, inviteRole, setInviteRole, isInviting,
-  onInvite, onRemoveMember, onRevokeInvite, onDeleteOrg, onManageMemberSettings,
+  inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteFlags, setInviteFlags, isInviting,
+  onInvite, onRemoveMember, onRevokeInvite, onDeleteOrg, onManageMemberSettings, onToggleFeature,
   getRoleIcon, getRoleColor
 }: {
   org: Organization;
@@ -1119,12 +1150,15 @@ function OrgDetails({
   setInviteEmail: (v: string) => void;
   inviteRole: 'manager' | 'member';
   setInviteRole: (v: 'manager' | 'member') => void;
+  inviteFlags: Record<string, boolean>;
+  setInviteFlags: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   isInviting: boolean;
   onInvite: (e: React.FormEvent) => void;
   onRemoveMember: (memberId: string, memberEmail: string) => void;
   onRevokeInvite: (inviteId: string, inviteEmail: string) => void;
   onDeleteOrg: (orgId: string, orgName: string) => void;
   onManageMemberSettings: (userId: string) => void;
+  onToggleFeature: (userId: string, feature: string, enabled: boolean) => void;
   getRoleIcon: (role: string) => typeof Crown;
   getRoleColor: (role: string) => string;
 }) {
@@ -1175,6 +1209,22 @@ function OrgDetails({
               )}
             </button>
           </div>
+
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Feature access</p>
+            <div className="flex flex-wrap gap-3">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={inviteFlags.instagram || false}
+                  onChange={(e) => setInviteFlags(prev => ({ ...prev, instagram: e.target.checked }))}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <InstagramIcon className="w-4 h-4 text-pink-500" />
+                Instagram
+              </label>
+            </div>
+          </div>
         </form>
       )}
 
@@ -1206,7 +1256,18 @@ function OrgDetails({
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
+                      {canManageSettings && member.role !== 'owner' && (
+                        <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 cursor-pointer" title="Toggle Instagram access">
+                          <input
+                            type="checkbox"
+                            checked={member.feature_flags?.instagram || false}
+                            onChange={(e) => onToggleFeature(member.user_id, 'instagram', e.target.checked)}
+                            className="rounded border-gray-300 text-pink-500 focus:ring-pink-400"
+                          />
+                          <InstagramIcon className="w-4 h-4 text-pink-500" />
+                        </label>
+                      )}
                       {canManageSettings && (
                         <button
                           onClick={() => onManageMemberSettings(member.user_id)}
