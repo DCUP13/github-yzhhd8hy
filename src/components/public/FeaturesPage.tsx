@@ -35,7 +35,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
     {
       icon: Zap,
       title: 'AI Template Generation',
-      body: 'Describe what you want and let GPT-4o generate a clean, inline-styled HTML email template. Select which fields are required, important, or optional, and the AI builds the template with proper merge variable syntax and conditional logic built in.',
+      body: 'Describe what you want and let AI generate a clean, inline-styled HTML email template. Select which fields are required, important, or optional, and the AI builds the template with proper merge variable syntax and conditional logic built in.',
       iconColor: 'text-om-gold-dark',
     },
     {
