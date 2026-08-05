@@ -16,7 +16,7 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
     {
       icon: Lock,
       title: 'Encryption',
-      body: 'All data transmission uses TLS/SSL encryption. Passwords are hashed using bcrypt before storage. Database connections are encrypted. SMTP credentials and OAuth tokens are stored encrypted and never exposed to the browser. Your Gmail app passwords and Amazon SES credentials are kept in encrypted edge function secrets, not in client-visible configuration.',
+      body: 'All data transmission uses TLS/SSL encryption. Passwords are hashed using bcrypt before storage. Database connections are encrypted. SMTP credentials and OAuth tokens are stored encrypted and never exposed to the browser. Your Email credentials are kept in encrypted edge function secrets, not in client-visible configuration.',
     },
     {
       icon: Server,
