@@ -21,7 +21,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
 
   const stats = [
     { title: '500+ Leads Per Scrape', body: 'Pull real estate agent contacts directly from Zillow with one click. Names, emails, phone numbers, and brokerage details.' },
-    { title: '1,440 Emails Per Day', body: 'Send through Amazon SES with per-sender daily limits. Route through multiple Gmail accounts for even higher volume.' },
+    { title: '5000+ Emails Per Day', body: 'Send emails confidently with per-sender daily limits. Talk to the team regarding higher volume.' },
     { title: '85% Reply Automation', body: 'AI auto-responder handles inbound replies using your custom prompts. Two-step mode for complex responses.' },
     { title: 'Full Pipeline Tracking', body: 'Delivery, open, click, bounce, and reply rates tracked per sender. Know exactly what works.' },
   ];
@@ -31,7 +31,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
     { icon: Users, title: 'Contact Enrichment', body: 'Fetch detailed agent profiles to extract email addresses, phone numbers, and business names. Property listings linked to each contact.' },
     { icon: FileText, title: 'Template Builder', body: 'Create HTML, DOCX, or PDF templates with merge variables for contact data, listing details, and campaign terms. AI-generated templates available.' },
     { icon: Zap, title: 'Campaign Scheduling', body: 'Set send time windows, per-campaign delays between emails, and test mode for preview drafts. Smart fallbacks for missing data.' },
-    { icon: Bot, title: 'AI Autoresponder', body: 'GPT-4o generates contextually relevant replies to inbound emails. Single or two-step prompt modes. Per-domain enablement.' },
+    { icon: Bot, title: 'AI Autoresponder', body: 'AI generates contextually relevant replies to inbound emails. Single or two-step prompt modes. Per-domain enablement.' },
     { icon: BarChart3, title: 'Analytics Dashboard', body: 'Track delivery, open, click, bounce, and reply rates. Per-sender breakdowns. Time-period filtering for performance trends.' },
   ];
 
@@ -51,7 +51,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
               className="text-xl md:text-2xl text-om-mahogany mb-10 leading-relaxed"
               style={{ fontFamily: "'EB Garamond', serif" }}
             >
-              Scrape leads from Zillow, build personalized email campaigns with smart merge fields, send through Gmail or Amazon SES, and let AI auto-respond to replies. Save hours every day.
+              Scrape leads from Zillow, build personalized email campaigns with smart merge fields, send via Email, and let AI auto-respond to replies. Save hours every day.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
               <button
@@ -183,7 +183,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
             {[
               { num: '1', icon: Search, title: 'Scrape Leads', body: 'Pull agent contacts from Zillow with one click.' },
               { num: '2', icon: FileText, title: 'Build Campaign', body: 'Create templates with merge fields. Preview in test mode.' },
-              { num: '3', icon: Send, title: 'Send Emails', body: 'Throttled sending through Gmail or SES. Time-windowed delivery.' },
+              { num: '3', icon: Send, title: 'Send Emails', body: 'Throttled Email Sending. Time-windowed delivery.' },
               { num: '4', icon: Bot, title: 'Auto-Respond', body: 'AI handles replies. Track opens, clicks, and responses.' },
             ].map((step) => {
               const Icon = step.icon;
