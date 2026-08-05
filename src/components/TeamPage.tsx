@@ -1277,5 +1277,3 @@ function OrgDetails({
     </div>
   );
 }
-
-export { TeamPage }
