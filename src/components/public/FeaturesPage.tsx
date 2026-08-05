@@ -2,8 +2,8 @@ import React from 'react';
 import { PublicLayout } from './PublicLayout';
 import {
   Search, Users, FileText, Zap, Bot, BarChart3,
-  Send, Mail, Instagram, Shield, ArrowRight, Database,
-  Clock, CheckCircle2, Globe, MessageSquare
+  Send, Mail, Shield, ArrowRight, Database,
+  MessageSquare, Globe, Clock, CheckCircle2
 } from 'lucide-react';
 import type { PublicRoute } from '../../lib/router';
 
@@ -16,8 +16,8 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
   const coreFeatures = [
     {
       icon: Search,
-      title: 'Zillow Lead Scraping',
-      body: 'Scrape real estate agent listings directly from Zillow\'s US Housing Market Data API. Configure your API key, set the number of pages to scrape, and pull hundreds of agent contacts with one click. Each contact includes name, profile URL, and screen name.',
+      title: 'Lead Discovery',
+      body: 'Pull real estate agent contacts from public listing data sources at scale. Configure your search scope, hit start, and watch contacts populate with names, profile links, and screen names — hundreds in a single run.',
       iconColor: 'text-om-gold',
     },
     {
@@ -47,27 +47,35 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
     {
       icon: Bot,
       title: 'AI Autoresponder',
-      body: 'When a recipient replies, GPT-4o generates a contextually relevant response using your custom prompts. Single-step mode for simple replies. Two-step mode runs an intermediate AI call whose output is injected into the final response. Per-domain enablement so you control which sending addresses auto-respond.',
+      body: 'When a recipient replies, AI generates a contextually relevant response using your custom prompts. Single-step mode for simple replies. Two-step mode runs an intermediate AI call whose output is injected into the final response. Per-domain enablement so you control which sending addresses auto-respond.',
       iconColor: 'text-om-mahogany',
     },
   ];
 
   const workflowSteps = [
-    { num: '1', icon: Search, title: 'Scrape', body: 'Pull agent contacts from Zillow via RapidAPI. Configure pages, hit start, and watch contacts populate with names, profiles, and screen names.' },
+    { num: '1', icon: Search, title: 'Discover', body: 'Pull agent contacts from public real estate listing sources. Configure your scope, hit start, and watch contacts populate with names, profiles, and screen names.' },
     { num: '2', icon: Users, title: 'Enrich', body: 'Fetch detailed profiles to extract emails, phone numbers, and brokerage info. Property listings auto-linked to each contact for personalized merge fields.' },
     { num: '3', icon: FileText, title: 'Template', body: 'Build templates with merge variables for contact data, listing details, and campaign terms. Use AI generation or the drag-and-drop editor. Preview in test mode.' },
-    { num: '4', icon: Send, title: 'Send', body: 'Launch campaigns with time-windowed, throttled sending through Gmail or Amazon SES. Atomic queue processing prevents duplicate sends. Daily limits enforced per sender.' },
+    { num: '4', icon: Send, title: 'Send', body: 'Launch campaigns with time-windowed, throttled sending through your connected email accounts. Atomic queue processing prevents duplicate sends. Daily limits enforced per sender.' },
     { num: '5', icon: BarChart3, title: 'Track', body: 'Monitor delivery, open, click, bounce, and reply rates. Per-sender breakdowns show which accounts perform best. Time-period filtering for trend analysis.' },
     { num: '6', icon: Bot, title: 'Respond', body: 'AI auto-responder handles inbound replies using your custom prompts. Two-step mode for complex scenarios. Drafts saved for review before sending.' },
   ];
 
   const additionalFeatures = [
-    { icon: Mail, title: 'Multi-Sender Routing', body: 'Send through Gmail SMTP (up to 500/day per account) or Amazon SES (up to 1,440/day per address). Automatic provider routing based on the from email address. Multiple sender accounts for higher volume.', iconColor: 'text-om-gold' },
+    { icon: Mail, title: 'Multi-Sender Routing', body: 'Send through multiple connected email accounts with automatic routing based on the from address. Connect several sender accounts for higher volume and better deliverability.', iconColor: 'text-om-gold' },
     { icon: BarChart3, title: 'Analytics Dashboard', body: 'Track total sent, delivered, opened, clicked, bounced, failed, and complained. Delivery rate, open rate, click rate, bounce rate, and reply rate. Per-sender performance comparison. 7-day, 30-day, and all-time views.', iconColor: 'text-om-forest' },
     { icon: Database, title: 'Data Quality System', body: 'Weighted field scoring with configurable required, important, and optional tiers. Campaigns blocked automatically if data quality falls below your threshold. Placeholder fallback system for missing values. Per-field missing statistics.', iconColor: 'text-om-mahogany' },
-    { icon: Instagram, title: 'Instagram Integration', body: 'Connect your Instagram Business or Creator account. Webhook capture of comments, direct messages, and mentions. All engagement events stored with sender info, message text, and media references.', iconColor: 'text-om-gold-dark' },
-    { icon: MessageSquare, title: 'Custom AI Prompts', body: 'Define your own prompts for the autoresponder. Categorize by use case. Add business data context. Two-step mode for complex reply scenarios. AI-assisted prompt generation by category.', iconColor: 'text-om-forest' },
+    { icon: MessageSquare, title: 'Social Engagement Capture', body: 'Connect your social accounts to capture comments, direct messages, and mentions automatically. All engagement events stored with sender info, message text, and media references — nothing slips through the cracks.', iconColor: 'text-om-gold-dark' },
+    { icon: Bot, title: 'Custom AI Prompts', body: 'Define your own prompts for the autoresponder. Categorize by use case. Add business data context. Two-step mode for complex reply scenarios. AI-assisted prompt generation by category.', iconColor: 'text-om-forest' },
     { icon: Shield, title: 'Reply Tracking', body: 'Inbound replies linked back to the original campaign email via reply tracking. See which campaigns generate responses. Reply rate calculated across all sent emails. Never lose track of a conversation.', iconColor: 'text-om-mahogany' },
+  ];
+
+  const integrations = [
+    { name: 'Public Listing Data', desc: 'Lead discovery', icon: Search },
+    { name: 'Email Delivery', desc: 'Campaign sending', icon: Send },
+    { name: 'Connected Mailboxes', desc: 'Send from your address', icon: Mail },
+    { name: 'AI Content Engine', desc: 'Smart writing & replies', icon: Bot },
+    { name: 'Social Engagement', desc: 'Comments & messages', icon: MessageSquare },
   ];
 
   return (
@@ -85,7 +93,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
             className="text-xl md:text-2xl text-om-mahogany max-w-3xl mx-auto"
             style={{ fontFamily: "'EB Garamond', serif" }}
           >
-            From finding leads on Zillow to auto-responding to replies, every step of your real estate outreach pipeline in one platform.
+            From finding leads to auto-responding to replies, every step of your real estate outreach pipeline in one platform.
           </p>
         </div>
       </section>
@@ -193,20 +201,14 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-10">
             <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-forest-deep mb-4">
-              Integrations
+              Integrated Capabilities
             </h2>
             <p className="text-lg text-om-mahogany" style={{ fontFamily: "'EB Garamond', serif" }}>
-              LoiBlast connects to the tools you already use.
+              Connect the tools and services you already use — all in one place.
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {[
-              { name: 'Zillow API', desc: 'Lead scraping', icon: Search },
-              { name: 'Amazon SES', desc: 'Email sending', icon: Send },
-              { name: 'Gmail SMTP', desc: 'Email sending', icon: Mail },
-              { name: 'OpenAI GPT-4o', desc: 'AI responses', icon: Bot },
-              { name: 'Instagram', desc: 'Social engagement', icon: Instagram },
-            ].map((integration) => {
+            {integrations.map((integration) => {
               const Icon = integration.icon;
               return (
                 <div key={integration.name} className="bg-om-parchment border border-om-tan rounded-xl p-5 text-center">
