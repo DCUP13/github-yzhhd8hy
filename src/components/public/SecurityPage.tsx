@@ -2,7 +2,7 @@ import React from 'react';
 import { PublicLayout } from './PublicLayout';
 import {
   Shield, Lock, Eye, Server, Key, FileCheck,
-  ArrowRight, Database, Cloud, AlertTriangle
+  ArrowRight, Database, Cloud
 } from 'lucide-react';
 import type { PublicRoute } from '../../lib/router';
 
@@ -15,43 +15,67 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
   const measures = [
     {
       icon: Lock,
-      title: 'Encryption',
-      body: 'All data transmission uses TLS/SSL encryption. Passwords are hashed using bcrypt before storage. Database connections are encrypted. SMTP credentials and OAuth tokens are stored encrypted and never exposed to the browser. Your Email credentials are kept in encrypted edge function secrets, not in client-visible configuration.',
+      title: 'Encryption Everywhere',
+      body: 'Every piece of data moving between you and our servers is encrypted in transit, and sensitive data is encrypted at rest. Passwords are never stored in readable form — they are hashed before they ever touch our database. Email credentials, connection keys, and access tokens are kept in encrypted server-side vaults that your browser can never see.',
     },
     {
       icon: Server,
-      title: 'Row-Level Security',
-      body: 'Every database table has row-level security (RLS) enabled with per-user policies. Users can only access their own contacts, campaigns, email templates, sent emails, prompts, and settings. No user can ever query, view, or modify another user\'s data — the database itself enforces this at the query level, not just the application layer.',
+      title: 'Per-User Data Isolation',
+      body: 'Your data is fenced off from every other user at the database level — not just in the app. The database itself enforces that each account can only read and modify its own contacts, campaigns, templates, sent emails, and settings. No user can ever query, view, or edit another user\'s data, period.',
     },
     {
       icon: Key,
-      title: 'Authentication',
-      body: 'Secure session management with JWT tokens through Supabase Auth. Sessions expire automatically and tokens refresh securely. Your account credentials are never stored in plain text. Optional two-factor authentication available from your account settings.',
+      title: 'Secure Authentication',
+      body: 'Sessions are managed with cryptographically signed tokens that expire automatically and refresh securely. Your account credentials are never stored in plain text. Optional two-factor authentication is available from your account settings for an added layer of protection.',
     },
     {
       icon: Eye,
-      title: 'Data Isolation',
-      body: 'Complete data isolation between accounts. Your scraped Zillow contacts, campaign templates, sent email history, AI prompts, Instagram webhook events, and analytics are never shared with or accessible by other users. Each user\'s data lives in its own secured partition.',
+      title: 'Private By Design',
+      body: 'Your contacts, campaign templates, email history, AI prompts, and analytics are never shared with or accessible by other users. Each account lives in its own secured partition, and we never sell, rent, or share your data with third parties for marketing purposes.',
     },
     {
       icon: FileCheck,
-      title: 'Compliance',
-      body: 'GDPR and CCPA compliant data handling. Clear data retention policies. Full data export and deletion capabilities on request. Email content processed by OpenAI for AI features is handled in accordance with OpenAI\'s data usage policies and our Privacy Policy.',
+      title: 'Compliance & Control',
+      body: 'GDPR and CCPA compliant data handling with clear retention policies. You can export or permanently delete your data at any time from your account settings. When AI features are used, content is processed only for the purpose of fulfilling your request and never used to train external models.',
     },
     {
       icon: Database,
-      title: 'Data Quality Protection',
-      body: 'The data quality scoring system prevents campaigns from running when contact data is incomplete or below your configured threshold. This protects your sender reputation by ensuring you never send emails to contacts with missing names, broken email addresses, or insufficient personalization data.',
+      title: 'Quality Safeguards',
+      body: 'Built-in data quality scoring prevents campaigns from running when contact data is incomplete or below your configured threshold. This protects your sender reputation by ensuring you never send emails to contacts with missing names, broken addresses, or insufficient personalization data.',
     },
   ];
 
   const thirdParty = [
-    { name: 'Amazon SES', what: 'Sends your outbound emails', security: 'AWS-managed infrastructure with TLS encryption. Your SES SMTP credentials stored as encrypted edge function secrets.' },
-    { name: 'Gmail SMTP', what: 'Sends through your Gmail accounts', security: 'App-specific passwords with 16-character authentication. Credentials stored encrypted, never logged.' },
-    { name: 'OpenAI (GPT-4o)', what: 'Powers AI template generation and autoresponder', security: 'Your OpenAI API key stored as an edge function secret. Email content sent to OpenAI only when AI features are used, in accordance with their data policies.' },
-    { name: 'RapidAPI / Zillow', what: 'Provides agent listing data for lead scraping', security: 'Your RapidAPI key stored as an edge function secret. Only used server-side to fetch public agent listing data.' },
-    { name: 'AWS S3', what: 'Stores email attachments', security: 'Presigned URLs with 1-hour expiry for downloads. Credentials never exposed to the browser. Access verified per-user before URLs are generated.' },
-    { name: 'Instagram / Meta', what: 'Captures social engagement events', security: 'Long-lived access tokens stored encrypted. Webhook verification with verify tokens. Event deduplication to prevent processing duplicates.' },
+    {
+      label: 'Outbound Email Delivery',
+      what: 'Sends your campaign and one-to-one emails',
+      security: 'Connected through industry-standard encrypted transport. Sending credentials are stored in encrypted server-side secrets and never exposed to your browser. All message delivery happens on our secured servers, not your device.',
+    },
+    {
+      label: 'Connected Email Accounts',
+      what: 'Lets you send through your own email address',
+      security: 'Account-specific passwords with strong authentication. Credentials are stored encrypted on the server, never logged, and never cached in your browser.',
+    },
+    {
+      label: 'AI Content Generation',
+      what: 'Powers smart template writing and auto-replies',
+      security: 'Your AI access key is stored as an encrypted server secret. Email content is sent for processing only when you use AI features, solely to complete your request, and is never used to train external models.',
+    },
+    {
+      label: 'Lead & Listing Data Sources',
+      what: 'Provides public agent and listing information for lead building',
+      security: 'Access keys are stored as encrypted server secrets and used only server-side to fetch publicly available data. Keys are never sent to your browser or logged.',
+    },
+    {
+      label: 'File & Attachment Storage',
+      what: 'Stores email attachments securely',
+      security: 'Files are served through short-lived, expiring download links generated only after verifying you own the message. Storage credentials are never exposed to your browser.',
+    },
+    {
+      label: 'Social Engagement Capture',
+      what: 'Captures engagement events from connected social accounts',
+      security: 'Long-lived access tokens are stored encrypted and protected by per-user policies. Incoming events are verified and de-duplicated to prevent tampering or replay.',
+    },
   ];
 
   return (
@@ -69,7 +93,7 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
             className="text-xl md:text-2xl text-om-mahogany max-w-3xl mx-auto"
             style={{ fontFamily: "'EB Garamond', serif" }}
           >
-            Enterprise-grade security built into every layer — from the database to the email queue to the AI processing pipeline.
+            Enterprise-grade security built into every layer — from the database to the email queue to the AI pipeline.
           </p>
         </div>
       </section>
@@ -103,18 +127,18 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
           <div className="text-center mb-10">
             <Cloud className="w-10 h-10 text-om-forest mx-auto mb-4" />
             <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-forest-deep mb-4">
-              Third-Party Security
+              Integrations You Can Trust
             </h2>
             <p className="text-lg text-om-mahogany max-w-2xl mx-auto" style={{ fontFamily: "'EB Garamond', serif" }}>
-              How each integration handles your data.
+              Every connected service is held to the same security standard as our own platform.
             </p>
           </div>
           <div className="space-y-4">
             {thirdParty.map((item) => (
-              <div key={item.name} className="bg-om-parchment border border-om-tan rounded-xl p-6 flex items-start gap-4">
+              <div key={item.label} className="bg-om-parchment border border-om-tan rounded-xl p-6 flex items-start gap-4">
                 <Shield className="w-6 h-6 text-om-forest flex-shrink-0 mt-1" />
                 <div>
-                  <h3 className="text-base font-display font-semibold text-om-forest-deep mb-1">{item.name}</h3>
+                  <h3 className="text-base font-display font-semibold text-om-forest-deep mb-1">{item.label}</h3>
                   <p className="text-sm text-om-brown mb-2" style={{ fontFamily: "'EB Garamond', serif" }}>
                     <span className="font-medium text-om-forest-deep">Purpose:</span> {item.what}
                   </p>
@@ -128,23 +152,23 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
         </div>
       </section>
 
-      {/* API Key Handling */}
+      {/* Key Handling */}
       <section className="py-14 px-4 sm:px-6 bg-om-parchment">
         <div className="max-w-4xl mx-auto">
           <div className="bg-om-cream border border-om-tan rounded-xl p-8">
             <div className="flex items-center gap-3 mb-6">
               <Key className="w-8 h-8 text-om-gold" />
               <h2 className="text-xl md:text-2xl font-display font-semibold text-om-forest-deep">
-                How Your API Keys Are Handled
+                How Your Credentials Are Handled
               </h2>
             </div>
             <ul className="space-y-4">
               {[
-                'All API keys (OpenAI, RapidAPI, Amazon SES, Gmail app passwords) are stored as encrypted edge function secrets on the server, never in the browser.',
-                'Keys are only accessed server-side when executing edge functions — your browser never sees or handles them directly.',
-                'AWS credentials for attachment downloads use Signature V4 presigned URLs with 1-hour expiry, generated server-side after verifying ownership.',
-                'Instagram access tokens are stored encrypted in the database with row-level security policies.',
-                'No API keys or credentials are ever logged, cached in the browser, or exposed in network responses.',
+                'Every API key, email password, and access token is stored as an encrypted server-side secret — never in your browser, never in plain text.',
+                'Credentials are only accessed on our secured servers when a task runs. Your browser never sees, handles, or transmits them.',
+                'File downloads are served through short-lived, expiring links generated only after confirming you own the message.',
+                'Connected social-account tokens are stored encrypted and protected by per-user access policies.',
+                'No credentials are ever logged, cached in your browser, or exposed in network responses.',
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3">
                   <Shield className="w-5 h-5 text-om-forest flex-shrink-0 mt-0.5" />
@@ -168,7 +192,7 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
               className="text-lg text-om-tan mb-8 max-w-2xl mx-auto"
               style={{ fontFamily: "'EB Garamond', serif" }}
             >
-              We take security seriously so you can focus on your outreach, not your infrastructure. Every layer of LoiBlast — from the database to the email queue to the AI pipeline — is designed with protection in mind.
+              We take security seriously so you can focus on your outreach, not your infrastructure. Every layer of our platform is designed with your protection in mind.
             </p>
             <button
               onClick={() => onNavigate('contact')}
