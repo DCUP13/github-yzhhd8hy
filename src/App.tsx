@@ -10,7 +10,7 @@ import { Prompts } from './components/Prompts';
 import { Contacts } from './components/Contacts';
 import { Analytics } from './components/Analytics';
 import { Instagram } from './components/Instagram';
-import { TeamPage } from './components/TeamPage';
+import { TeamView as TeamPage } from './components/TeamPage';
 import { SupportPage } from './components/SupportPage';
 import { EmailProvider } from './contexts/EmailContext';
 import { supabase } from './lib/supabase';
@@ -344,11 +344,7 @@ export default function App() {
                     )
                   )}
                   {appView === 'team' && (
-                    <TeamPage
-                      onSignOut={handleSignOut}
-                      currentView={appView}
-                      isSuperAdmin={isSuperAdmin}
-                    />
+                    <TeamPage onSignOut={handleSignOut} />
                   )}
                   {appView === 'support' && (
                     <SupportPage onSignOut={handleSignOut} currentView={appView} isSuperAdmin={isSuperAdmin} />
