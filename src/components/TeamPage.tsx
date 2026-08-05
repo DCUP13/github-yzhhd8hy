@@ -10,6 +10,7 @@ import { toast } from '../lib/toast';
 import { showConfirm } from '../lib/confirm';
 import MemberDetailDialog from './MemberDetailDialog';
 import OrganizationSettings from './OrganizationSettings';
+import { TeamManagement } from './TeamManagement';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ function computeHasUnread(lastMessageAt: string | null, lastReadAt: string | nul
 interface TeamViewProps { onSignOut: () => void; }
 
 export function TeamView({ onSignOut }: TeamViewProps) {
-  const [tab, setTab] = useState<'chat' | 'organization'>('chat');
+  const [tab, setTab] = useState<'chat' | 'organization' | 'manage'>('chat');
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
   const [selectedOrgIdx, setSelectedOrgIdx] = useState(0);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -245,10 +246,14 @@ export function TeamView({ onSignOut }: TeamViewProps) {
 
         {/* Tabs */}
         <div className="flex gap-0">
-          {(['chat', 'organization'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors capitalize ${tab === t ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
-              {t === 'chat' ? 'Chat' : 'Organization'}
+          {([
+            { key: 'chat', label: 'Chat' },
+            { key: 'organization', label: 'Organization' },
+            { key: 'manage', label: 'Manage' },
+          ] as const).map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+              {t.label}
             </button>
           ))}
         </div>
@@ -257,8 +262,10 @@ export function TeamView({ onSignOut }: TeamViewProps) {
       {orgId && currentUserId ? (
         tab === 'chat' ? (
           <ChatTab key={orgId} orgId={orgId} currentUserId={currentUserId} initialSelectedId={pendingChatId} onInitialSelectedConsumed={() => setPendingChatId(null)} />
-        ) : (
+        ) : tab === 'organization' ? (
           <OrgTab key={orgId} orgId={orgId} currentUserId={currentUserId} currentRole={currentRole} onMemberCountChange={setMemberCount} onStartChat={handleStartChat} onOrgDeleted={handleOrgDeleted} />
+        ) : (
+          <TeamManagement key={orgId} onSignOut={onSignOut} />
         )
       ) : null}
 
