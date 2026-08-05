@@ -294,7 +294,7 @@ export default function App() {
                     onSignOut={handleSignOut}
                     onHomeClick={() => setAppView('dashboard')}
                     onAppClick={() => setAppView('app')}
-                    onSettingsClick={() => { setManagingMemberId(undefined); setAppView('settings'); }}
+                    onSettingsClick={() => setAppView('settings')}
                     onTemplatesClick={() => setAppView('templates')}
                     onEmailsClick={() => setAppView('emails')}
                     onAddressesClick={() => setAppView('addresses')}
