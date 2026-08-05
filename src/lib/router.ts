@@ -33,21 +33,27 @@ export function pathToRoute(path: string): PublicRoute {
   return PATH_TO_ROUTE[path] ?? 'home';
 }
 
+function getHashPath(): string {
+  const hash = window.location.hash.replace(/^#/, '');
+  return hash || '/';
+}
+
 export function useRouter() {
-  const [route, setRoute] = useState<PublicRoute>(() => pathToRoute(window.location.pathname));
+  const [route, setRoute] = useState<PublicRoute>(() => pathToRoute(getHashPath()));
 
   useEffect(() => {
-    const onPopState = () => {
-      setRoute(pathToRoute(window.location.pathname));
+    const onHashChange = () => {
+      setRoute(pathToRoute(getHashPath()));
     };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   const navigate = useCallback((newRoute: PublicRoute) => {
     const path = getRoutePath(newRoute);
-    if (window.location.pathname !== path) {
-      window.history.pushState({}, '', path);
+    const newHash = '#' + path;
+    if (window.location.hash !== newHash) {
+      window.location.hash = newHash;
       setRoute(newRoute);
       window.scrollTo(0, 0);
     }
