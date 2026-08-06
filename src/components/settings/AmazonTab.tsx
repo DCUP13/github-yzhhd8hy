@@ -20,15 +20,70 @@ export function AmazonTab({ userId }: AmazonTabProps) {
   const [domainError, setDomainError] = useState('');
   const [domainSettings, setDomainSettings] = useState<Record<string, { autoresponderEnabled: boolean }>>({});
 
+  // Owner-only noreply domain
+  const [isOrgOwner, setIsOrgOwner] = useState(false);
+  const [noreplyDomain, setNoreplyDomain] = useState('');
+  const [noreplySaving, setNoreplySaving] = useState(false);
+  const [noreplySaved, setNoreplySaved] = useState(false);
+
   useEffect(() => {
     fetchSESEmails();
     fetchSESDomains();
+    fetchNoreplyDomain();
   }, []);
 
   const getCurrentUserId = async (): Promise<string | null> => {
     if (userId) return userId;
     const user = await supabase.auth.getUser();
     return user.data.user?.id || null;
+  };
+
+  const fetchNoreplyDomain = async () => {
+    try {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) return;
+
+      // Check if user is an org owner
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', currentUserId)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (membership?.role === 'owner') {
+        setIsOrgOwner(true);
+        const { data: settings } = await supabase
+          .from('amazon_ses_settings')
+          .select('noreply_domain')
+          .eq('user_id', currentUserId)
+          .maybeSingle();
+        if (settings?.noreply_domain) {
+          setNoreplyDomain(settings.noreply_domain);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching noreply domain:', error);
+    }
+  };
+
+  const handleSaveNoreplyDomain = async () => {
+    try {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) return;
+      setNoreplySaving(true);
+      const { error } = await supabase
+        .from('amazon_ses_settings')
+        .upsert({ user_id: currentUserId, noreply_domain: noreplyDomain.trim() || null, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      if (error) throw error;
+      setNoreplySaved(true);
+      setTimeout(() => setNoreplySaved(false), 3000);
+    } catch (error) {
+      console.error('Error saving noreply domain:', error);
+      alert('Failed to save noreply domain.');
+    } finally {
+      setNoreplySaving(false);
+    }
   };
 
   const fetchSESDomains = async () => {
@@ -351,6 +406,39 @@ export function AmazonTab({ userId }: AmazonTabProps) {
         </div>
       </div>
 
+      {/* Owner-only: Noreply Domain */}
+      {isOrgOwner && (
+        <div className="mt-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                Noreply Domain (Owner Only)
+              </h3>
+              <p className="mt-1 text-sm text-amber-700 dark:text-amber-400 mb-3">
+                The domain used as the sender address for team invitation emails (e.g. mail.yourcompany.com). This is only visible and editable by the organization owner.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={noreplyDomain}
+                  onChange={(e) => setNoreplyDomain(e.target.value)}
+                  placeholder="mail.yourcompany.com"
+                  className="flex-1 px-3 py-2 text-sm border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
+                <button
+                  onClick={handleSaveNoreplyDomain}
+                  disabled={noreplySaving}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm font-medium flex-shrink-0"
+                >
+                  {noreplySaving ? 'Saving...' : noreplySaved ? 'Saved!' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SES Domains Section */}
       <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-4">
@@ -419,7 +507,7 @@ export function AmazonTab({ userId }: AmazonTabProps) {
                     </span>
                     <Toggle
                       checked={domainSettings[domain]?.autoresponderEnabled || false}
-                      onChange={() => handleToggleAutoresponder(domain, !domainSettings[domain]?.autoresponderEnabled)}
+                      onChange={(checked) => handleToggleAutoresponder(domain, checked)}
                     />
                   </div>
                   <button

@@ -13,35 +13,39 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "No authorization header" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "No authorization header" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
+      supabaseUrl,
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } }
     );
 
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { email, password, organization_id, role } = await req.json();
 
     if (!email || !password || !organization_id) {
-      return new Response(JSON.stringify({ error: "Missing email, password, or organization_id" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Missing email, password, or organization_id" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Check manager/owner status
+    // Verify caller is manager/owner of the org
     const { data: membership } = await supabase
       .from("organization_members")
       .select("role")
@@ -50,14 +54,24 @@ Deno.serve(async (req: Request) => {
       .eq("status", "active")
       .maybeSingle();
 
-    const isSuperAdmin = (await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()).data?.role === "super_admin";
-
-    if (!isSuperAdmin && (!membership || (membership.role !== "owner" && membership.role !== "manager"))) {
-      return new Response(JSON.stringify({ error: "Only managers or owners can create team members" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!membership || (membership.role !== "owner" && membership.role !== "manager")) {
+      return new Response(JSON.stringify({ error: "Only managers or owners can create team members" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    if (membership?.role === "manager" && role === "manager") {
-      return new Response(JSON.stringify({ error: "Managers can only create members, not managers" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Managers cannot create other managers
+    if (membership.role === "manager" && role === "manager") {
+      return new Response(JSON.stringify({ error: "Managers can only create members, not managers" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Block owner assignment
+    if (role === "owner") {
+      return new Response(JSON.stringify({ error: "Cannot assign owner role" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
@@ -71,16 +85,26 @@ Deno.serve(async (req: Request) => {
     if (newUser.user) {
       const { error: memberError } = await supabase
         .from("organization_members")
-        .insert({ organization_id, user_id: newUser.user.id, role: role || "member", status: "active" });
+        .insert({
+          organization_id,
+          user_id: newUser.user.id,
+          role: role || "member",
+          status: "active",
+          invited_by: user.id,
+        });
 
       if (memberError && !memberError.message.includes("duplicate")) {
         console.error("Failed to add member:", memberError);
       }
     }
 
-    return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
     console.error("Error in create-team-member:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
