@@ -274,8 +274,7 @@ export default function OrganizationSettings({ orgId, onClose }: OrganizationSet
           industry: formData.industry,
           company_size: formData.company_size,
           website: formData.website,
-          location: formData.location,
-          updated_at: new Date().toISOString()
+          location: formData.location
         })
         .eq('id', organization.id);
 
