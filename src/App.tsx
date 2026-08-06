@@ -13,6 +13,7 @@ import { Instagram } from './components/Instagram';
 import { TeamView as TeamPage } from './components/TeamPage';
 import { SupportPage } from './components/SupportPage';
 import { EmailProvider } from './contexts/EmailContext';
+import { OrganizationProvider } from './contexts/OrganizationContext';
 import { supabase } from './lib/supabase';
 import type { Template } from './features/templates/types';
 import { DashboardProvider } from './contexts/DashboardContext';
@@ -288,6 +289,7 @@ export default function App() {
           <FeatureFlagsContext.Provider value={featureFlags}>
           <EmailProvider>
             <DashboardProvider>
+          <OrganizationProvider>
               <div className="flex min-h-screen bg-white dark:bg-gray-900">
                 <div className="fixed inset-y-0 left-0 w-64">
                   <Sidebar
@@ -351,6 +353,7 @@ export default function App() {
                   )}
                 </div>
               </div>
+          </OrganizationProvider>
             </DashboardProvider>
           </EmailProvider>
           </FeatureFlagsContext.Provider>

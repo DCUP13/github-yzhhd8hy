@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import type { OrgInfo } from '../contexts/OrganizationContext';
 import {
   Users, Send, Search, ChevronLeft, MessageSquare,
   Plus, Trash2, Mail, Building2, Globe, MapPin, Briefcase,
   UserPlus, CheckCircle, AlertCircle, X, Settings, Clock, MessageCircle,
-  ChevronDown, RefreshCw, ArrowUpDown,
+  RefreshCw, ArrowUpDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -11,6 +12,7 @@ import { showConfirm } from '../lib/confirm';
 import MemberDetailDialog from './MemberDetailDialog';
 import OrganizationSettings from './OrganizationSettings';
 import { TeamManagement } from './TeamManagement';
+import { useOrganization } from '../contexts/OrganizationContext';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -19,7 +21,6 @@ interface TeamMessage { id: string; conversation_id: string; sender_id: string; 
 interface OrgMember { id: string; user_id: string; email: string; name: string; role: string; joined_at: string; }
 interface Invitation { id: string; email: string; role?: string; status: string; created_at: string; expires_at: string; }
 interface OrgDetails { id: string; name: string; description: string; logo_url: string; industry: string; company_size: string; website: string; location: string; }
-interface OrgInfo { id: string; name: string; role: string; }
 
 const AVATAR_COLORS = ['from-blue-500 to-blue-700','from-emerald-500 to-emerald-700','from-violet-500 to-violet-700','from-orange-500 to-orange-700','from-rose-500 to-rose-700','from-teal-500 to-teal-700'];
 function avatarGradient(id: string) { const n = id.charCodeAt(0) + id.charCodeAt(id.length - 1); return AVATAR_COLORS[n % AVATAR_COLORS.length]; }
@@ -39,106 +40,28 @@ interface TeamViewProps { onSignOut: () => void; }
 
 export function TeamView({ onSignOut }: TeamViewProps) {
   const [tab, setTab] = useState<'chat' | 'organization' | 'manage'>('chat');
-  const [orgs, setOrgs] = useState<OrgInfo[]>([]);
-  const [selectedOrgIdx, setSelectedOrgIdx] = useState(0);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [memberCount, setMemberCount] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [pendingChatId, setPendingChatId] = useState<string | null>(null);
-  const [showSwitcher, setShowSwitcher] = useState(false);
-  const [showCreateOrg, setShowCreateOrg] = useState(false);
-  const switcherRef = useRef<HTMLDivElement>(null);
+  const [memberCount, setMemberCount] = useState(0);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const selectedOrg = orgs[selectedOrgIdx] ?? null;
-  const orgId = selectedOrg?.id ?? null;
+  const { orgs, selectedOrg, selectedOrgId, showCreateOrg, setShowCreateOrg, handleOrgCreated, handleOrgDeleted, loading } = useOrganization();
+
+  const orgId = selectedOrgId;
   const currentRole = selectedOrg?.role ?? 'member';
   const orgName = selectedOrg?.name ?? '';
   const isOwner = orgs.some(o => o.role === 'owner');
 
-  // Reset member count when org changes
-  useEffect(() => { setMemberCount(0); }, [selectedOrgIdx]);
+  useEffect(() => { setMemberCount(0); }, [selectedOrgId]);
 
-  // Close switcher on outside click
   useEffect(() => {
-    if (!showSwitcher) return;
-    function handle(e: MouseEvent) {
-      if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
-        setShowSwitcher(false);
-      }
-    }
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
-  }, [showSwitcher]);
-
-  useEffect(() => { loadBase(); }, []);
-
-  async function loadBase() {
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
-    setCurrentUserId(user.id);
-
-    const { data: memberships } = await supabase
-      .from('organization_members')
-      .select('organization_id, role')
-      .eq('user_id', user.id);
-
-    if (!memberships || memberships.length === 0) { setLoading(false); return; }
-
-    const orgIds = memberships.map(m => m.organization_id);
-    const { data: orgData } = await supabase
-      .from('organizations')
-      .select('id, name')
-      .in('id', orgIds);
-
-    const merged: OrgInfo[] = (orgData ?? []).map(org => ({
-      id: org.id,
-      name: org.name,
-      role: memberships.find(m => m.organization_id === org.id)?.role ?? 'member',
-    })).sort((a, b) => {
-      if (a.role === 'owner' && b.role !== 'owner') return -1;
-      if (b.role === 'owner' && a.role !== 'owner') return 1;
-      return a.name.localeCompare(b.name);
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id);
     });
-
-    setOrgs(merged);
-    setLoading(false);
-  }
+  }, []);
 
   function handleStartChat(memberId: string) {
     setPendingChatId(memberId);
     setTab('chat');
-  }
-
-  function handleOrgCreated(newOrg: OrgInfo) {
-    setOrgs(prev => {
-      const updated = [...prev, newOrg].sort((a, b) => {
-        if (a.role === 'owner' && b.role !== 'owner') return -1;
-        if (b.role === 'owner' && a.role !== 'owner') return 1;
-        return a.name.localeCompare(b.name);
-      });
-      const newIdx = updated.findIndex(o => o.id === newOrg.id);
-      setSelectedOrgIdx(newIdx >= 0 ? newIdx : 0);
-      return updated;
-    });
-    setShowCreateOrg(false);
-  }
-
-  function handleOrgDeleted() {
-    const deletedId = orgId;
-    setOrgs(prev => {
-      const updated = prev.filter(o => o.id !== deletedId);
-      setSelectedOrgIdx(0);
-      return updated;
-    });
-    setTab('chat');
-  }
-
-  function switchOrg(idx: number) {
-    setSelectedOrgIdx(idx);
-    setShowSwitcher(false);
-    setTab('chat');
-    setPendingChatId(null);
   }
 
   if (loading) return (
@@ -179,59 +102,10 @@ export function TeamView({ onSignOut }: TeamViewProps) {
             <Users className="w-5 h-5 md:w-6 md:h-6 text-blue-600 dark:text-blue-400" />
           </div>
           <div className="flex-1 min-w-0">
-            {orgs.length <= 1 ? (
-              <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white truncate">{orgName}</h1>
-            ) : (
-              <div className="relative" ref={switcherRef}>
-                <button
-                  onClick={() => setShowSwitcher(v => !v)}
-                  className="flex items-center gap-1.5 text-xl md:text-2xl font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors max-w-full"
-                >
-                  <span className="truncate max-w-[200px] md:max-w-xs">{orgName}</span>
-                  <ChevronDown className={`w-5 h-5 flex-shrink-0 transition-transform duration-200 ${showSwitcher ? 'rotate-180' : ''}`} />
-                </button>
-                {showSwitcher && (
-                  <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
-                    <div className="py-1">
-                      {orgs.map((org, idx) => (
-                        <button
-                          key={org.id}
-                          onClick={() => switchOrg(idx)}
-                          className={`w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${idx === selectedOrgIdx ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
-                        >
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${idx === selectedOrgIdx ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                            <Building2 className={`w-4 h-4 ${idx === selectedOrgIdx ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium truncate ${idx === selectedOrgIdx ? 'text-blue-600 dark:text-blue-400' : 'text-gray-800 dark:text-gray-200'}`}>{org.name}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 capitalize mt-0.5">{org.role}</p>
-                          </div>
-                          {idx === selectedOrgIdx && <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
-                        </button>
-                      ))}
-                    </div>
-                    {isOwner && (
-                      <>
-                        <div className="border-t border-gray-200 dark:border-gray-700" />
-                        <button
-                          onClick={() => { setShowSwitcher(false); setShowCreateOrg(true); }}
-                          className="w-full text-left px-4 py-3 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-3 transition-colors"
-                        >
-                          <div className="w-8 h-8 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-700 flex items-center justify-center flex-shrink-0">
-                            <Plus className="w-4 h-4" />
-                          </div>
-                          <span className="font-medium">New Organization</span>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white truncate">Team — {orgName}</h1>
             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-0.5">{memberCount} member{memberCount !== 1 ? 's' : ''}</p>
           </div>
 
-          {/* Create org button when only 1 (or 0) orgs */}
           {isOwner && orgs.length <= 1 && (
             <button
               onClick={() => setShowCreateOrg(true)}
