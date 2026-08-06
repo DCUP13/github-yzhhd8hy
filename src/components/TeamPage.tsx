@@ -4,14 +4,13 @@ import {
   Users, Send, Search, ChevronLeft, MessageSquare,
   Plus, Trash2, Mail, Building2, Globe, MapPin, Briefcase,
   UserPlus, CheckCircle, AlertCircle, X, Settings, Clock, MessageCircle,
-  RefreshCw, ArrowUpDown,
+  ChevronDown, RefreshCw, ArrowUpDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
 import { showConfirm } from '../lib/confirm';
 import MemberDetailDialog from './MemberDetailDialog';
 import OrganizationSettings from './OrganizationSettings';
-import { TeamManagement } from './TeamManagement';
 import { useOrganization } from '../contexts/OrganizationContext';
 
 // ── Shared helpers ───────────────────────────────────────────────────
@@ -39,12 +38,13 @@ function computeHasUnread(lastMessageAt: string | null, lastReadAt: string | nul
 interface TeamViewProps { onSignOut: () => void; }
 
 export function TeamView({ onSignOut }: TeamViewProps) {
-  const [tab, setTab] = useState<'chat' | 'organization' | 'manage'>('chat');
+  const [tab, setTab] = useState<'chat' | 'organization'>('chat');
   const [pendingChatId, setPendingChatId] = useState<string | null>(null);
   const [memberCount, setMemberCount] = useState(0);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const switcherRef = useRef<HTMLDivElement>(null);
 
-  const { orgs, selectedOrg, selectedOrgId, showCreateOrg, setShowCreateOrg, handleOrgCreated, handleOrgDeleted, loading } = useOrganization();
+  const { orgs, selectedOrg, selectedOrgId, showSwitcher, setShowSwitcher, switchOrg, showCreateOrg, setShowCreateOrg, handleOrgCreated, handleOrgDeleted, loading } = useOrganization();
 
   const orgId = selectedOrgId;
   const currentRole = selectedOrg?.role ?? 'member';
@@ -59,9 +59,26 @@ export function TeamView({ onSignOut }: TeamViewProps) {
     });
   }, []);
 
+  useEffect(() => {
+    if (!showSwitcher) return;
+    function handle(e: MouseEvent) {
+      if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
+        setShowSwitcher(false);
+      }
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [showSwitcher, setShowSwitcher]);
+
   function handleStartChat(memberId: string) {
     setPendingChatId(memberId);
     setTab('chat');
+  }
+
+  function handleSwitchOrg(id: string) {
+    switchOrg(id);
+    setTab('chat');
+    setPendingChatId(null);
   }
 
   if (loading) return (
@@ -102,20 +119,53 @@ export function TeamView({ onSignOut }: TeamViewProps) {
             <Users className="w-5 h-5 md:w-6 md:h-6 text-blue-600 dark:text-blue-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white truncate">Team — {orgName}</h1>
+            <div className="relative" ref={switcherRef}>
+              <button
+                onClick={() => setShowSwitcher(!showSwitcher)}
+                className="flex items-center gap-1.5 text-xl md:text-2xl font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors max-w-full"
+              >
+                <span className="truncate max-w-[200px] md:max-w-xs">{orgName}</span>
+                <ChevronDown className={`w-5 h-5 flex-shrink-0 transition-transform duration-200 ${showSwitcher ? 'rotate-180' : ''}`} />
+              </button>
+              {showSwitcher && (
+                <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                  <div className="py-1">
+                    {orgs.map(org => (
+                      <button
+                        key={org.id}
+                        onClick={() => handleSwitchOrg(org.id)}
+                        className={`w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${org.id === selectedOrgId ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                      >
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${org.id === selectedOrgId ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                          <Building2 className={`w-4 h-4 ${org.id === selectedOrgId ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${org.id === selectedOrgId ? 'text-blue-600 dark:text-blue-400' : 'text-gray-800 dark:text-gray-200'}`}>{org.name}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 capitalize mt-0.5">{org.role}</p>
+                        </div>
+                        {org.id === selectedOrgId && <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                  {isOwner && (
+                    <>
+                      <div className="border-t border-gray-200 dark:border-gray-700" />
+                      <button
+                        onClick={() => { setShowSwitcher(false); setShowCreateOrg(true); }}
+                        className="w-full text-left px-4 py-3 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-3 transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-700 flex items-center justify-center flex-shrink-0">
+                          <Plus className="w-4 h-4" />
+                        </div>
+                        <span className="font-medium">New Organization</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-0.5">{memberCount} member{memberCount !== 1 ? 's' : ''}</p>
           </div>
-
-          {isOwner && orgs.length <= 1 && (
-            <button
-              onClick={() => setShowCreateOrg(true)}
-              title="Create new organization"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Org</span>
-            </button>
-          )}
         </div>
 
         {/* Tabs */}
@@ -123,7 +173,6 @@ export function TeamView({ onSignOut }: TeamViewProps) {
           {([
             { key: 'chat', label: 'Chat' },
             { key: 'organization', label: 'Organization' },
-            { key: 'manage', label: 'Manage' },
           ] as const).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
@@ -136,10 +185,8 @@ export function TeamView({ onSignOut }: TeamViewProps) {
       {orgId && currentUserId ? (
         tab === 'chat' ? (
           <ChatTab key={orgId} orgId={orgId} currentUserId={currentUserId} initialSelectedId={pendingChatId} onInitialSelectedConsumed={() => setPendingChatId(null)} />
-        ) : tab === 'organization' ? (
-          <OrgTab key={orgId} orgId={orgId} currentUserId={currentUserId} currentRole={currentRole} onMemberCountChange={setMemberCount} onStartChat={handleStartChat} onOrgDeleted={handleOrgDeleted} />
         ) : (
-          <TeamManagement key={orgId} onSignOut={onSignOut} />
+          <OrgTab key={orgId} orgId={orgId} currentUserId={currentUserId} currentRole={currentRole} onMemberCountChange={setMemberCount} onStartChat={handleStartChat} onOrgDeleted={handleOrgDeleted} />
         )
       ) : null}
 
