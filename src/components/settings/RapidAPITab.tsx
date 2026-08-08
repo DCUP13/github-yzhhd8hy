@@ -8,7 +8,11 @@ interface RapidAPISettings {
   apiHost: string;
 }
 
-export function RapidAPITab() {
+interface RapidAPITabProps {
+  userId?: string;
+}
+
+export function RapidAPITab({ userId }: RapidAPITabProps = {}) {
   const [settings, setSettings] = useState<RapidAPISettings>({
     maxPages: 10,
     apiKey: '',
@@ -22,10 +26,16 @@ export function RapidAPITab() {
     fetchSettings();
   }, []);
 
+  const getCurrentUserId = async (): Promise<string | null> => {
+    if (userId) return userId;
+    const user = await supabase.auth.getUser();
+    return user.data.user?.id || null;
+  };
+
   const fetchSettings = async () => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
         setIsLoading(false);
         return;
       }
@@ -33,7 +43,7 @@ export function RapidAPITab() {
       const { data, error } = await supabase
         .from('rapid_api_settings')
         .select('*')
-        .eq('user_id', user.data.user.id)
+        .eq('user_id', currentUserId)
         .maybeSingle();
 
       if (error && error.code !== 'PGRST116') throw error;
@@ -57,15 +67,15 @@ export function RapidAPITab() {
     setIsSaving(true);
 
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
         throw new Error('User not authenticated');
       }
 
       const { error } = await supabase
         .from('rapid_api_settings')
         .upsert({
-          user_id: user.data.user.id,
+          user_id: currentUserId,
           max_pages: settings.maxPages,
           api_key: settings.apiKey,
           api_host: settings.apiHost,

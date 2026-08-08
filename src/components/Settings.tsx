@@ -281,9 +281,9 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView, mem
               <AmazonTab userId={memberUserId} />
             )}
 
-            {activeTab === 'rapid-api' && <RapidAPITab />}
+            {activeTab === 'rapid-api' && <RapidAPITab userId={memberUserId} />}
 
-            {activeTab === 'instagram' && <InstagramTab />}
+            {activeTab === 'instagram' && <InstagramTab userId={memberUserId} />}
           </div>
         </div>
 

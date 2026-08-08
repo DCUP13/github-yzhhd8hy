@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Instagram as InstagramIcon, Check, AlertCircle, Link2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
-export function InstagramTab() {
+interface InstagramTabProps {
+  userId?: string;
+}
+
+export function InstagramTab({ userId }: InstagramTabProps = {}) {
   const [igUserId, setIgUserId] = useState('');
   const [username, setUsername] = useState('');
   const [accessToken, setAccessToken] = useState('');
@@ -17,15 +21,21 @@ export function InstagramTab() {
     fetchAccount();
   }, []);
 
+  const getCurrentUserId = async (): Promise<string | null> => {
+    if (userId) return userId;
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.id || null;
+  };
+
   const fetchAccount = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) return;
 
       const { data, error } = await supabase
         .from('instagram_accounts')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUserId)
         .maybeSingle();
 
       if (error) {
@@ -49,11 +59,11 @@ export function InstagramTab() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) throw new Error('User not authenticated');
 
       const payload = {
-        user_id: user.id,
+        user_id: currentUserId,
         ig_user_id: igUserId || null,
         username: username || null,
         access_token: accessToken || null,
