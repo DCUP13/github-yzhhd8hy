@@ -168,6 +168,11 @@ Deno.serve(async (req: Request) => {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      // Ensure profiles row is up to date for existing user
+      await supabase.from("profiles").upsert({
+        id: userId,
+        email: email.toLowerCase(),
+      }, { onConflict: "id" });
       log("Updated existing user with temp password", { userId });
     } else {
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
@@ -184,6 +189,13 @@ Deno.serve(async (req: Request) => {
       }
       userId = newUser.user.id;
       log("Created new auth user", { userId });
+
+      // Ensure a profiles row exists (the DB trigger should also do this, but be explicit)
+      await supabase.from("profiles").upsert({
+        id: userId,
+        email: email.toLowerCase(),
+        name: email.toLowerCase(),
+      }, { onConflict: "id" });
     }
 
     // Insert the invitation record

@@ -189,6 +189,13 @@ export default function App() {
         setAppView('dashboard');
         (async () => {
           try {
+            // Mark any pending invitation for this user's email as accepted
+            await supabase
+              .from('member_invitations')
+              .update({ status: 'accepted' })
+              .eq('email', session.user.email?.toLowerCase() ?? '')
+              .eq('status', 'pending');
+
             await fetchUserSettings(session.user.id);
             await fetchUserRole(session.user.id);
           } catch (error) {
