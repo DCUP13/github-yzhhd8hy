@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Server, Mail, Send, X, AlertCircle, Globe, Plus } from 'lucide-react';
+import { Server, Mail, Send, X, AlertCircle, Globe, Plus, ShieldCheck } from 'lucide-react';
 import { useEmails } from '../../contexts/EmailContext';
 import { Toggle } from './Toggle';
 import type { SESEmail } from './types';
 import { supabase } from '../../lib/supabase';
+import { toast } from '../../lib/toast';
 
 interface AmazonTabProps {
   userId?: string;
@@ -20,11 +21,14 @@ export function AmazonTab({ userId }: AmazonTabProps) {
   const [domainError, setDomainError] = useState('');
   const [domainSettings, setDomainSettings] = useState<Record<string, { autoresponderEnabled: boolean }>>({});
 
-  // Owner-only noreply domain
+  // Owner-only invitation address (custom address + verified domain dropdown)
   const [isOrgOwner, setIsOrgOwner] = useState(false);
-  const [noreplyDomain, setNoreplyDomain] = useState('');
+  const [noreplyLocalPart, setNoreplyLocalPart] = useState('noreply');
+  const [noreplySelectedDomain, setNoreplySelectedDomain] = useState('');
+  const [noreplyAddress, setNoreplyAddress] = useState('');
   const [noreplySaving, setNoreplySaving] = useState(false);
   const [noreplySaved, setNoreplySaved] = useState(false);
+  const [noreplyExempted, setNoreplyExempted] = useState(false);
 
   useEffect(() => {
     fetchSESEmails();
@@ -43,7 +47,6 @@ export function AmazonTab({ userId }: AmazonTabProps) {
       const currentUserId = await getCurrentUserId();
       if (!currentUserId) return;
 
-      // Check if user is an org owner
       const { data: membership } = await supabase
         .from('organization_members')
         .select('role')
@@ -55,15 +58,31 @@ export function AmazonTab({ userId }: AmazonTabProps) {
         setIsOrgOwner(true);
         const { data: settings } = await supabase
           .from('amazon_ses_settings')
-          .select('noreply_domain')
+          .select('noreply_address, noreply_domain')
           .eq('user_id', currentUserId)
           .maybeSingle();
-        if (settings?.noreply_domain) {
-          setNoreplyDomain(settings.noreply_domain);
+        if (settings?.noreply_address) {
+          setNoreplyAddress(settings.noreply_address);
+          const [local, domain] = settings.noreply_address.split('@');
+          setNoreplyLocalPart(local || 'noreply');
+          setNoreplySelectedDomain(domain || '');
+        } else if (settings?.noreply_domain) {
+          setNoreplySelectedDomain(settings.noreply_domain);
+        }
+        // Check if the address is already exempted from autoresponder
+        const addr = settings?.noreply_address || (settings?.noreply_domain ? `noreply@${settings.noreply_domain}` : '');
+        if (addr) {
+          const { data: exempt } = await supabase
+            .from('autoresponder_exemptions')
+            .select('id')
+            .eq('user_id', currentUserId)
+            .eq('email_address', addr.toLowerCase())
+            .maybeSingle();
+          setNoreplyExempted(!!exempt);
         }
       }
     } catch (error) {
-      console.error('Error fetching noreply domain:', error);
+      console.error('Error fetching noreply address:', error);
     }
   };
 
@@ -71,16 +90,36 @@ export function AmazonTab({ userId }: AmazonTabProps) {
     try {
       const currentUserId = await getCurrentUserId();
       if (!currentUserId) return;
+      const domain = noreplySelectedDomain.trim();
+      const localPart = noreplyLocalPart.trim() || 'noreply';
+      if (!domain) {
+        toast.error('Please select a verified domain for the invitation address.');
+        return;
+      }
+      const fullAddress = `${localPart}@${domain}`.toLowerCase();
       setNoreplySaving(true);
       const { error } = await supabase
         .from('amazon_ses_settings')
-        .upsert({ user_id: currentUserId, noreply_domain: noreplyDomain.trim() || null, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+        .upsert({
+          user_id: currentUserId,
+          noreply_address: fullAddress,
+          noreply_domain: domain,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
       if (error) throw error;
+      // Auto-exempt this address from the autoresponder
+      const { error: exemptError } = await supabase
+        .from('autoresponder_exemptions')
+        .upsert({ user_id: currentUserId, email_address: fullAddress }, { onConflict: 'user_id,email_address' });
+      if (exemptError) console.error('Failed to exempt address:', exemptError);
+      setNoreplyAddress(fullAddress);
+      setNoreplyExempted(true);
       setNoreplySaved(true);
       setTimeout(() => setNoreplySaved(false), 3000);
+      toast.success('Invitation address saved and exempted from autoresponder.');
     } catch (error) {
-      console.error('Error saving noreply domain:', error);
-      alert('Failed to save noreply domain.');
+      console.error('Error saving noreply address:', error);
+      toast.error('Failed to save invitation address.');
     } finally {
       setNoreplySaving(false);
     }
@@ -413,19 +452,30 @@ export function AmazonTab({ userId }: AmazonTabProps) {
             <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
               <h3 className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                Noreply Domain (Owner Only)
+                Invitation Address (Owner Only)
               </h3>
               <p className="mt-1 text-sm text-amber-700 dark:text-amber-400 mb-3">
-                The domain used as the sender address for team invitation emails (e.g. mail.yourcompany.com). This is only visible and editable by the organization owner.
+                The sender address used for team invitation emails. Choose a verified domain from your account and type any local part (e.g. invites, noreply, welcome). This address is automatically exempt from the autoresponder so replies to invitations won't trigger auto-replies.
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
-                  value={noreplyDomain}
-                  onChange={(e) => setNoreplyDomain(e.target.value)}
-                  placeholder="mail.yourcompany.com"
-                  className="flex-1 px-3 py-2 text-sm border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  value={noreplyLocalPart}
+                  onChange={(e) => setNoreplyLocalPart(e.target.value)}
+                  placeholder="noreply"
+                  className="w-full sm:w-40 px-3 py-2 text-sm border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 />
+                <span className="flex items-center text-amber-700 dark:text-amber-400 text-sm font-medium">@</span>
+                <select
+                  value={noreplySelectedDomain}
+                  onChange={(e) => setNoreplySelectedDomain(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                >
+                  <option value="">Select a verified domain...</option>
+                  {domains.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
                 <button
                   onClick={handleSaveNoreplyDomain}
                   disabled={noreplySaving}
@@ -434,6 +484,12 @@ export function AmazonTab({ userId }: AmazonTabProps) {
                   {noreplySaving ? 'Saving...' : noreplySaved ? 'Saved!' : 'Save'}
                 </button>
               </div>
+              {noreplyExempted && noreplyAddress && (
+                <div className="flex items-center gap-1.5 mt-2 text-xs text-green-700 dark:text-green-400">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>{noreplyAddress} is exempt from the autoresponder</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

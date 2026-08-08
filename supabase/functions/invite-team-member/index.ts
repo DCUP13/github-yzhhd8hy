@@ -104,18 +104,18 @@ Deno.serve(async (req: Request) => {
       .eq("id", organization_id)
       .maybeSingle();
 
-    // Fetch noreply domain from the inviter's SES settings
+    // Fetch invitation address from the inviter's SES settings
     const { data: sesSettings } = await supabase
       .from("amazon_ses_settings")
-      .select("noreply_domain, smtp_username")
+      .select("noreply_address, noreply_domain, smtp_username")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    const noreplyDomain = sesSettings?.noreply_domain || "mail.example.com";
-    const fromEmail = sesSettings?.smtp_username || `noreply@${noreplyDomain}`;
-    const fromAddress = sesSettings?.noreply_domain
-      ? `noreply@${noreplyDomain}`
-      : fromEmail;
+    const fromAddress = sesSettings?.noreply_address
+      ? sesSettings.noreply_address
+      : sesSettings?.noreply_domain
+        ? `noreply@${sesSettings.noreply_domain}`
+        : sesSettings?.smtp_username || "noreply@mail.example.com";
 
     const { error: inviteError } = await supabase.from("member_invitations").insert({
       organization_id,

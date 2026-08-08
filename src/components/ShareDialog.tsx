@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 interface ShareDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  itemType: 'campaign' | 'contact' | 'template';
+  itemType: 'campaign' | 'contact' | 'template' | 'prompt';
   itemId: string;
   itemName: string;
 }
@@ -33,11 +33,32 @@ export function ShareDialog({ isOpen, onClose, itemType, itemId, itemName }: Sha
   const [selectedOrgId, setSelectedOrgId] = useState('');
   const [isSharing, setIsSharing] = useState(false);
 
+  const [isOwner, setIsOwner] = useState(false);
+  const [myOrgId, setMyOrgId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isOpen) return;
+    checkRole();
     loadSharedWith();
     loadOrganizations();
   }, [isOpen, itemId, itemType]);
+
+  const checkRole = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('role, organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+      setIsOwner(membership?.role === 'owner');
+      setMyOrgId(membership?.organization_id || null);
+    } catch (err) {
+      // ignore
+    }
+  };
 
   const loadSharedWith = async () => {
     try {
@@ -83,13 +104,33 @@ export function ShareDialog({ isOpen, onClose, itemType, itemId, itemName }: Sha
 
   const loadOrganizations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('id, name')
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      setOrgs(data || []);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('role, organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+      if (membership?.role === 'owner') {
+        // Owners can share with any org — load all orgs
+        const { data, error } = await supabase
+          .from('organizations')
+          .select('id, name')
+          .order('name', { ascending: true });
+        if (error) throw error;
+        setOrgs(data || []);
+      } else {
+        // Members/managers can only share with their own org
+        if (membership?.organization_id) {
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('id, name')
+            .eq('id', membership.organization_id)
+            .maybeSingle();
+          setOrgs(org ? [org] : []);
+        }
+      }
     } catch (err) {
       // organizations may not be visible to non-admin users
     }
@@ -236,17 +277,19 @@ export function ShareDialog({ isOpen, onClose, itemType, itemId, itemName }: Sha
             <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Share With New Target</h3>
             <div className="space-y-3">
               <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="shareType"
-                    value="all"
-                    checked={shareType === 'all'}
-                    onChange={() => setShareType('all')}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-900 dark:text-white">Everyone</span>
-                </label>
+                {isOwner && (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="shareType"
+                      value="all"
+                      checked={shareType === 'all'}
+                      onChange={() => setShareType('all')}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-900 dark:text-white">Everyone</span>
+                  </label>
+                )}
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -271,6 +314,9 @@ export function ShareDialog({ isOpen, onClose, itemType, itemId, itemName }: Sha
                     <option key={org.id} value={org.id}>{org.name}</option>
                   ))}
                 </select>
+              )}
+              {!isOwner && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">As a member or manager, you can share with your own organization only. Owners can share with any organization.</p>
               )}
 
               <button

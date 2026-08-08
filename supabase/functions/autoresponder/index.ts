@@ -17,6 +17,9 @@ interface PromptRow {
   business_data: string | null;
   use_business_data: boolean;
   variables: string[] | null;
+  routing_addresses: string[] | null;
+  routing_domains: string[] | null;
+  user_id: string;
 }
 
 /**
@@ -123,15 +126,76 @@ Deno.serve(async (req: Request) => {
     );
 
     const body = await req.json().catch(() => ({}));
-    const { prompt_id, email_content, conversation, custom_variables, outbox_email_id } = body as {
+    const { prompt_id, email_content, conversation, custom_variables, outbox_email_id, recipient_address } = body as {
       prompt_id?: string;
       email_content?: string;
       conversation?: string;
       custom_variables?: Record<string, string>;
       outbox_email_id?: string;
+      recipient_address?: string;
     };
 
-    if (!prompt_id) {
+    // If a recipient_address is provided (incoming email destination), check
+    // exemptions and auto-select a prompt by routing address/domain.
+    let selectedPromptId = prompt_id;
+    let resolvedUserId: string | undefined;
+
+    if (recipient_address) {
+      const lowerAddr = recipient_address.toLowerCase().trim();
+      const domain = lowerAddr.split('@')[1] || '';
+
+      // Look up the user who owns the receiving address (by matching domain)
+      if (domain) {
+        const { data: domainRow } = await supabase
+          .from('amazon_ses_domains')
+          .select('user_id, autoresponder_enabled')
+          .ilike('domain', domain)
+          .maybeSingle();
+
+        if (domainRow && domainRow.autoresponder_enabled) {
+          resolvedUserId = domainRow.user_id;
+
+          // Check if the recipient address is exempt from auto-replying
+          const { data: exempt } = await supabase
+            .from('autoresponder_exemptions')
+            .select('id')
+            .eq('user_id', domainRow.user_id)
+            .ilike('email_address', lowerAddr)
+            .maybeSingle();
+
+          if (exempt) {
+            return new Response(
+              JSON.stringify({ success: true, skipped: true, reason: 'Address is exempt from autoresponder' }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+
+          // Auto-select a prompt: first by exact address, then by domain
+          if (!selectedPromptId) {
+            const { data: byAddr } = await supabase
+              .from('prompts')
+              .select('id, routing_addresses, routing_domains')
+              .contains('routing_addresses', [lowerAddr])
+              .maybeSingle();
+
+            if (byAddr?.id) {
+              selectedPromptId = byAddr.id;
+            } else if (domain) {
+              const { data: byDomain } = await supabase
+                .from('prompts')
+                .select('id, routing_addresses, routing_domains')
+                .contains('routing_domains', [domain])
+                .maybeSingle();
+              if (byDomain?.id) {
+                selectedPromptId = byDomain.id;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!selectedPromptId) {
       return new Response(
         JSON.stringify({ error: "Missing prompt_id" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -141,8 +205,8 @@ Deno.serve(async (req: Request) => {
     // Load the prompt
     const { data: prompt, error: promptError } = await supabase
       .from("prompts")
-      .select("id, title, content, reply_mode, step1_content, step2_content, business_data, use_business_data, variables")
-      .eq("id", prompt_id)
+      .select("id, title, content, reply_mode, step1_content, step2_content, business_data, use_business_data, variables, routing_addresses, routing_domains, user_id")
+      .eq("id", selectedPromptId)
       .maybeSingle() as { data: PromptRow | null; error: any };
 
     if (promptError || !prompt) {

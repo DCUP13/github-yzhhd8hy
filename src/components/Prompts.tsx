@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Plus, CreditCard as Edit, Trash2, Search, Info, Repeat, Zap } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FileText, Plus, CreditCard as Edit, Trash2, Search, Info, Repeat, Zap, Copy, Share2, Globe, Building2, Users, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { ShareDialog } from './ShareDialog';
 
 interface PromptsProps {
   onSignOut: () => void;
@@ -18,8 +19,14 @@ interface Prompt {
   step2_content: string | null;
   business_data: string | null;
   use_business_data: boolean;
+  routing_addresses: string[];
+  routing_domains: string[];
   created_at: string;
   updated_at: string;
+}
+
+interface DomainRow {
+  domain: string;
 }
 
 const categories = [
@@ -34,11 +41,17 @@ const categories = [
 
 export function Prompts({ onSignOut, currentView }: PromptsProps) {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [sharedPrompts, setSharedPrompts] = useState<Prompt[]>([]);
+  const [domains, setDomains] = useState<DomainRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
+  const [showShared, setShowShared] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -50,11 +63,49 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
     step2Content: '',
     businessData: '',
     useBusinessData: false,
+    routingAddresses: '',
+    routingDomains: '',
   });
 
   useEffect(() => {
     fetchPrompts();
+    fetchDomains();
+    checkOwnerStatus();
   }, []);
+
+  const checkOwnerStatus = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      setCurrentUserId(session.user.id);
+
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      setIsOwner(membership?.role === 'owner');
+    } catch (err) {
+      console.error('Error checking owner status:', err);
+    }
+  };
+
+  const fetchDomains = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data } = await supabase
+        .from('amazon_ses_domains')
+        .select('domain')
+        .eq('user_id', session.user.id)
+        .order('domain');
+      setDomains(data || []);
+    } catch (err) {
+      console.error('Error fetching domains:', err);
+    }
+  };
 
   const fetchPrompts = async () => {
     try {
@@ -72,6 +123,25 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
 
       if (error) throw error;
       setPrompts(data || []);
+
+      // Fetch shared prompts
+      const { data: sharedItems } = await supabase
+        .from('shared_items')
+        .select('item_id')
+        .eq('item_type', 'prompt');
+
+      if (sharedItems && sharedItems.length > 0) {
+        const sharedIds = sharedItems.map(s => s.item_id);
+        const { data: sharedData } = await supabase
+          .from('prompts')
+          .select('*')
+          .in('id', sharedIds)
+          .neq('user_id', session.user.id)
+          .order('updated_at', { ascending: false });
+        setSharedPrompts(sharedData || []);
+      } else {
+        setSharedPrompts([]);
+      }
     } catch (error) {
       console.error('Error fetching prompts:', error);
     } finally {
@@ -96,6 +166,67 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
     }
   };
 
+  const handleDuplicatePrompt = async (prompt: Prompt) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      const { error } = await supabase
+        .from('prompts')
+        .insert({
+          user_id: session.user.id,
+          title: `${prompt.title} (Copy)`,
+          category: prompt.category,
+          content: prompt.content,
+          variables: prompt.variables,
+          reply_mode: prompt.reply_mode,
+          step1_content: prompt.step1_content,
+          step2_content: prompt.step2_content,
+          business_data: prompt.business_data,
+          use_business_data: prompt.use_business_data,
+          routing_addresses: prompt.routing_addresses || [],
+          routing_domains: prompt.routing_domains || [],
+        });
+
+      if (error) throw error;
+      await fetchPrompts();
+    } catch (error) {
+      console.error('Error duplicating prompt:', error);
+      alert('Failed to duplicate prompt. Please try again.');
+    }
+  };
+
+  const handleCopySharedPrompt = async (prompt: Prompt) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      const { error } = await supabase
+        .from('prompts')
+        .insert({
+          user_id: session.user.id,
+          title: prompt.title,
+          category: prompt.category,
+          content: prompt.content,
+          variables: prompt.variables,
+          reply_mode: prompt.reply_mode,
+          step1_content: prompt.step1_content,
+          step2_content: prompt.step2_content,
+          business_data: prompt.business_data,
+          use_business_data: prompt.use_business_data,
+          routing_addresses: [],
+          routing_domains: [],
+        });
+
+      if (error) throw error;
+      await fetchPrompts();
+      alert('Prompt copied to your account.');
+    } catch (error) {
+      console.error('Error copying shared prompt:', error);
+      alert('Failed to copy prompt. Please try again.');
+    }
+  };
+
   const handleEditPrompt = (prompt: Prompt) => {
     setEditingPrompt(prompt);
     setFormData({
@@ -108,6 +239,8 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
       step2Content: prompt.step2_content || '',
       businessData: prompt.business_data || '',
       useBusinessData: prompt.use_business_data || false,
+      routingAddresses: (prompt.routing_addresses ?? []).join(', '),
+      routingDomains: (prompt.routing_domains ?? []).join(', '),
     });
     setShowCreateModal(true);
   };
@@ -116,6 +249,12 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
     prompt.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (prompt.content || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     (prompt.step1_content || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    prompt.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredSharedPrompts = sharedPrompts.filter(prompt =>
+    prompt.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (prompt.content || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     prompt.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -130,6 +269,8 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
       step2Content: '',
       businessData: '',
       useBusinessData: false,
+      routingAddresses: '',
+      routingDomains: '',
     });
     setShowCreateModal(false);
     setEditingPrompt(null);
@@ -156,6 +297,16 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
         .map(v => v.trim())
         .filter(v => v.length > 0);
 
+      const routingAddresses = formData.routingAddresses
+        .split(',')
+        .map(v => v.trim().toLowerCase())
+        .filter(v => v.length > 0);
+
+      const routingDomains = formData.routingDomains
+        .split(',')
+        .map(v => v.trim().toLowerCase())
+        .filter(v => v.length > 0);
+
       const promptData: Record<string, any> = {
         title: formData.title,
         category: formData.category,
@@ -165,6 +316,8 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
         reply_mode: formData.replyMode,
         use_business_data: formData.useBusinessData,
         business_data: formData.useBusinessData ? formData.businessData : null,
+        routing_addresses: routingAddresses,
+        routing_domains: routingDomains,
       };
 
       if (formData.replyMode === 'two_step') {
@@ -194,7 +347,6 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
 
       await fetchPrompts();
       resetForm();
-      alert(editingPrompt ? 'Prompt updated successfully!' : 'Prompt created successfully!');
     } catch (error) {
       console.error('Error saving prompt:', error);
       alert('Failed to save prompt. Please try again.');
@@ -218,6 +370,17 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Prompts</h1>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={() => setShowShared(!showShared)}
+              className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-lg shadow-sm transition-colors ${
+                showShared
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Shared {sharedPrompts.length > 0 && `(${sharedPrompts.length})`}
+            </button>
             <button
               onClick={() => setShowInfoDialog(true)}
               className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg shadow-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -248,6 +411,67 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
           </div>
         </div>
 
+        {/* Shared Prompts Section */}
+        {showShared && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-5 h-5 text-blue-500" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Shared Prompts</h2>
+            </div>
+            {filteredSharedPrompts.length === 0 ? (
+              <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <Users className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {searchQuery ? 'No shared prompts match your search' : 'No prompts have been shared with you yet'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredSharedPrompts.map((prompt) => (
+                  <div
+                    key={prompt.id}
+                    className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow border-2 border-blue-100 dark:border-blue-900/30"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                            {prompt.title}
+                          </h3>
+                          {prompt.reply_mode === 'two_step' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                              <Repeat className="w-3 h-3" />
+                              2-Step
+                            </span>
+                          )}
+                        </div>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          {prompt.category}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3 mb-3">
+                      {prompt.reply_mode === 'two_step'
+                        ? prompt.step1_content || prompt.step2_content
+                        : prompt.content}
+                    </p>
+
+                    <button
+                      onClick={() => handleCopySharedPrompt(prompt)}
+                      className="w-full mt-3 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy to my account
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* My Prompts */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredPrompts.length === 0 ? (
             <div className="col-span-full text-center py-12 bg-white dark:bg-gray-800 rounded-xl">
@@ -284,6 +508,20 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   </div>
                   <div className="flex gap-1">
                     <button
+                      onClick={() => handleDuplicatePrompt(prompt)}
+                      className="p-2 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                      title="Duplicate prompt"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setShareTarget({ id: prompt.id, name: prompt.title })}
+                      className="p-2 text-gray-400 hover:text-green-500 dark:text-gray-500 dark:hover:text-green-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                      title="Share prompt"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => handleEditPrompt(prompt)}
                       className="p-2 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                       title="Edit prompt"
@@ -312,6 +550,26 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
                       Business data attached
                     </span>
+                  </div>
+                )}
+
+                {(prompt.routing_addresses ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {(prompt.routing_addresses ?? []).map((addr, i) => (
+                      <span key={i} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        {addr}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {(prompt.routing_domains ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {(prompt.routing_domains ?? []).map((dom, i) => (
+                      <span key={i} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                        @{dom}
+                      </span>
+                    ))}
                   </div>
                 )}
 
@@ -501,6 +759,64 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   )}
                 </div>
 
+                {/* Routing Section */}
+                <div className="border border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
+                  <label className="block text-sm font-medium text-green-800 dark:text-green-300 mb-2">
+                    Email Routing (optional)
+                  </label>
+                  <p className="text-xs text-green-700 dark:text-green-400 mb-3">
+                    When the autoresponder is enabled for a domain, incoming emails sent to these addresses or domains will automatically use this prompt to generate a reply.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Specific addresses (comma-separated)
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.routingAddresses}
+                        onChange={(e) => setFormData(prev => ({ ...prev, routingAddresses: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., support@mycompany.com, help@mycompany.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Entire domains (comma-separated)
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.routingDomains}
+                        onChange={(e) => setFormData(prev => ({ ...prev, routingDomains: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="e.g., mycompany.com, support.mycompany.com"
+                      />
+                      {domains.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {domains.map(d => (
+                            <button
+                              key={d.domain}
+                              type="button"
+                              onClick={() => {
+                                const current = formData.routingDomains.split(',').map(v => v.trim()).filter(Boolean);
+                                if (!current.includes(d.domain)) {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    routingDomains: [...current, d.domain].join(', '),
+                                  }));
+                                }
+                              }}
+                              className="px-2 py-0.5 text-xs rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            >
+                              + {d.domain}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
                   <p className="text-xs text-blue-700 dark:text-blue-300">
                     <strong>Available placeholders:</strong> {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, {`{{email}}`} (incoming email), {`{{conversation}}`} (full thread), plus your custom variables.
@@ -600,6 +916,20 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 </div>
 
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Email Routing</h4>
+                  <p>
+                    You can assign specific email addresses or entire domains to a prompt. When the autoresponder is enabled for that domain and an email arrives at one of those addresses, the system automatically selects this prompt to generate the reply. This lets you use different prompts for different departments or brands.
+                  </p>
+                </div>
+
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Sharing & Duplicating</h4>
+                  <p>
+                    Use the <strong>duplicate</strong> button on any prompt card to create a copy of it in your account. Use the <strong>share</strong> button to share a prompt with your organization or, if you're an owner, with any organization. Shared prompts appear in the "Shared" section where anyone can copy them to their own account.
+                  </p>
+                </div>
+
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Example Two-Step Flow</h4>
                   <p><strong>Step 1:</strong> "Analyze this email and extract the key questions. Output as a numbered list. Email: {`{{email}}`}"</p>
                   <p className="mt-2"><strong>Step 2:</strong> "Using this analysis, write a professional reply that answers each question. Use our company info for context: {`{{business_data}}`}. Analysis: {`{{step1_result}}`}"</p>
@@ -618,6 +948,16 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
               </div>
             </div>
           </div>
+        )}
+
+        {shareTarget && (
+          <ShareDialog
+            isOpen={true}
+            onClose={() => setShareTarget(null)}
+            itemType="prompt"
+            itemId={shareTarget.id}
+            itemName={shareTarget.name}
+          />
         )}
       </div>
     </div>
