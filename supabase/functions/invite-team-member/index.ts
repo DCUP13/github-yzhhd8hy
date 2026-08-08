@@ -124,28 +124,26 @@ Deno.serve(async (req: Request) => {
 
     if (orgError) log("Failed to fetch org name", orgError);
 
-    // Fetch invitation address from the inviter's SES settings
+    // Fetch the invitation (noreply) address — credentials are in edge function secrets, not the DB
     const { data: sesSettings, error: sesError } = await supabase
       .from("amazon_ses_settings")
-      .select("noreply_address, noreply_domain, smtp_username, smtp_server, smtp_port")
+      .select("noreply_address, noreply_domain")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (sesError) log("Failed to fetch SES settings", sesError);
+    if (sesError) log("Failed to fetch noreply address", sesError);
 
-    log("SES settings lookup", {
+    log("Noreply address lookup", {
       found: !!sesSettings,
       noreply_address: sesSettings?.noreply_address ?? null,
       noreply_domain: sesSettings?.noreply_domain ?? null,
-      smtp_username: sesSettings?.smtp_username ?? null,
-      smtp_server: sesSettings?.smtp_server ?? null,
     });
 
     const fromAddress = sesSettings?.noreply_address
       ? sesSettings.noreply_address
       : sesSettings?.noreply_domain
         ? `noreply@${sesSettings.noreply_domain}`
-        : sesSettings?.smtp_username || "noreply@mail.example.com";
+        : "noreply@mail.example.com";
 
     log("Using from address", { fromAddress });
 
@@ -256,11 +254,6 @@ Deno.serve(async (req: Request) => {
     // Build the response with full diagnostic info
     if (!emailSent) {
       const warnings: string[] = [];
-      if (!sesSettings) {
-        warnings.push("No Amazon SES settings found for your account. Configure your AWS SES credentials in Settings → Amazon SES.");
-      } else if (!sesSettings.smtp_username || sesSettings.smtp_username.length < 10) {
-        warnings.push("Your Amazon SES settings look incomplete or invalid. The SMTP username in Settings → Amazon SES appears to be a placeholder.");
-      }
       if (fromAddress === "noreply@mail.example.com") {
         warnings.push("No invitation address is configured. Set a custom invitation address (e.g. noreply@yourdomain.com) in Settings → Amazon SES.");
       }

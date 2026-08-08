@@ -89,23 +89,17 @@ serve(async (req) => {
           })
           .eq('id', email.id)
 
-        const { data: sesSettings } = await supabaseClient
-          .from('amazon_ses_settings')
-          .select('*')
-          .eq('user_id', email.user_id)
-          .single()
-
         const { data: gmailSettings } = await supabaseClient
           .from('google_smtp_emails')
           .select('*')
           .eq('user_id', email.user_id)
           .eq('address', email.from_email)
-          .single()
+          .maybeSingle()
 
         let emailSent = false
         let errorMessage = ''
 
-        // Check AWS SES env vars
+        // AWS SES credentials come from edge function env vars — not the database
         const AWS_ACCESS_KEY_ID = Deno.env.get('AWS_ACCESS_KEY_ID')
         const AWS_SECRET_ACCESS_KEY = Deno.env.get('AWS_SECRET_ACCESS_KEY')
         const AWS_REGION = Deno.env.get('AWS_REGION') || 'us-east-1'
@@ -114,18 +108,17 @@ serve(async (req) => {
           hasAccessKey: !!AWS_ACCESS_KEY_ID,
           hasSecretKey: !!AWS_SECRET_ACCESS_KEY,
           region: AWS_REGION,
-          sesSettingsFound: !!sesSettings,
           gmailSettingsFound: !!gmailSettings,
         })
 
-        // Try to send via Amazon SES API first
-        if (sesSettings && !emailSent) {
+        // Send via Amazon SES API (credentials from env vars)
+        if (!emailSent) {
           if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
-            log('SES settings exist but AWS credentials are not set in edge function env vars')
+            log('AWS credentials not set in edge function env vars')
             errorMessage = 'AWS credentials not configured. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION in your edge function secrets.'
           } else {
             try {
-              await sendViaSES(email, sesSettings, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
+              await sendViaSES(email, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
               emailSent = true
             } catch (error) {
               const msg = error instanceof Error ? error.message : String(error)
@@ -135,7 +128,7 @@ serve(async (req) => {
           }
         }
 
-        // Try Gmail if SES failed or not configured
+        // Fallback: try Gmail SMTP if SES failed
         if (gmailSettings && !emailSent) {
           try {
             await sendViaGmail(email, gmailSettings)
@@ -147,8 +140,8 @@ serve(async (req) => {
           }
         }
 
-        if (!sesSettings && !gmailSettings && !emailSent) {
-          errorMessage = 'No email provider configured. Add Amazon SES settings in Settings → Amazon SES, or connect a Gmail account.'
+        if (!emailSent && !errorMessage) {
+          errorMessage = 'No email provider available. AWS SES credentials are not configured in edge function secrets.'
         }
 
         if (emailSent) {
@@ -230,7 +223,6 @@ serve(async (req) => {
 
 async function sendViaSES(
   email: EmailData, 
-  sesSettings: any,
   AWS_ACCESS_KEY_ID: string,
   AWS_SECRET_ACCESS_KEY: string,
   AWS_REGION: string
@@ -240,7 +232,7 @@ async function sendViaSES(
   log(`Sending ${recipients.length} email(s) via SES API`, { recipients, region: AWS_REGION })
   
   const sendPromises = recipients.map(async (recipient) => {
-    return await sendIndividualSESEmail(email, sesSettings, recipient, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
+    return await sendIndividualSESEmail(email, recipient, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
   })
   
   const results = await Promise.allSettled(sendPromises)
@@ -256,7 +248,6 @@ async function sendViaSES(
 
 async function sendIndividualSESEmail(
   email: EmailData, 
-  sesSettings: any, 
   recipient: string,
   AWS_ACCESS_KEY_ID: string,
   AWS_SECRET_ACCESS_KEY: string,
