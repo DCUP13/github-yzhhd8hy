@@ -19,9 +19,10 @@ interface Organization {
 interface OrganizationSettingsProps {
   orgId: string;
   onClose: () => void;
+  onSaved?: () => void;
 }
 
-export default function OrganizationSettings({ orgId, onClose }: OrganizationSettingsProps) {
+export default function OrganizationSettings({ orgId, onClose, onSaved }: OrganizationSettingsProps) {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -281,6 +282,7 @@ export default function OrganizationSettings({ orgId, onClose }: OrganizationSet
       if (updateError) throw updateError;
 
       setSuccess('Organization details updated successfully!');
+      onSaved?.();
       setTimeout(() => {
         onClose();
       }, 1500);

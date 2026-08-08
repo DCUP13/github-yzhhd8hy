@@ -122,31 +122,16 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
   async function loadStats() {
     setStatsLoading(true);
     try {
-      const { data: sentEmails } = await supabase
-        .from('email_outbox')
-        .select('id')
-        .eq('user_id', memberId);
-      const totalSent = sentEmails?.length || 0;
-
-      const { data: opens } = await supabase
-        .from('email_open_events')
-        .select('id')
-        .eq('user_id', memberId);
-      const totalOpens = opens?.length || 0;
-
-      const { data: replies } = await supabase
-        .from('email_replies')
-        .select('id')
-        .eq('user_id', memberId);
-      const totalReplies = replies?.length || 0;
-
-      const { data: campaigns } = await supabase
-        .from('campaigns')
-        .select('id')
-        .eq('user_id', memberId);
-      const campaignsRun = campaigns?.length || 0;
-
-      setStats({ totalSent, totalOpens, totalReplies, campaignsRun });
+      const { data, error } = await supabase
+        .rpc('get_member_statistics', { p_member_id: memberId });
+      if (error) throw error;
+      const r = (data && data[0]) || { total_sent: 0, total_opens: 0, total_replies: 0, campaigns_run: 0 };
+      setStats({
+        totalSent: Number(r.total_sent) || 0,
+        totalOpens: Number(r.total_opens) || 0,
+        totalReplies: Number(r.total_replies) || 0,
+        campaignsRun: Number(r.campaigns_run) || 0,
+      });
     } catch (err) {
       console.error('Error loading stats:', err);
       setStats({ totalSent: 0, totalOpens: 0, totalReplies: 0, campaignsRun: 0 });
@@ -486,11 +471,17 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
                   ) : userSettings ? (
                     <div className="space-y-3">
                       {Object.entries(userSettings).filter(([key]) => !['id', 'user_id', 'created_at', 'updated_at'].includes(key)).map(([key, value]) => (
-                        <div key={key} className="flex justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                        <div key={key} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                           <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">{key.replace(/_/g, ' ')}</span>
-                          <span className="text-sm text-gray-900 dark:text-white font-medium">
-                            {typeof value === 'boolean' ? (value ? 'On' : 'Off') : String(value || '—')}
-                          </span>
+                          {typeof value === 'boolean' ? (
+                            <Toggle checked={value} onChange={async (checked) => {
+                              const { error } = await supabase.from('user_settings').update({ [key]: checked }).eq('user_id', memberId);
+                              if (error) { toast.error('Failed to update setting'); return; }
+                              setUserSettings(prev => ({ ...prev!, [key]: checked }));
+                            }} />
+                          ) : (
+                            <span className="text-sm text-gray-900 dark:text-white font-medium">{String(value || '—')}</span>
+                          )}
                         </div>
                       ))}
                     </div>

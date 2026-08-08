@@ -44,7 +44,7 @@ export function TeamView({ onSignOut }: TeamViewProps) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const switcherRef = useRef<HTMLDivElement>(null);
 
-  const { orgs, selectedOrg, selectedOrgId, showSwitcher, setShowSwitcher, switchOrg, showCreateOrg, setShowCreateOrg, handleOrgCreated, handleOrgDeleted, loading } = useOrganization();
+  const { orgs, selectedOrg, selectedOrgId, showSwitcher, setShowSwitcher, switchOrg, showCreateOrg, setShowCreateOrg, handleOrgCreated, handleOrgDeleted, refresh, loading } = useOrganization();
 
   const orgId = selectedOrgId;
   const currentRole = selectedOrg?.role ?? 'member';
@@ -669,10 +669,11 @@ function OrgTab({ orgId, currentUserId, currentRole, onMemberCountChange, onStar
     if (!await showConfirm({ message: `Resend invitation to ${inv.email}?`, confirmText: 'Resend' })) return;
     await supabase.from('member_invitations').delete().eq('id', inv.id);
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Your session has expired. Please sign in again.');
     const res = await fetch(`${supabaseUrl}/functions/v1/invite-team-member`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${session.access_token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: inv.email, organization_id: orgId, invited_by: currentUserId, role: inv.role || 'member' }),
     });
     const data = await res.json();
@@ -729,7 +730,7 @@ function OrgTab({ orgId, currentUserId, currentRole, onMemberCountChange, onStar
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-3">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">{orgDetails.name}</h2>
-                  {isManager && (
+                  {currentRole === 'owner' && (
                     <button onClick={() => setShowOrgSettings(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex-shrink-0">
                       <Settings className="w-3.5 h-3.5" />Edit
                     </button>
@@ -864,7 +865,7 @@ function OrgTab({ orgId, currentUserId, currentRole, onMemberCountChange, onStar
       {selectedMember && (
         <MemberDetailDialog memberId={selectedMember.user_id} memberName={selectedMember.name} memberEmail={selectedMember.email} organizationId={orgId ?? undefined} onClose={() => setSelectedMember(null)} />
       )}
-      {showOrgSettings && <OrganizationSettings orgId={orgId} onClose={() => { setShowOrgSettings(false); loadOrgData(); }} />}
+      {showOrgSettings && <OrganizationSettings orgId={orgId} onClose={() => { setShowOrgSettings(false); loadOrgData(); }} onSaved={refresh} />}
       {showInviteModal && (
         <InviteModal orgId={orgId} currentUserId={currentUserId} currentRole={currentRole} onClose={() => setShowInviteModal(false)}
           onSuccess={() => {
@@ -897,10 +898,12 @@ function InviteModal({ orgId, currentUserId, currentRole, onClose, onSuccess }: 
     setLoading(true); setError(''); setSuccessMsg('');
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Your session has expired. Please sign in again.');
+      const authHeaders = { 'Authorization': `Bearer ${session.access_token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
       if (inviteType === 'direct') {
         const res = await fetch(`${supabaseUrl}/functions/v1/create-team-member`, {
-          method: 'POST', headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          method: 'POST', headers: authHeaders,
           body: JSON.stringify({ email: email.trim(), password: password.trim(), organization_id: orgId, role }),
         });
         const data = await res.json();
@@ -908,7 +911,7 @@ function InviteModal({ orgId, currentUserId, currentRole, onClose, onSuccess }: 
         setSuccessMsg(`Account created — email: ${email}, password: ${password}`);
       } else {
         const res = await fetch(`${supabaseUrl}/functions/v1/invite-team-member`, {
-          method: 'POST', headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          method: 'POST', headers: authHeaders,
           body: JSON.stringify({ email: email.trim(), organization_id: orgId, invited_by: currentUserId, role }),
         });
         const data = await res.json();
