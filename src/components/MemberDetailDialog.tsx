@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Globe, Settings as SettingsIcon, BarChart3, Server, Plus, Trash2, Send, Crown, Shield, User as UserIcon, Clock, AlertCircle } from 'lucide-react';
+import { X, Mail, Globe, Settings as SettingsIcon, BarChart3, Server, Plus, Trash2, Send, Crown, Shield, User as UserIcon, Clock, KeyRound, Instagram as InstagramIcon, Bell, Moon, Lock, Bug, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
 import { Toggle } from './settings/Toggle';
+import { RapidAPITab } from './settings/RapidAPITab';
+import { InstagramTab } from './settings/InstagramTab';
 
 interface MemberDetailDialogProps {
   memberId: string;
@@ -12,10 +14,37 @@ interface MemberDetailDialogProps {
   onClose: () => void;
 }
 
-type Tab = 'emails' | 'domains' | 'settings' | 'stats';
+type Tab = 'emails' | 'domains' | 'settings' | 'rapid-api' | 'instagram' | 'stats';
 
 interface SESEmailRow { id: string; address: string; daily_limit: number; }
 interface DomainRow { id: string; domain: string; autoresponder_enabled: boolean; }
+
+interface MemberSettings {
+  notifications: boolean;
+  two_factor_auth: boolean;
+  newsletter: boolean;
+  public_profile: boolean;
+  debugging: boolean;
+  clean_up_loi: boolean;
+}
+
+const DEFAULT_SETTINGS: MemberSettings = {
+  notifications: true,
+  two_factor_auth: false,
+  newsletter: false,
+  public_profile: true,
+  debugging: false,
+  clean_up_loi: false,
+};
+
+const SETTING_ROWS: { key: keyof MemberSettings; label: string; description: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: 'notifications', label: 'Push Notifications', description: 'Receive notifications about important updates', icon: Bell },
+  { key: 'two_factor_auth', label: 'Two-Factor Authentication', description: 'Add an extra layer of security', icon: Lock },
+  { key: 'public_profile', label: 'Public Profile', description: 'Make profile visible to other users', icon: Globe },
+  { key: 'newsletter', label: 'Newsletter', description: 'Receive newsletter with updates', icon: Mail },
+  { key: 'debugging', label: 'Debugging', description: 'Enable additional logging and debugging', icon: Bug },
+  { key: 'clean_up_loi', label: 'Clean Up Attachments', description: 'Delete local attachment files during campaigns', icon: FileText },
+];
 
 export function MemberDetailDialog({ memberId, memberName, memberEmail, organizationId, onClose }: MemberDetailDialogProps) {
   const [activeTab, setActiveTab] = useState<Tab>('emails');
@@ -35,7 +64,7 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
   const [domainError, setDomainError] = useState('');
 
   // Settings
-  const [userSettings, setUserSettings] = useState<Record<string, any> | null>(null);
+  const [settings, setSettings] = useState<MemberSettings>(DEFAULT_SETTINGS);
   const [settingsLoading, setSettingsLoading] = useState(false);
 
   // Stats
@@ -53,7 +82,7 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
     if (activeTab === 'domains' && domains.length === 0) {
       loadDomains();
     }
-    if (activeTab === 'settings' && !userSettings) {
+    if (activeTab === 'settings') {
       loadSettings();
     }
     if (activeTab === 'stats' && !stats) {
@@ -103,8 +132,29 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
       .select('*')
       .eq('user_id', memberId)
       .maybeSingle();
-    setUserSettings(data);
+    if (data) {
+      setSettings({
+        notifications: data.notifications ?? DEFAULT_SETTINGS.notifications,
+        two_factor_auth: data.two_factor_auth ?? DEFAULT_SETTINGS.two_factor_auth,
+        newsletter: data.newsletter ?? DEFAULT_SETTINGS.newsletter,
+        public_profile: data.public_profile ?? DEFAULT_SETTINGS.public_profile,
+        debugging: data.debugging ?? DEFAULT_SETTINGS.debugging,
+        clean_up_loi: data.clean_up_loi ?? DEFAULT_SETTINGS.clean_up_loi,
+      });
+    }
     setSettingsLoading(false);
+  }
+
+  async function handleSettingToggle(key: keyof MemberSettings, checked: boolean) {
+    setSettings(prev => ({ ...prev, [key]: checked }));
+    const { error } = await supabase
+      .from('user_settings')
+      .update({ [key]: checked, updated_at: new Date().toISOString() })
+      .eq('user_id', memberId);
+    if (error) {
+      setSettings(prev => ({ ...prev, [key]: !checked }));
+      toast.error('Failed to update setting');
+    }
   }
 
   async function loadStats() {
@@ -192,6 +242,8 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
     { key: 'emails', label: 'Email Accounts', icon: Mail },
     { key: 'domains', label: 'Domains', icon: Globe },
     { key: 'settings', label: 'Settings', icon: SettingsIcon },
+    { key: 'rapid-api', label: 'Rapid API', icon: KeyRound },
+    { key: 'instagram', label: 'Instagram', icon: InstagramIcon },
     { key: 'stats', label: 'Statistics', icon: BarChart3 },
   ];
 
@@ -215,14 +267,14 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0">
+        <div className="flex border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0 overflow-x-auto">
           {tabs.map(tab => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.key
                     ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -360,27 +412,36 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
                     <div className="flex items-center justify-center py-8">
                       <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                     </div>
-                  ) : userSettings ? (
-                    <div className="space-y-3">
-                      {Object.entries(userSettings).filter(([key]) => !['id', 'user_id', 'created_at', 'updated_at'].includes(key)).map(([key, value]) => (
+                  ) : (
+                    <div className="space-y-2">
+                      {SETTING_ROWS.map(({ key, label, description, icon: Icon }) => (
                         <div key={key} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                          <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">{key.replace(/_/g, ' ')}</span>
-                          {typeof value === 'boolean' ? (
-                            <Toggle checked={value} onChange={async (checked) => {
-                              const { error } = await supabase.from('user_settings').update({ [key]: checked }).eq('user_id', memberId);
-                              if (error) { toast.error('Failed to update setting'); return; }
-                              setUserSettings(prev => ({ ...prev!, [key]: checked }));
-                            }} />
-                          ) : (
-                            <span className="text-sm text-gray-900 dark:text-white font-medium">{String(value || '—')}</span>
-                          )}
+                          <div className="flex items-start gap-3">
+                            <Icon className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">{label}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
+                            </div>
+                          </div>
+                          <Toggle
+                            checked={settings[key]}
+                            onChange={(checked) => handleSettingToggle(key, checked)}
+                          />
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">No settings found for this member</p>
                   )}
                 </div>
+              )}
+
+              {/* Rapid API Tab */}
+              {activeTab === 'rapid-api' && (
+                <RapidAPITab userId={memberId} />
+              )}
+
+              {/* Instagram Tab */}
+              {activeTab === 'instagram' && (
+                <InstagramTab userId={memberId} />
               )}
 
               {/* Statistics Tab */}
