@@ -89,13 +89,6 @@ serve(async (req) => {
           })
           .eq('id', email.id)
 
-        const { data: gmailSettings } = await supabaseClient
-          .from('google_smtp_emails')
-          .select('*')
-          .eq('user_id', email.user_id)
-          .eq('address', email.from_email)
-          .maybeSingle()
-
         let emailSent = false
         let errorMessage = ''
 
@@ -108,7 +101,6 @@ serve(async (req) => {
           hasAccessKey: !!AWS_ACCESS_KEY_ID,
           hasSecretKey: !!AWS_SECRET_ACCESS_KEY,
           region: AWS_REGION,
-          gmailSettingsFound: !!gmailSettings,
         })
 
         // Send via Amazon SES API (credentials from env vars)
@@ -125,18 +117,6 @@ serve(async (req) => {
               log('SES sending failed', msg)
               errorMessage = `SES: ${msg}`
             }
-          }
-        }
-
-        // Fallback: try Gmail SMTP if SES failed
-        if (gmailSettings && !emailSent) {
-          try {
-            await sendViaGmail(email, gmailSettings)
-            emailSent = true
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error)
-            log('Gmail sending failed', msg)
-            errorMessage = errorMessage ? `${errorMessage}, Gmail: ${msg}` : `Gmail: ${msg}`
           }
         }
 
@@ -338,43 +318,6 @@ async function sendIndividualSESEmail(
   }
   
   log(`SES email sent to ${recipient}`)
-}
-
-async function sendViaGmail(email: EmailData, gmailSettings: any) {
-  const smtpHost = 'smtp.gmail.com'
-  const smtpPort = 587
-  
-  const recipients = email.to_email.split(',').map(addr => addr.trim()).filter(addr => addr.length > 0)
-  
-  log(`Sending ${recipients.length} email(s) via Gmail`)
-  
-  for (const recipient of recipients) {
-    await sendIndividualGmailEmail(email, gmailSettings, recipient)
-  }
-  
-  log(`Successfully sent ${recipients.length} email(s) via Gmail`)
-}
-
-async function sendIndividualGmailEmail(email: EmailData, gmailSettings: any, recipient: string) {
-  log(`Sending Gmail email to ${recipient}`)
-  
-  const emailMessage = [
-    `From: ${email.from_email}`,
-    `To: ${recipient}`,
-    `Subject: ${email.subject}`,
-    `Content-Type: text/html; charset=UTF-8`,
-    ``,
-    email.body
-  ].join('\r\n')
-  
-  // SMTP not fully implemented — placeholder
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  
-  if (Math.random() < 0.05) {
-    throw new Error('Gmail SMTP connection failed')
-  }
-  
-  log(`Gmail email sent to ${recipient}`)
 }
 
 async function sha256(message: string): Promise<string> {

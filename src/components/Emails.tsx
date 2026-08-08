@@ -10,27 +10,20 @@ interface EmailsProps {
 
 export interface EmailEntry {
   address: string;
-  smtpProvider?: 'amazon' | 'gmail';
+  smtpProvider?: 'amazon';
   dailyLimit?: number;
   sentEmails?: number;
   isLocked?: boolean;
 }
 
 export function Addresses({ onSignOut, currentView }: EmailsProps) {
-  const { sesEmails, googleEmails, refreshEmails } = useEmails();
-  
-  // Combine and sort emails alphabetically by address
-  const allEmails = [...sesEmails.map(email => ({ 
-    ...email, 
-    type: 'ses' as const, 
+  const { sesEmails, refreshEmails } = useEmails();
+
+  const allEmails = [...sesEmails.map(email => ({
+    ...email,
+    type: 'ses' as const,
     id: `ses-${email.address}`,
     smtpProvider: 'amazon' as const
-  })),
-  ...googleEmails.map(email => ({ 
-    ...email, 
-    type: 'gmail' as const, 
-    id: `gmail-${email.address}`,
-    smtpProvider: 'gmail' as const
   }))].sort((a, b) => a.address.localeCompare(b.address));
 
   const handleResetSentEmails = async (email: typeof allEmails[0]) => {
@@ -40,10 +33,9 @@ export function Addresses({ onSignOut, currentView }: EmailsProps) {
         throw new Error('User not authenticated');
       }
 
-      const table = email.type === 'ses' ? 'amazon_ses_emails' : 'google_smtp_emails';
       const { error } = await supabase
-        .from(table)
-        .update({ 
+        .from('amazon_ses_emails')
+        .update({
           sent_emails: 0,
           is_locked: false,
           updated_at: new Date().toISOString()
@@ -77,7 +69,7 @@ export function Addresses({ onSignOut, currentView }: EmailsProps) {
                   No Email Addresses Configured
                 </h3>
                 <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
-                  You haven't added any email addresses yet. Go to Settings to configure your Amazon SES or Gmail SMTP sender emails.
+                  You haven't added any email addresses yet. Go to Settings to configure your Amazon SES sender emails.
                 </p>
               </div>
             </div>
@@ -97,7 +89,7 @@ export function Addresses({ onSignOut, currentView }: EmailsProps) {
 
         <div className="space-y-6">
           {allEmails.map((email) => {
-            const limit = email.dailyLimit || (email.type === 'ses' ? 50000 : 500);
+            const limit = email.dailyLimit || 50000;
             const sentEmails = email.sentEmails || 0;
             const remaining = limit - sentEmails;
             const usagePercentage = (sentEmails / limit) * 100;
@@ -112,11 +104,7 @@ export function Addresses({ onSignOut, currentView }: EmailsProps) {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    {email.type === 'ses' ? (
-                      <Server className="w-5 h-5 text-orange-500" />
-                    ) : (
-                      <Mail className="w-5 h-5 text-red-500" />
-                    )}
+                    <Server className="w-5 h-5 text-orange-500" />
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-lg font-medium text-gray-900 dark:text-white">
@@ -130,7 +118,7 @@ export function Addresses({ onSignOut, currentView }: EmailsProps) {
                         )}
                       </div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {email.type === 'ses' ? 'Amazon SES' : 'Gmail SMTP'}
+                        Amazon SES
                       </p>
                     </div>
                   </div>
@@ -159,7 +147,7 @@ export function Addresses({ onSignOut, currentView }: EmailsProps) {
 
                 <div className="mt-4">
                   <div className="relative w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={`absolute left-0 top-0 h-full rounded-full ${
                         isLocked
                           ? 'bg-yellow-500'

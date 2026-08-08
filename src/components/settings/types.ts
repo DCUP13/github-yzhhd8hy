@@ -1,23 +1,7 @@
 import { Divide as LucideIcon } from 'lucide-react';
 
-export interface EmailSettings {
-  smtpUsername: string;
-  smtpPassword: string;
-  smtpPort: string;
-  smtpServer: string;
-}
-
 export interface SESEmail {
   address: string;
-  dailyLimit?: number;
-  sentEmails?: number;
-  isLocked?: boolean;
-  testing?: boolean;
-}
-
-export interface GoogleEmail {
-  address: string;
-  appPassword: string;
   dailyLimit?: number;
   sentEmails?: number;
   isLocked?: boolean;

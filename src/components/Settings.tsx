@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Server, Mail, BarChart3, Instagram as InstagramIcon, Key, ArrowLeft } from 'lucide-react';
+import { Server, BarChart3, Instagram as InstagramIcon, Key, ArrowLeft } from 'lucide-react';
 import { GeneralTab } from './settings/GeneralTab';
 import { AmazonTab } from './settings/AmazonTab';
-import { GoogleTab } from './settings/GoogleTab';
 import { RapidAPITab } from './settings/RapidAPITab';
 import { DataQualityTab } from './settings/DataQualityTab';
 import { InstagramTab } from './settings/InstagramTab';
@@ -17,7 +16,7 @@ interface SettingsProps {
   onBackToTeam?: () => void;
 }
 
-type SettingsTab = 'user' | 'general' | 'amazon' | 'google' | 'rapid-api' | 'data-quality' | 'instagram';
+type SettingsTab = 'user' | 'general' | 'amazon' | 'rapid-api' | 'data-quality' | 'instagram';
 
 export function Settings({ onSignOut: _onSignOut, currentView: _currentView, memberUserId, onBackToTeam }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -208,7 +207,6 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView, mem
     { id: 'general' as const, label: 'General', icon: Server },
     { id: 'data-quality' as const, label: 'Data Quality', icon: BarChart3 },
     { id: 'amazon' as const, label: 'Amazon SES', icon: Server },
-    { id: 'google' as const, label: 'Google SMTP', icon: Mail },
     { id: 'rapid-api' as const, label: 'Rapid API', icon: Server },
     { id: 'instagram' as const, label: 'Instagram', icon: InstagramIcon }
   ];
@@ -282,8 +280,6 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView, mem
             {activeTab === 'amazon' && (
               <AmazonTab userId={memberUserId} />
             )}
-
-            {activeTab === 'google' && <GoogleTab />}
 
             {activeTab === 'rapid-api' && <RapidAPITab />}
 

@@ -15,7 +15,6 @@ interface MemberDetailDialogProps {
 type Tab = 'emails' | 'domains' | 'settings' | 'stats';
 
 interface SESEmailRow { id: string; address: string; daily_limit: number; }
-interface GoogleEmailRow { id: string; address: string; app_password: string; daily_limit: number; }
 interface DomainRow { id: string; domain: string; autoresponder_enabled: boolean; }
 
 export function MemberDetailDialog({ memberId, memberName, memberEmail, organizationId, onClose }: MemberDetailDialogProps) {
@@ -29,13 +28,6 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
   const [newSesEmail, setNewSesEmail] = useState('');
   const [newSesLimit, setNewSesLimit] = useState(1440);
   const [sesError, setSesError] = useState('');
-
-  // Google emails
-  const [googleEmails, setGoogleEmails] = useState<GoogleEmailRow[]>([]);
-  const [newGoogleEmail, setNewGoogleEmail] = useState('');
-  const [newGooglePassword, setNewGooglePassword] = useState('');
-  const [newGoogleLimit, setNewGoogleLimit] = useState(500);
-  const [googleError, setGoogleError] = useState('');
 
   // Domains
   const [domains, setDomains] = useState<DomainRow[]>([]);
@@ -55,7 +47,7 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
   }, [memberId]);
 
   useEffect(() => {
-    if (activeTab === 'emails' && sesEmails.length === 0 && googleEmails.length === 0) {
+    if (activeTab === 'emails' && sesEmails.length === 0) {
       loadEmails();
     }
     if (activeTab === 'domains' && domains.length === 0) {
@@ -91,12 +83,8 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
   }
 
   async function loadEmails() {
-    const [sesRes, googleRes] = await Promise.all([
-      supabase.from('amazon_ses_emails').select('id, address, daily_limit').eq('user_id', memberId).order('address', { ascending: true }),
-      supabase.from('google_smtp_emails').select('id, address, app_password, daily_limit').eq('user_id', memberId).order('address', { ascending: true }),
-    ]);
-    if (sesRes.data) setSesEmails(sesRes.data);
-    if (googleRes.data) setGoogleEmails(googleRes.data);
+    const { data } = await supabase.from('amazon_ses_emails').select('id, address, daily_limit').eq('user_id', memberId).order('address', { ascending: true });
+    if (data) setSesEmails(data);
   }
 
   async function loadDomains() {
@@ -166,38 +154,6 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
   async function handleUpdateSesLimit(id: string, limit: number) {
     await supabase.from('amazon_ses_emails').update({ daily_limit: limit, updated_at: new Date().toISOString() }).eq('id', id);
     setSesEmails(prev => prev.map(e => e.id === id ? { ...e, daily_limit: limit } : e));
-  }
-
-  // Google email handlers
-  async function handleAddGoogleEmail(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newGoogleEmail.match(/^[^\s@]+@gmail\.com$/)) {
-      setGoogleError('Please enter a valid Gmail address');
-      return;
-    }
-    if (newGooglePassword.length !== 16) {
-      setGoogleError('App password must be 16 characters');
-      return;
-    }
-    const { error } = await supabase.from('google_smtp_emails').insert({
-      user_id: memberId, address: newGoogleEmail, app_password: newGooglePassword, daily_limit: newGoogleLimit,
-    });
-    if (error) {
-      setGoogleError(error.code === '23505' ? 'This email is already registered' : error.message);
-      return;
-    }
-    setNewGoogleEmail(''); setNewGooglePassword(''); setGoogleError('');
-    loadEmails();
-  }
-
-  async function handleRemoveGoogleEmail(id: string) {
-    await supabase.from('google_smtp_emails').delete().eq('id', id);
-    setGoogleEmails(prev => prev.filter(e => e.id !== id));
-  }
-
-  async function handleUpdateGoogleLimit(id: string, limit: number) {
-    await supabase.from('google_smtp_emails').update({ daily_limit: limit, updated_at: new Date().toISOString() }).eq('id', id);
-    setGoogleEmails(prev => prev.map(e => e.id === id ? { ...e, daily_limit: limit } : e));
   }
 
   // Domain handlers
@@ -346,70 +302,6 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
                     </div>
                   </div>
 
-                  {/* Google SMTP Emails */}
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Mail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Google SMTP Emails</h4>
-                    </div>
-                    <form onSubmit={handleAddGoogleEmail} className="space-y-3 mb-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <input
-                          type="email"
-                          value={newGoogleEmail}
-                          onChange={e => { setNewGoogleEmail(e.target.value); setGoogleError(''); }}
-                          placeholder="user@gmail.com"
-                          className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <input
-                          type="text"
-                          value={newGooglePassword}
-                          onChange={e => { setNewGooglePassword(e.target.value); setGoogleError(''); }}
-                          placeholder="App password"
-                          className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <div className="flex gap-2">
-                          <input
-                            type="number"
-                            value={newGoogleLimit}
-                            onChange={e => setNewGoogleLimit(Math.min(500, Math.max(1, parseInt(e.target.value) || 1)))}
-                            min="1" max="500"
-                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            title="Daily limit"
-                          />
-                          <button type="submit" className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm flex items-center gap-1 flex-shrink-0">
-                            <Plus className="w-4 h-4" /> Add
-                          </button>
-                        </div>
-                      </div>
-                      {googleError && <p className="text-sm text-red-600 dark:text-red-400">{googleError}</p>}
-                    </form>
-                    <div className="space-y-2">
-                      {googleEmails.length === 0 ? (
-                        <p className="text-center text-gray-400 dark:text-gray-500 text-sm py-4">No Google SMTP emails configured</p>
-                      ) : googleEmails.map(email => (
-                        <div key={email.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group">
-                          <div className="flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="text-sm text-gray-900 dark:text-white">{email.address}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              value={email.daily_limit}
-                              onChange={e => handleUpdateGoogleLimit(email.id, Math.min(500, Math.max(1, parseInt(e.target.value) || 1)))}
-                              min="1" max="500"
-                              className="w-20 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            />
-                            <span className="text-xs text-gray-400">/day</span>
-                            <button onClick={() => handleRemoveGoogleEmail(email.id)} className="p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               )}
 

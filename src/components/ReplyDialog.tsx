@@ -26,7 +26,7 @@ interface ReplyDialogProps {
 }
 
 export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: ReplyDialogProps) {
-  const { sesEmails, googleEmails, sesDomains } = useEmails();
+  const { sesEmails, sesDomains } = useEmails();
   const editorRef = useRef<RichTextEditorRef>(null);
   
   // Form state
@@ -42,8 +42,7 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
 
   // Email options
   const configuredEmails = [
-    ...sesEmails.map(email => ({ address: email.address, provider: 'Amazon SES' })),
-    ...googleEmails.map(email => ({ address: email.address, provider: 'Gmail' }))
+    ...sesEmails.map(email => ({ address: email.address, provider: 'Amazon SES' }))
   ];
 
   const domainEmails = sesDomains.flatMap(domain => [
@@ -277,7 +276,7 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
               No sender email addresses configured
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              Please configure Amazon SES or Gmail SMTP settings in the Settings page before sending emails.
+              Please configure Amazon SES settings in the Settings page before sending emails.
             </p>
             <button
               onClick={onClose}

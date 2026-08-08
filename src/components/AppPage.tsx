@@ -9,7 +9,7 @@ import { CampaignDataQuality } from './CampaignDataQuality';
 import { ShareDialog } from './ShareDialog';
 
 interface EmailWithProvider extends EmailEntry {
-  smtpProvider: 'amazon' | 'gmail';
+  smtpProvider: 'amazon';
 }
 
 interface Campaign {
@@ -117,7 +117,7 @@ const daysTillCloseOptions = [
 
 export function AppPage({ onSignOut, currentView }: AppPageProps) {
   const { templates } = React.useContext(TemplatesContext);
-  const { sesEmails, googleEmails } = useEmails();
+  const { sesEmails } = useEmails();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [currentCampaign, setCurrentCampaign] = useState<Campaign | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
@@ -129,8 +129,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
   const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
 
   const availableEmails: EmailEntry[] = [
-    ...sesEmails.map(email => ({ address: email.address, smtpProvider: 'amazon' as const })),
-    ...googleEmails.map(email => ({ address: email.address, smtpProvider: 'gmail' as const }))
+    ...sesEmails.map(email => ({ address: email.address, smtpProvider: 'amazon' as const }))
   ];
 
   useEffect(() => {
@@ -190,7 +189,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
         emails: campaign.emails.filter(email => allEmailAddresses.has(email.address))
       }))
     );
-  }, [sesEmails, googleEmails]);
+  }, [sesEmails]);
 
   // Reset city selection when state changes
   useEffect(() => {
@@ -1186,7 +1185,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                             .filter(email => !currentCampaign.emails.some(e => e.address === email.address))
                             .map(email => (
                               <option key={email.address} value={email.address}>
-                                {email.address} ({email.smtpProvider === 'amazon' ? 'Amazon SES' : 'Gmail'})
+                                {email.address} (Amazon SES)
                               </option>
                             ))
                           }
@@ -1205,7 +1204,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                                 </h4>
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className="text-xs text-gray-500 dark:text-gray-400">
-                                    {email.smtpProvider === 'amazon' ? 'Amazon SES' : 'Gmail'}
+                                    Amazon SES
                                   </span>
                                 </div>
                               </div>
