@@ -235,7 +235,6 @@ Deno.serve(async (req: Request) => {
         <h3>To get started:</h3>
         <ol>
           <li>Go to the login page</li>
-          <li>Select "${assignedRole === "manager" ? "Manager" : "Member"}" as your login type</li>
           <li>Use the email and temporary password above</li>
           <li>You'll be prompted to change your password after first login</li>
         </ol>
