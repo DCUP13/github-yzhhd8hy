@@ -681,6 +681,12 @@ function OrgTab({ orgId, currentUserId, currentRole, onMemberCountChange, onStar
       setStatus({ type: 'error', message: data.error || 'Failed to resend invitation' });
       return;
     }
+    if (data.email_sent === false) {
+      const parts = [data.error || 'The invitation was created but the email could not be sent.'];
+      if (data.warnings?.length) parts.push(...data.warnings);
+      setStatus({ type: 'error', message: parts.join(' ') });
+      return;
+    }
     setStatus({ type: 'success', message: `Invitation resent to ${inv.email}` });
     loadOrgData();
     setTimeout(() => setStatus(null), 4000);
@@ -916,6 +922,11 @@ function InviteModal({ orgId, currentUserId, currentRole, onClose, onSuccess }: 
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to send invitation');
+        if (data.email_sent === false) {
+          const parts = [data.error || 'The invitation was created but the email could not be sent.'];
+          if (data.warnings?.length) parts.push(...data.warnings);
+          throw new Error(parts.join(' '));
+        }
         setSuccessMsg(`Invitation sent to ${email}`);
       }
       setEmail(''); setPassword(''); setRole('member');

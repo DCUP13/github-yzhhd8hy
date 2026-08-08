@@ -147,6 +147,12 @@ export function TeamManagement({ onSignOut }: TeamManagementProps) {
           throw new Error(result.error || 'Failed to send invitation');
         }
 
+        if (result.email_sent === false) {
+          const parts = [result.error || 'The invitation was created but the email could not be sent.'];
+          if (result.warnings?.length) parts.push(...result.warnings);
+          throw new Error(parts.join(' '));
+        }
+
         setStatus({ type: 'success', message: `Invitation sent to ${inviteEmail}` });
       }
 

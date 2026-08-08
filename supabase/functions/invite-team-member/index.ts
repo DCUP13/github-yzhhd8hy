@@ -12,32 +12,43 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const log = (msg: string, data?: unknown) => {
+    if (data !== undefined) {
+      console.error(`[invite-team-member] ${msg}`, JSON.stringify(data, null, 2));
+    } else {
+      console.error(`[invite-team-member] ${msg}`);
+    }
+  };
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
+      log("No Authorization header on incoming request");
       return new Response(JSON.stringify({ error: "No authorization header" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const userClient = createClient(
-      supabaseUrl,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      supabaseUrl, anonKey,
       { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } }
     );
 
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      log("getUser failed", userError);
+      return new Response(JSON.stringify({ error: "Unauthorized — your session may have expired." }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const { email, organization_id, invited_by, role } = await req.json();
+    log("Request received", { email, organization_id, role, invited_by, userId: user.id });
 
     if (!email || !organization_id) {
       return new Response(JSON.stringify({ error: "Missing email or organization_id" }), {
@@ -46,7 +57,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Verify caller is manager/owner of the org
-    const { data: membership } = await supabase
+    const { data: membership, error: membershipError } = await supabase
       .from("organization_members")
       .select("role")
       .eq("user_id", user.id)
@@ -54,20 +65,26 @@ Deno.serve(async (req: Request) => {
       .eq("status", "active")
       .maybeSingle();
 
+    if (membershipError) {
+      log("Failed to look up membership", membershipError);
+      return new Response(JSON.stringify({ error: "Failed to verify your organization membership." }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!membership || (membership.role !== "owner" && membership.role !== "manager")) {
+      log("Permission denied — caller is not manager/owner", { role: membership?.role });
       return new Response(JSON.stringify({ error: "Only managers or owners can invite members" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Managers cannot invite other managers
     if (membership.role === "manager" && role === "manager") {
       return new Response(JSON.stringify({ error: "Managers can only invite members, not other managers" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Block owner assignment
     if (role === "owner") {
       return new Response(JSON.stringify({ error: "Cannot assign owner role via invitation" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -98,19 +115,31 @@ Deno.serve(async (req: Request) => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Fetch org name for the email
-    const { data: org } = await supabase
+    // Fetch org name
+    const { data: org, error: orgError } = await supabase
       .from("organizations")
       .select("name")
       .eq("id", organization_id)
       .maybeSingle();
 
+    if (orgError) log("Failed to fetch org name", orgError);
+
     // Fetch invitation address from the inviter's SES settings
-    const { data: sesSettings } = await supabase
+    const { data: sesSettings, error: sesError } = await supabase
       .from("amazon_ses_settings")
-      .select("noreply_address, noreply_domain, smtp_username")
+      .select("noreply_address, noreply_domain, smtp_username, smtp_server, smtp_port")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    if (sesError) log("Failed to fetch SES settings", sesError);
+
+    log("SES settings lookup", {
+      found: !!sesSettings,
+      noreply_address: sesSettings?.noreply_address ?? null,
+      noreply_domain: sesSettings?.noreply_domain ?? null,
+      smtp_username: sesSettings?.smtp_username ?? null,
+      smtp_server: sesSettings?.smtp_server ?? null,
+    });
 
     const fromAddress = sesSettings?.noreply_address
       ? sesSettings.noreply_address
@@ -118,6 +147,9 @@ Deno.serve(async (req: Request) => {
         ? `noreply@${sesSettings.noreply_domain}`
         : sesSettings?.smtp_username || "noreply@mail.example.com";
 
+    log("Using from address", { fromAddress });
+
+    // Insert the invitation record
     const { error: inviteError } = await supabase.from("member_invitations").insert({
       organization_id,
       email: email.toLowerCase(),
@@ -128,6 +160,7 @@ Deno.serve(async (req: Request) => {
     });
 
     if (inviteError) {
+      log("Failed to insert invitation", inviteError);
       return new Response(JSON.stringify({ error: `Failed to create invitation: ${inviteError.message}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -155,8 +188,7 @@ Deno.serve(async (req: Request) => {
       </div>
     `;
 
-    // Insert into the outbox — use "body" (not "html_body") so the send-email
-    // function can read it, since send-email looks for email.body.
+    // Insert into the outbox using "body" (the field send-email reads)
     const { data: outboxRow, error: outboxError } = await supabase
       .from("email_outbox")
       .insert({
@@ -171,29 +203,95 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (outboxError) {
-      console.error("Failed to insert into outbox:", outboxError);
-    } else {
-      // Trigger the send-email function to process this specific email immediately
-      try {
-        await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({ emailId: outboxRow.id }),
-        });
-      } catch (triggerError) {
-        console.error("Failed to trigger send-email:", triggerError);
-      }
+      log("Failed to insert into email_outbox", outboxError);
+      return new Response(JSON.stringify({
+        error: `Invitation created but failed to queue email: ${outboxError.message}. The email will not be sent until this is fixed.`,
+      }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    log("Email inserted into outbox", { outboxId: outboxRow.id });
+
+    // ── Trigger send-email using the ORIGINAL user's JWT ──────────────
+    // send-email calls auth.getUser() to verify the caller, so we must
+    // forward the real user JWT — NOT the service role key.
+    let emailSent = false;
+    let sendErrorDetail = "";
+
+    try {
+      const sendResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": authHeader,
+          "apikey": anonKey,
+        },
+        body: JSON.stringify({ emailId: outboxRow.id }),
+      });
+
+      const sendResult = await sendResponse.json().catch(() => ({}));
+      log("send-email response", { status: sendResponse.status, body: sendResult });
+
+      if (!sendResponse.ok) {
+        sendErrorDetail = sendResult.error || `send-email returned HTTP ${sendResponse.status}`;
+        log("send-email failed", { status: sendResponse.status, error: sendErrorDetail });
+      } else {
+        // Check if the email was actually sent or failed
+        const results = sendResult.results || [];
+        const thisResult = results.find((r: { id: string }) => r.id === outboxRow.id);
+        if (thisResult?.status === "failed") {
+          sendErrorDetail = thisResult.error || "send-email processed the email but it failed";
+          log("send-email marked email as failed", thisResult);
+        } else {
+          emailSent = true;
+          log("Email sent successfully");
+        }
+      }
+    } catch (triggerError) {
+      sendErrorDetail = triggerError instanceof Error ? triggerError.message : String(triggerError);
+      log("Exception while calling send-email", triggerError);
+    }
+
+    // Build the response with full diagnostic info
+    if (!emailSent) {
+      const warnings: string[] = [];
+      if (!sesSettings) {
+        warnings.push("No Amazon SES settings found for your account. Configure SMTP credentials in Settings → Amazon SES.");
+      } else if (!sesSettings.smtp_username && !sesSettings.smtp_server) {
+        warnings.push("Amazon SES SMTP credentials are not configured. Add your SMTP server, port, username, and password in Settings → Amazon SES.");
+      }
+      if (fromAddress === "noreply@mail.example.com") {
+        warnings.push("No invitation address is configured. Set a custom invitation address (e.g. noreply@yourdomain.com) in Settings → Amazon SES.");
+      }
+
+      const fullError = sendErrorDetail
+        ? `Invitation created but the email could not be sent: ${sendErrorDetail}`
+        : "Invitation created but the email could not be sent.";
+
+      return new Response(JSON.stringify({
+        success: true,
+        email_sent: false,
+        error: fullError,
+        warnings,
+        outbox_id: outboxRow.id,
+      }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      email_sent: true,
+      message: `Invitation sent to ${email.toLowerCase()}`,
+    }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in invite-team-member:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), {
+    log("Unhandled error", error);
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : "Internal server error",
+    }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
