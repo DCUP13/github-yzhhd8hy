@@ -90,8 +90,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // Generate a temporary password
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     const tempPassword = Array.from(crypto.getRandomValues(new Uint8Array(12)))
-      .map((b) => "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"[b % 54])
+      .map((b) => chars[b % chars.length])
       .join("");
 
     const expiresAt = new Date();
@@ -132,28 +133,60 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Send invitation email via the outbox
     const orgName = org?.name || "your organization";
-    const acceptUrl = `${supabaseUrl}/functions/v1/accept-invitation`;
+    const assignedRole = role || "member";
 
     const htmlBody = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>You've been invited to join ${orgName}</h2>
-        <p>You've been invited to join <strong>${orgName}</strong> as a ${role || "member"}.</p>
-        <p><strong>Your temporary password:</strong> <code style="padding: 8px 12px; background: #f3f4f6; border-radius: 4px; font-size: 16px;">${tempPassword}</code></p>
-        <p>Use this password along with your email address to accept the invitation and log in.</p>
-        <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">This invitation expires in 7 days.</p>
+        <p>You've been invited to join <strong>${orgName}</strong> as a ${assignedRole}.</p>
+        <h3>Login Details</h3>
+        <p><strong>Email:</strong> ${email.toLowerCase()}</p>
+        <p><strong>Temporary Password:</strong> <code style="padding: 8px 12px; background: #f3f4f6; border-radius: 4px; font-size: 16px;">${tempPassword}</code></p>
+        <p><strong>Role:</strong> ${assignedRole.charAt(0).toUpperCase() + assignedRole.slice(1)}</p>
+        <h3>To get started:</h3>
+        <ol>
+          <li>Go to the login page</li>
+          <li>Select "${assignedRole === "manager" ? "Manager" : "Member"}" as your login type</li>
+          <li>Use the email and temporary password above</li>
+          <li>You'll be prompted to change your password after first login</li>
+        </ol>
+        <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">This invitation will expire in 7 days. If you didn't expect this invitation, you can safely ignore this email.</p>
       </div>
     `;
 
-    await supabase.from("email_outbox").insert({
-      user_id: user.id,
-      to_email: email.toLowerCase(),
-      from_email: fromAddress,
-      subject: `You're invited to join ${orgName}`,
-      html_body: htmlBody,
-      status: "pending",
-    });
+    // Insert into the outbox — use "body" (not "html_body") so the send-email
+    // function can read it, since send-email looks for email.body.
+    const { data: outboxRow, error: outboxError } = await supabase
+      .from("email_outbox")
+      .insert({
+        user_id: user.id,
+        to_email: email.toLowerCase(),
+        from_email: fromAddress,
+        subject: `You've been invited to join ${orgName}`,
+        body: htmlBody,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (outboxError) {
+      console.error("Failed to insert into outbox:", outboxError);
+    } else {
+      // Trigger the send-email function to process this specific email immediately
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({ emailId: outboxRow.id }),
+        });
+      } catch (triggerError) {
+        console.error("Failed to trigger send-email:", triggerError);
+      }
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
