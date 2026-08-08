@@ -257,9 +257,9 @@ Deno.serve(async (req: Request) => {
     if (!emailSent) {
       const warnings: string[] = [];
       if (!sesSettings) {
-        warnings.push("No Amazon SES settings found for your account. Configure SMTP credentials in Settings → Amazon SES.");
-      } else if (!sesSettings.smtp_username && !sesSettings.smtp_server) {
-        warnings.push("Amazon SES SMTP credentials are not configured. Add your SMTP server, port, username, and password in Settings → Amazon SES.");
+        warnings.push("No Amazon SES settings found for your account. Configure your AWS SES credentials in Settings → Amazon SES.");
+      } else if (!sesSettings.smtp_username || sesSettings.smtp_username.length < 10) {
+        warnings.push("Your Amazon SES settings look incomplete or invalid. The SMTP username in Settings → Amazon SES appears to be a placeholder.");
       }
       if (fromAddress === "noreply@mail.example.com") {
         warnings.push("No invitation address is configured. Set a custom invitation address (e.g. noreply@yourdomain.com) in Settings → Amazon SES.");
