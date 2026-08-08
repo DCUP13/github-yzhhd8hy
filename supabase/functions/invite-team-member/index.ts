@@ -147,6 +147,45 @@ Deno.serve(async (req: Request) => {
 
     log("Using from address", { fromAddress });
 
+    // Create the auth user with the temp password so they can sign in immediately
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
+    const existingUser = existingUsers?.users?.find(
+      (u: { email: string }) => u.email?.toLowerCase() === email.toLowerCase()
+    );
+
+    let userId: string;
+
+    if (existingUser) {
+      userId = existingUser.id;
+      const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { needs_password_change: true },
+      });
+      if (updateError) {
+        log("Failed to update existing user password", updateError);
+        return new Response(JSON.stringify({ error: `Failed to set password: ${updateError.message}` }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      log("Updated existing user with temp password", { userId });
+    } else {
+      const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+        email: email.toLowerCase(),
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { needs_password_change: true },
+      });
+      if (createError) {
+        log("Failed to create auth user", createError);
+        return new Response(JSON.stringify({ error: `Failed to create user account: ${createError.message}` }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = newUser.user.id;
+      log("Created new auth user", { userId });
+    }
+
     // Insert the invitation record
     const { error: inviteError } = await supabase.from("member_invitations").insert({
       organization_id,
@@ -162,6 +201,24 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: `Failed to create invitation: ${inviteError.message}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Add the user to the organization
+    const { error: memberError } = await supabase
+      .from("organization_members")
+      .insert({
+        organization_id,
+        user_id: userId,
+        role: role || "member",
+        status: "active",
+        invited_by: invited_by || user.id,
+      });
+
+    if (memberError) {
+      log("Failed to add user to organization", memberError);
+      // Non-fatal — the invitation record exists and the auth user can sign in
+    } else {
+      log("Added user to organization", { userId, role: role || "member" });
     }
 
     const orgName = org?.name || "your organization";
