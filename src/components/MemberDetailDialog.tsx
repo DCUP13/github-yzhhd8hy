@@ -11,6 +11,7 @@ interface MemberDetailDialogProps {
   memberName: string;
   memberEmail: string;
   organizationId?: string;
+  viewerRole: string;
   onClose: () => void;
 }
 
@@ -46,7 +47,7 @@ const SETTING_ROWS: { key: keyof MemberSettings; label: string; description: str
   { key: 'clean_up_loi', label: 'Clean Up Attachments', description: 'Delete local attachment files during campaigns', icon: FileText },
 ];
 
-export function MemberDetailDialog({ memberId, memberName, memberEmail, organizationId, onClose }: MemberDetailDialogProps) {
+export function MemberDetailDialog({ memberId, memberName, memberEmail, organizationId, viewerRole, onClose }: MemberDetailDialogProps) {
   const [activeTab, setActiveTab] = useState<Tab>('emails');
   const [memberRole, setMemberRole] = useState<string>('member');
   const [joinedAt, setJoinedAt] = useState<string>('');
@@ -272,12 +273,23 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
   const RoleIcon = memberRole === 'owner' ? Crown : memberRole === 'manager' ? Shield : UserIcon;
   const roleColor = memberRole === 'owner' ? 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/20' : memberRole === 'manager' ? 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700';
 
+  const isOwner = memberRole === 'owner';
+  const canManageSettings = viewerRole === 'owner' || !isOwner;
+
+  useEffect(() => {
+    if (!canManageSettings && activeTab !== 'stats') {
+      setActiveTab('stats');
+    }
+  }, [canManageSettings, activeTab]);
+
   const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { key: 'emails', label: 'Email Accounts', icon: Mail },
-    { key: 'domains', label: 'Domains', icon: Globe },
-    { key: 'settings', label: 'Settings', icon: SettingsIcon },
-    { key: 'rapid-api', label: 'Rapid API', icon: KeyRound },
-    { key: 'instagram', label: 'Instagram', icon: InstagramIcon },
+    ...(canManageSettings ? [
+      { key: 'emails' as Tab, label: 'Email Accounts', icon: Mail },
+      { key: 'domains' as Tab, label: 'Domains', icon: Globe },
+      { key: 'settings' as Tab, label: 'Settings', icon: SettingsIcon },
+      { key: 'rapid-api' as Tab, label: 'Rapid API', icon: KeyRound },
+      { key: 'instagram' as Tab, label: 'Instagram', icon: InstagramIcon },
+    ] : []),
     { key: 'stats', label: 'Statistics', icon: BarChart3 },
   ];
 
@@ -330,7 +342,8 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
           ) : (
             <>
               {/* Email Accounts Tab */}
-              {activeTab === 'emails' && (
+              {/* Emails Tab — hidden when a non-owner views the owner */}
+              {activeTab === 'emails' && canManageSettings && (
                 <div className="space-y-6">
                   {/* SES Emails */}
                   <div>
@@ -392,7 +405,8 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
               )}
 
               {/* Domains Tab */}
-              {activeTab === 'domains' && (
+              {/* Domains Tab — hidden when a non-owner views the owner */}
+              {activeTab === 'domains' && canManageSettings && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Globe className="w-4 h-4 text-gray-500 dark:text-gray-400" />
@@ -435,8 +449,8 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
                 </div>
               )}
 
-              {/* Settings Tab */}
-              {activeTab === 'settings' && (
+              {/* Settings Tab — hidden when a non-owner views the owner */}
+              {activeTab === 'settings' && canManageSettings && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 mb-3">
                     <SettingsIcon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
@@ -468,13 +482,13 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
                 </div>
               )}
 
-              {/* Rapid API Tab */}
-              {activeTab === 'rapid-api' && (
+              {/* Rapid API Tab — hidden when a non-owner views the owner */}
+              {activeTab === 'rapid-api' && canManageSettings && (
                 <RapidAPITab userId={memberId} />
               )}
 
-              {/* Instagram Tab */}
-              {activeTab === 'instagram' && (
+              {/* Instagram Tab — hidden when a non-owner views the owner */}
+              {activeTab === 'instagram' && canManageSettings && (
                 <InstagramTab userId={memberId} />
               )}
 
