@@ -12,6 +12,7 @@ import { Analytics } from './components/Analytics';
 import { Instagram } from './components/Instagram';
 import { TeamView as TeamPage } from './components/TeamPage';
 import { SupportPage } from './components/SupportPage';
+import { useUnreadChatCount } from './lib/useUnreadChatCount';
 import { EmailProvider } from './contexts/EmailContext';
 import { OrganizationProvider } from './contexts/OrganizationContext';
 import { supabase } from './lib/supabase';
@@ -84,6 +85,8 @@ export default function App() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({ instagram: false, linkedin: false });
+
+  const unreadChatCount = useUnreadChatCount(appView);
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -315,6 +318,7 @@ export default function App() {
                     onSupportClick={() => setAppView('support')}
                     isSuperAdmin={isSuperAdmin}
                     featureFlags={featureFlags}
+                    unreadChatCount={unreadChatCount}
                   />
                 </div>
                 <div className="flex-1 ml-64">

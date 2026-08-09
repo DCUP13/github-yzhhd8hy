@@ -17,6 +17,7 @@ interface SidebarProps {
   onSupportClick: () => void;
   isSuperAdmin?: boolean;
   featureFlags?: FeatureFlags;
+  unreadChatCount?: number;
 }
 
 export function Sidebar({
@@ -34,7 +35,8 @@ export function Sidebar({
   onTeamClick,
   onSupportClick,
   isSuperAdmin,
-  featureFlags
+  featureFlags,
+  unreadChatCount = 0
 }: SidebarProps) {
   const navButtonClass = "w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors";
 
@@ -68,6 +70,11 @@ export function Sidebar({
         </button>
         <button onClick={onTeamClick} className={navButtonClass}>
           <Users className="w-4 h-4" /> Team
+          {unreadChatCount > 0 && (
+            <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold text-white bg-red-500 rounded-full">
+              {unreadChatCount > 99 ? '99+' : unreadChatCount}
+            </span>
+          )}
         </button>
         {(featureFlags?.instagram || isSuperAdmin) && (
           <button onClick={onInstagramClick} className={navButtonClass}>
