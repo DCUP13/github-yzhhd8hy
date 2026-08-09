@@ -86,7 +86,7 @@ export default function App() {
 
   const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({ instagram: false, linkedin: false });
 
-  const unreadChatCount = useUnreadChatCount(appView);
+  const unreadChatCount = useUnreadChatCount();
 
   const fetchUserRole = async (userId: string) => {
     try {
