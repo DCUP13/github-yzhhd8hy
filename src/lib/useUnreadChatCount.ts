@@ -31,6 +31,3 @@ export function useUnreadChatCount() {
 
   return count;
 }
-
-
-export { useUnreadChatCount }
