@@ -26,6 +26,37 @@ export function RapidAPITab({ userId }: RapidAPITabProps = {}) {
     fetchSettings();
   }, []);
 
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let active = true;
+
+    (async () => {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId || !active) return;
+
+      channel = supabase
+        .channel(`rapid_api_rt_${currentUserId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'rapid_api_settings', filter: `user_id=eq.${currentUserId}` },
+          (payload) => {
+            const d = payload.new as Record<string, unknown>;
+            setSettings({
+              maxPages: Number(d.max_pages) || 10,
+              apiKey: String(d.api_key || ''),
+              apiHost: String(d.api_host || ''),
+            });
+          }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   const getCurrentUserId = async (): Promise<string | null> => {
     if (userId) return userId;
     const user = await supabase.auth.getUser();

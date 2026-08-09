@@ -40,6 +40,45 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView, mem
     fetchUserProfile();
   }, [memberUserId]);
 
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let active = true;
+
+    (async () => {
+      let targetUserId = memberUserId;
+      if (!targetUserId) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user || !active) return;
+        targetUserId = session.user.id;
+      }
+      if (!targetUserId || !active) return;
+
+      channel = supabase
+        .channel(`user_settings_rt_${targetUserId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${targetUserId}` },
+          (payload) => {
+            const d = payload.new as Record<string, unknown>;
+            setSettings({
+              notifications: Boolean(d.notifications),
+              twoFactorAuth: Boolean(d.two_factor_auth),
+              newsletter: Boolean(d.newsletter),
+              publicProfile: Boolean(d.public_profile),
+              debugging: Boolean(d.debugging),
+              cleanUpLoi: Boolean(d.clean_up_loi),
+            });
+          }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [memberUserId]);
+
   const fetchUserProfile = async () => {
     try {
       if (isManagingMember) {

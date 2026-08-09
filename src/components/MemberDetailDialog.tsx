@@ -76,6 +76,40 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
   }, [memberId]);
 
   useEffect(() => {
+    if (!memberId) return;
+    const channel = supabase
+      .channel(`member_detail_rt_${memberId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${memberId}` },
+        (payload) => {
+          const d = payload.new as Record<string, unknown>;
+          setSettings({
+            notifications: Boolean(d.notifications ?? DEFAULT_SETTINGS.notifications),
+            two_factor_auth: Boolean(d.two_factor_auth ?? DEFAULT_SETTINGS.two_factor_auth),
+            newsletter: Boolean(d.newsletter ?? DEFAULT_SETTINGS.newsletter),
+            public_profile: Boolean(d.public_profile ?? DEFAULT_SETTINGS.public_profile),
+            debugging: Boolean(d.debugging ?? DEFAULT_SETTINGS.debugging),
+            clean_up_loi: Boolean(d.clean_up_loi ?? DEFAULT_SETTINGS.clean_up_loi),
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'amazon_ses_emails', filter: `user_id=eq.${memberId}` },
+        () => loadEmails()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'amazon_ses_domains', filter: `user_id=eq.${memberId}` },
+        () => loadDomains()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [memberId]);
+
+  useEffect(() => {
     if (activeTab === 'emails' && sesEmails.length === 0) {
       loadEmails();
     }

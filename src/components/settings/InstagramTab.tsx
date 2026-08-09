@@ -21,6 +21,38 @@ export function InstagramTab({ userId }: InstagramTabProps = {}) {
     fetchAccount();
   }, []);
 
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let active = true;
+
+    (async () => {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId || !active) return;
+
+      channel = supabase
+        .channel(`instagram_rt_${currentUserId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'instagram_accounts', filter: `user_id=eq.${currentUserId}` },
+          (payload) => {
+            const d = payload.new as Record<string, unknown>;
+            setIgUserId(String(d.ig_user_id || ''));
+            setUsername(String(d.username || ''));
+            setAccessToken(String(d.access_token || ''));
+            setConnected(Boolean(d.connected));
+            setHasExistingToken(!!d.access_token);
+            if (d.id) setAccountId(String(d.id));
+          }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   const getCurrentUserId = async (): Promise<string | null> => {
     if (userId) return userId;
     const { data: { user } } = await supabase.auth.getUser();

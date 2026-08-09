@@ -36,6 +36,35 @@ export function AmazonTab({ userId }: AmazonTabProps) {
     fetchNoreplyDomain();
   }, []);
 
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let active = true;
+
+    (async () => {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId || !active) return;
+
+      channel = supabase
+        .channel(`amazon_ses_rt_${currentUserId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'amazon_ses_emails', filter: `user_id=eq.${currentUserId}` },
+          () => { fetchSESEmails(); }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'amazon_ses_domains', filter: `user_id=eq.${currentUserId}` },
+          () => { fetchSESDomains(); }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
+
   const getCurrentUserId = async (): Promise<string | null> => {
     if (userId) return userId;
     const user = await supabase.auth.getUser();
