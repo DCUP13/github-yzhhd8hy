@@ -91,6 +91,28 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let userId: string | null = null;
+
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      userId = user.id;
+
+      channel = supabase.channel('org-membership-sync')
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'organization_members', filter: `user_id=eq.${userId}` },
+          () => { refresh(); }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [refresh]);
+
   function switchOrg(id: string) {
     setSelectedOrgId(id);
     setShowSwitcher(false);

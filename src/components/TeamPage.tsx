@@ -624,6 +624,16 @@ function OrgTab({ orgId, currentUserId, currentRole, onMemberCountChange, onStar
 
   useEffect(() => { loadOrgData(); }, []);
 
+  useEffect(() => {
+    const channel = supabase.channel('org-members-list')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'organization_members', filter: `organization_id=eq.${orgId}` },
+        () => { loadOrgData(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [orgId]);
+
   async function loadOrgData() {
     setLoading(true);
     const [{ data: org }, { data: members }, { data: invs }] = await Promise.all([
