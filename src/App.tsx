@@ -29,7 +29,7 @@ import { ContactPage } from './components/public/ContactPage';
 import { AuthPage } from './components/public/AuthPage';
 import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, RefundPolicy, AcceptableUsePolicy, AccessibilityADA } from './components/public/LegalPages';
 import { NotFoundPage } from './components/public/NotFoundPage';
-import { Lock as LockIcon } from 'lucide-react';
+import { Lock as LockIcon, Menu } from 'lucide-react';
 
 type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'team' | 'support';
 
@@ -85,6 +85,7 @@ export default function App() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({ instagram: false, linkedin: false });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const unreadChatCount = useUnreadChatCount();
 
@@ -301,7 +302,8 @@ export default function App() {
             <DashboardProvider>
           <OrganizationProvider>
               <div className="flex min-h-screen bg-white dark:bg-gray-900">
-                <div className="fixed inset-y-0 left-0 w-64">
+                {/* Desktop sidebar — fixed */}
+                <div className="hidden lg:block fixed inset-y-0 left-0 w-64 flex-shrink-0">
                   <Sidebar
                     onSignOut={handleSignOut}
                     onHomeClick={() => setAppView('dashboard')}
@@ -321,7 +323,44 @@ export default function App() {
                     unreadChatCount={unreadChatCount}
                   />
                 </div>
-                <div className="flex-1 ml-64">
+
+                {/* Mobile sidebar — slide-in drawer */}
+                {sidebarOpen && (
+                  <div className="lg:hidden fixed inset-0 z-50">
+                    <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+                    <div className="absolute inset-y-0 left-0 w-64 bg-blue-800 dark:bg-gray-800 shadow-xl">
+                      <Sidebar
+                        onSignOut={handleSignOut}
+                        onHomeClick={() => setAppView('dashboard')}
+                        onAppClick={() => setAppView('app')}
+                        onSettingsClick={() => setAppView('settings')}
+                        onTemplatesClick={() => setAppView('templates')}
+                        onEmailsClick={() => setAppView('emails')}
+                        onAddressesClick={() => setAppView('addresses')}
+                        onPromptsClick={() => setAppView('prompts')}
+                        onContactsClick={() => setAppView('contacts')}
+                        onAnalyticsClick={() => setAppView('analytics')}
+                        onInstagramClick={() => setAppView('instagram')}
+                        onTeamClick={() => setAppView('team')}
+                        onSupportClick={() => setAppView('support')}
+                        isSuperAdmin={isSuperAdmin}
+                        featureFlags={featureFlags}
+                        unreadChatCount={unreadChatCount}
+                        onNavigate={() => setSidebarOpen(false)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Mobile top bar */}
+                <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-blue-800 dark:bg-gray-800 text-white px-4 py-3 flex items-center gap-3 flex-shrink-0">
+                  <button onClick={() => setSidebarOpen(true)} className="p-1.5 hover:bg-blue-700 dark:hover:bg-gray-700 rounded-lg">
+                    <Menu className="w-5 h-5" />
+                  </button>
+                  <h2 className="text-base font-bold">Dashboard</h2>
+                </div>
+
+                <div className="flex-1 lg:ml-64 pt-12 lg:pt-0">
                   {appView === 'dashboard' && (
                     <Dashboard onSignOut={handleSignOut} currentView={appView} onNavigateAnalytics={() => setAppView('analytics')} />
                   )}

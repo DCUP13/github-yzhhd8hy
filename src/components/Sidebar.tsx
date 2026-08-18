@@ -1,4 +1,4 @@
-import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram, Headphones } from 'lucide-react';
+import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram, Headphones, X } from 'lucide-react';
 import type { FeatureFlags } from '../App';
 
 interface SidebarProps {
@@ -18,6 +18,7 @@ interface SidebarProps {
   isSuperAdmin?: boolean;
   featureFlags?: FeatureFlags;
   unreadChatCount?: number;
+  onNavigate?: () => void;
 }
 
 export function Sidebar({
@@ -36,40 +37,53 @@ export function Sidebar({
   onSupportClick,
   isSuperAdmin,
   featureFlags,
-  unreadChatCount = 0
+  unreadChatCount = 0,
+  onNavigate,
 }: SidebarProps) {
-  const navButtonClass = "w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors";
+  const navButtonClass = "w-full flex items-center gap-3 px-3 sm:px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors";
+
+  const handleNav = (fn: () => void) => {
+    fn();
+    onNavigate?.();
+  };
 
   return (
-    <div className="h-screen w-64 bg-blue-800 dark:bg-gray-800 text-white p-6 flex flex-col">
-      <div className="mb-6">
+    <div className="h-full w-64 bg-blue-800 dark:bg-gray-800 text-white flex flex-col">
+      {/* Header — fixed at top */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0">
         <h2 className="text-lg font-bold text-white">Dashboard</h2>
+        {onNavigate && (
+          <button onClick={onNavigate} className="lg:hidden p-1 hover:bg-blue-700 dark:hover:bg-gray-700 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
-      <nav className="space-y-2 flex-1">
-        <button onClick={onHomeClick} className={navButtonClass}>
-          <Home className="w-4 h-4" /> Home
+      {/* Nav — scrollable, fills remaining space */}
+      <nav className="flex-1 overflow-y-auto sidebar-scroll px-3 sm:px-6 pb-4 space-y-2">
+        <button onClick={() => handleNav(onHomeClick)} className={navButtonClass}>
+          <Home className="w-4 h-4 flex-shrink-0" /> Home
         </button>
-        <button onClick={onAppClick} className={navButtonClass}>
-          <Layout className="w-4 h-4" /> Campaigns
+        <button onClick={() => handleNav(onAppClick)} className={navButtonClass}>
+          <Layout className="w-4 h-4 flex-shrink-0" /> Campaigns
         </button>
-        <button onClick={onTemplatesClick} className={navButtonClass}>
-          <FileText className="w-4 h-4" /> Templates
+        <button onClick={() => handleNav(onTemplatesClick)} className={navButtonClass}>
+          <FileText className="w-4 h-4 flex-shrink-0" /> Templates
         </button>
-        <button onClick={onEmailsClick} className={navButtonClass}>
-          <Inbox className="w-4 h-4" /> Emails
+        <button onClick={() => handleNav(onEmailsClick)} className={navButtonClass}>
+          <Inbox className="w-4 h-4 flex-shrink-0" /> Emails
         </button>
-        <button onClick={onAddressesClick} className={navButtonClass}>
-          <Mail className="w-4 h-4" /> Addresses
+        <button onClick={() => handleNav(onAddressesClick)} className={navButtonClass}>
+          <Mail className="w-4 h-4 flex-shrink-0" /> Addresses
         </button>
-        <button onClick={onPromptsClick} className={navButtonClass}>
-          <MessageSquare className="w-4 h-4" /> Prompts
+        <button onClick={() => handleNav(onPromptsClick)} className={navButtonClass}>
+          <MessageSquare className="w-4 h-4 flex-shrink-0" /> Prompts
         </button>
-        <button onClick={onContactsClick} className={navButtonClass}>
-          <Users className="w-4 h-4" /> Contacts
+        <button onClick={() => handleNav(onContactsClick)} className={navButtonClass}>
+          <Users className="w-4 h-4 flex-shrink-0" /> Contacts
         </button>
-        <button onClick={onTeamClick} className={navButtonClass}>
-          <Users className="w-4 h-4" /> Team
+        <button onClick={() => handleNav(onTeamClick)} className={navButtonClass}>
+          <Users className="w-4 h-4 flex-shrink-0" /> Team
           {unreadChatCount > 0 && (
             <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold text-white bg-red-500 rounded-full">
               {unreadChatCount > 99 ? '99+' : unreadChatCount}
@@ -77,24 +91,25 @@ export function Sidebar({
           )}
         </button>
         {(featureFlags?.instagram || isSuperAdmin) && (
-          <button onClick={onInstagramClick} className={navButtonClass}>
-            <Instagram className="w-4 h-4" /> Instagram
+          <button onClick={() => handleNav(onInstagramClick)} className={navButtonClass}>
+            <Instagram className="w-4 h-4 flex-shrink-0" /> Instagram
           </button>
         )}
-        <button onClick={onAnalyticsClick} className={navButtonClass}>
-          <BarChart3 className="w-4 h-4" /> Analytics
+        <button onClick={() => handleNav(onAnalyticsClick)} className={navButtonClass}>
+          <BarChart3 className="w-4 h-4 flex-shrink-0" /> Analytics
         </button>
-        <button onClick={onSettingsClick} className={navButtonClass}>
-          <SettingsIcon className="w-4 h-4" /> Settings
+        <button onClick={() => handleNav(onSettingsClick)} className={navButtonClass}>
+          <SettingsIcon className="w-4 h-4 flex-shrink-0" /> Settings
         </button>
       </nav>
 
-      <div className="space-y-2 pt-4 border-t border-blue-700 dark:border-gray-700">
-        <button onClick={onSupportClick} className={navButtonClass}>
-          <Headphones className="w-4 h-4" /> {isSuperAdmin ? 'Support Admin' : 'Support'}
+      {/* Footer — always visible, pinned at bottom */}
+      <div className="flex-shrink-0 space-y-2 px-3 sm:px-6 pt-4 pb-6 border-t border-blue-700 dark:border-gray-700">
+        <button onClick={() => handleNav(onSupportClick)} className={navButtonClass}>
+          <Headphones className="w-4 h-4 flex-shrink-0" /> {isSuperAdmin ? 'Support Admin' : 'Support'}
         </button>
-        <button onClick={onSignOut} className="w-full flex items-center gap-3 px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors text-red-300 hover:text-red-200">
-          <LogOut className="w-4 h-4" /> Sign out
+        <button onClick={() => handleNav(onSignOut)} className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-gray-700 transition-colors text-red-300 hover:text-red-200">
+          <LogOut className="w-4 h-4 flex-shrink-0" /> Sign out
         </button>
       </div>
     </div>
