@@ -29,6 +29,18 @@ function graphUrl(base: string, accessToken: string): string {
   return `${base}${sep}access_token=${encodeURIComponent(accessToken)}`;
 }
 
+function isInstagramToken(token: string): boolean {
+  return token.startsWith("IGA");
+}
+
+function apiBase(token: string): string {
+  return isInstagramToken(token) ? "https://graph.instagram.com" : "https://graph.facebook.com";
+}
+
+function authHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -102,12 +114,23 @@ Deno.serve(async (req: Request) => {
     };
 
     // 1. Fetch account-level data from Graph API
-    // Instagram tokens (IGA...) must be passed as access_token query param, NOT Bearer header
-    const profileUrl = graphUrl(
-      `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count`,
-      accessToken,
-    );
-    const profileRes = await fetch(profileUrl);
+    // Instagram tokens (IGA...) use graph.instagram.com with Bearer header.
+    // Facebook/Page tokens use graph.facebook.com with access_token query param.
+    const baseUrl = apiBase(accessToken);
+    let profileRes: Response;
+    if (isInstagramToken(accessToken)) {
+      profileRes = await fetch(
+        `${baseUrl}/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count`,
+        { headers: authHeaders(accessToken) },
+      );
+    } else {
+      profileRes = await fetch(
+        graphUrl(
+          `${baseUrl}/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count`,
+          accessToken,
+        ),
+      );
+    }
 
     if (!profileRes.ok) {
       const errBody: GraphApiError = await profileRes.json().catch(() => ({}));
@@ -133,11 +156,20 @@ Deno.serve(async (req: Request) => {
     const profile = await profileRes.json();
 
     // 2. Fetch recent media (up to 25 posts)
-    const mediaUrl = graphUrl(
-      `https://graph.facebook.com/v21.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
-      accessToken,
-    );
-    const mediaRes = await fetch(mediaUrl);
+    let mediaRes: Response;
+    if (isInstagramToken(accessToken)) {
+      mediaRes = await fetch(
+        `${baseUrl}/v21.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
+        { headers: authHeaders(accessToken) },
+      );
+    } else {
+      mediaRes = await fetch(
+        graphUrl(
+          `${baseUrl}/v21.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
+          accessToken,
+        ),
+      );
+    }
     const mediaData = mediaRes.ok ? await mediaRes.json() : { data: [] };
     const mediaItems: any[] = mediaData.data ?? [];
 
@@ -154,11 +186,20 @@ Deno.serve(async (req: Request) => {
       let videoViews: number | null = null;
 
       try {
-        const insightsUrl = graphUrl(
-          `https://graph.facebook.com/v21.0/${item.id}/insights?metric=reach,impressions,saved,video_views`,
-          accessToken,
-        );
-        const insightsRes = await fetch(insightsUrl);
+        let insightsRes: Response;
+        if (isInstagramToken(accessToken)) {
+          insightsRes = await fetch(
+            `${baseUrl}/v21.0/${item.id}/insights?metric=reach,impressions,saved,video_views`,
+            { headers: authHeaders(accessToken) },
+          );
+        } else {
+          insightsRes = await fetch(
+            graphUrl(
+              `${baseUrl}/v21.0/${item.id}/insights?metric=reach,impressions,saved,video_views`,
+              accessToken,
+            ),
+          );
+        }
         if (insightsRes.ok) {
           const insightsBody = await insightsRes.json();
           for (const metric of insightsBody.data ?? []) {
