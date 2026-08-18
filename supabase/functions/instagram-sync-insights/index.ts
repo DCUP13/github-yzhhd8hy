@@ -24,8 +24,9 @@ function isTokenInvalidError(body: GraphApiError): boolean {
   return code === 190 || code === 102 || code === 200 || code === 463 || code === 467;
 }
 
-function graphHeaders(accessToken: string): Record<string, string> {
-  return { Authorization: `Bearer ${accessToken}` };
+function graphUrl(base: string, accessToken: string): string {
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}access_token=${encodeURIComponent(accessToken)}`;
 }
 
 Deno.serve(async (req: Request) => {
@@ -100,15 +101,18 @@ Deno.serve(async (req: Request) => {
         .eq("id", accountId);
     };
 
-    // 1. Fetch account-level data from Graph API (using Authorization header)
-    const profileUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count`;
-    const profileRes = await fetch(profileUrl, { headers: graphHeaders(accessToken) });
+    // 1. Fetch account-level data from Graph API
+    // Instagram tokens (IGA...) must be passed as access_token query param, NOT Bearer header
+    const profileUrl = graphUrl(
+      `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count`,
+      accessToken,
+    );
+    const profileRes = await fetch(profileUrl);
 
     if (!profileRes.ok) {
       const errBody: GraphApiError = await profileRes.json().catch(() => ({}));
       const errMsg = errBody.error?.message ?? `HTTP ${profileRes.status}`;
 
-      // Treat token-invalid errors (code 190, 102, etc.) as expired
       if (isTokenInvalidError(errBody) || profileRes.status === 401 || profileRes.status === 403) {
         await markTokenExpired();
         return new Response(JSON.stringify({
@@ -129,8 +133,11 @@ Deno.serve(async (req: Request) => {
     const profile = await profileRes.json();
 
     // 2. Fetch recent media (up to 25 posts)
-    const mediaUrl = `https://graph.facebook.com/v21.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`;
-    const mediaRes = await fetch(mediaUrl, { headers: graphHeaders(accessToken) });
+    const mediaUrl = graphUrl(
+      `https://graph.facebook.com/v21.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
+      accessToken,
+    );
+    const mediaRes = await fetch(mediaUrl);
     const mediaData = mediaRes.ok ? await mediaRes.json() : { data: [] };
     const mediaItems: any[] = mediaData.data ?? [];
 
@@ -147,8 +154,11 @@ Deno.serve(async (req: Request) => {
       let videoViews: number | null = null;
 
       try {
-        const insightsUrl = `https://graph.facebook.com/v21.0/${item.id}/insights?metric=reach,impressions,saved,video_views`;
-        const insightsRes = await fetch(insightsUrl, { headers: graphHeaders(accessToken) });
+        const insightsUrl = graphUrl(
+          `https://graph.facebook.com/v21.0/${item.id}/insights?metric=reach,impressions,saved,video_views`,
+          accessToken,
+        );
+        const insightsRes = await fetch(insightsUrl);
         if (insightsRes.ok) {
           const insightsBody = await insightsRes.json();
           for (const metric of insightsBody.data ?? []) {
