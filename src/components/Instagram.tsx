@@ -345,7 +345,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       });
 
       if (!response.ok) {
-        const err = await response.json();
+        const err = await response.json().catch(() => ({}));
+        if (err.token_expired) {
+          await fetchData();
+        }
         alert(err.error || 'Failed to sync insights');
         setIsRefreshing(false);
         return;

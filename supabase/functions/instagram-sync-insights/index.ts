@@ -6,6 +6,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface GraphApiError {
+  error?: {
+    message?: string;
+    type?: string;
+    code?: number;
+    fbtrace_id?: string;
+  };
+}
+
+function cleanToken(raw: string): string {
+  return raw.trim().replace(/[\u200B-\u200D\uFEFF]/g, "");
+}
+
+function isTokenInvalidError(body: GraphApiError): boolean {
+  const code = body.error?.code;
+  return code === 190 || code === 102 || code === 200 || code === 463 || code === 467;
+}
+
+function graphHeaders(accessToken: string): Record<string, string> {
+  return { Authorization: `Bearer ${accessToken}` };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -37,7 +59,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Fetch the account
     const { data: account, error: acctError } = await supabaseClient
       .from("instagram_accounts")
       .select("*")
@@ -58,23 +79,48 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const accessToken = account.access_token;
-    const igUserId = account.ig_user_id;
+    const accessToken = cleanToken(account.access_token);
+    const igUserId = account.ig_user_id.trim();
 
-    // 1. Fetch account-level data from Graph API
-    const profileUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${accessToken}`;
-    const profileRes = await fetch(profileUrl);
+    if (!accessToken) {
+      await supabaseClient
+        .from("instagram_accounts")
+        .update({ token_expired: true })
+        .eq("id", accountId);
+      return new Response(JSON.stringify({ error: "Access token is empty after cleaning. Please re-enter a valid token." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const markTokenExpired = async () => {
+      await supabaseClient
+        .from("instagram_accounts")
+        .update({ token_expired: true, connected: false, updated_at: new Date().toISOString() })
+        .eq("id", accountId);
+    };
+
+    // 1. Fetch account-level data from Graph API (using Authorization header)
+    const profileUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count`;
+    const profileRes = await fetch(profileUrl, { headers: graphHeaders(accessToken) });
 
     if (!profileRes.ok) {
-      const errBody = await profileRes.text();
-      // Mark token as expired if we get a 401/403
-      if (profileRes.status === 401 || profileRes.status === 403) {
-        await supabaseClient
-          .from("instagram_accounts")
-          .update({ token_expired: true })
-          .eq("id", accountId);
+      const errBody: GraphApiError = await profileRes.json().catch(() => ({}));
+      const errMsg = errBody.error?.message ?? `HTTP ${profileRes.status}`;
+
+      // Treat token-invalid errors (code 190, 102, etc.) as expired
+      if (isTokenInvalidError(errBody) || profileRes.status === 401 || profileRes.status === 403) {
+        await markTokenExpired();
+        return new Response(JSON.stringify({
+          error: `Your Instagram access token is invalid or expired. Please reconnect the account or update the token in Settings.`,
+          token_expired: true,
+        }), {
+          status: profileRes.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      return new Response(JSON.stringify({ error: `Graph API error: ${errBody}` }), {
+
+      return new Response(JSON.stringify({ error: `Graph API error: ${errMsg}` }), {
         status: profileRes.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -83,12 +129,12 @@ Deno.serve(async (req: Request) => {
     const profile = await profileRes.json();
 
     // 2. Fetch recent media (up to 25 posts)
-    const mediaUrl = `https://graph.facebook.com/v21.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25&access_token=${accessToken}`;
-    const mediaRes = await fetch(mediaUrl);
+    const mediaUrl = `https://graph.facebook.com/v21.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`;
+    const mediaRes = await fetch(mediaUrl, { headers: graphHeaders(accessToken) });
     const mediaData = mediaRes.ok ? await mediaRes.json() : { data: [] };
     const mediaItems: any[] = mediaData.data ?? [];
 
-    // 3. Fetch insights for each media item (reach, impressions, saved, video_views)
+    // 3. Fetch insights for each media item
     const postsData: any[] = [];
     let totalReach = 0;
     let totalImpressions = 0;
@@ -101,8 +147,8 @@ Deno.serve(async (req: Request) => {
       let videoViews: number | null = null;
 
       try {
-        const insightsUrl = `https://graph.facebook.com/v21.0/${item.id}/insights?metric=reach,impressions,saved,video_views&access_token=${accessToken}`;
-        const insightsRes = await fetch(insightsUrl);
+        const insightsUrl = `https://graph.facebook.com/v21.0/${item.id}/insights?metric=reach,impressions,saved,video_views`;
+        const insightsRes = await fetch(insightsUrl, { headers: graphHeaders(accessToken) });
         if (insightsRes.ok) {
           const insightsBody = await insightsRes.json();
           for (const metric of insightsBody.data ?? []) {
@@ -146,7 +192,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Calculate engagement rate
     const engagementRate = totalImpressions > 0
       ? Math.round((totalEngagement / totalImpressions) * 10000) / 100
       : 0;
@@ -170,7 +215,7 @@ Deno.serve(async (req: Request) => {
       console.error("Error saving snapshot:", snapshotError);
     }
 
-    // 5. Update account with latest profile data
+    // 5. Update account with latest profile data and clean token
     await supabaseClient
       .from("instagram_accounts")
       .update({
@@ -179,7 +224,9 @@ Deno.serve(async (req: Request) => {
         followers_count: profile.followers_count ?? null,
         follows_count: profile.follows_count ?? null,
         media_count: profile.media_count ?? null,
+        access_token: accessToken,
         token_expired: false,
+        connected: true,
         updated_at: new Date().toISOString(),
       })
       .eq("id", accountId);
