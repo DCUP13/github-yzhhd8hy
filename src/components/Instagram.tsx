@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Instagram as InstagramIcon, MessageSquare, Send, Plus, Trash2, RefreshCw, Zap, Clock, User, Image as ImageIcon, Share2, Users, X, BarChart3, TrendingUp, Heart, Eye, Bookmark, Play, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Instagram as InstagramIcon, MessageSquare, Send, Plus, Trash2, RefreshCw, Zap, Clock, User, Image as ImageIcon, Share2, Users, X, BarChart3, TrendingUp, Heart, Eye, Bookmark, Play, ChevronDown, Film, ArrowLeft, CheckCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
 
@@ -15,11 +15,20 @@ interface WebhookEvent {
   event_type: string;
   sender_id: string | null;
   sender_username: string | null;
+  sender_name: string | null;
+  sender_profile_url: string | null;
   message_text: string | null;
   media_id: string | null;
+  media_type: string | null;
+  media_permalink: string | null;
+  media_caption: string | null;
   comment_id: string | null;
   created_at: string;
   processed: boolean;
+  direction: string;
+  recipient_id: string | null;
+  reply_text: string | null;
+  replied_at: string | null;
 }
 
 interface AutoRule {
@@ -95,6 +104,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   const [newEventCount, setNewEventCount] = useState(0);
   const prevEventCountRef = useRef(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const [inboxFilter, setInboxFilter] = useState<'all' | 'messages' | 'comments'>('all');
 
   const allAccounts = [...accounts, ...sharedAccounts];
   const selectedAccount = allAccounts.find(a => a.id === selectedAccountId) || allAccounts[0] || null;
@@ -273,7 +286,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           event: 'INSERT',
           schema: 'public',
           table: 'instagram_webhook_events',
-          filter: `ig_user_id=eq.${selectedAccount.ig_user_id}`,
+          filter: `user_id=eq.${selectedAccount.user_id}`,
         },
         (payload) => {
           const newEvent = payload.new as WebhookEvent;
@@ -451,6 +464,149 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     return new Date(dateString).toLocaleString([], {
       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
     });
+  };
+
+  const formatTime = (dateString: string) => {
+    return new Date(dateString).toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  // Group events into conversations
+  // DMs are grouped by the "other party" ID (sender for incoming, recipient for outgoing)
+  // Comments/mentions/etc are grouped by media_id (so all comments on a reel/post are together)
+  interface Conversation {
+    id: string;
+    type: 'dm' | 'media';
+    events: WebhookEvent[];
+    otherPartyId: string | null;
+    otherPartyName: string;
+    otherPartyUsername: string | null;
+    otherPartyAvatar: string | null;
+    lastMessageAt: string;
+    lastMessageText: string | null;
+    unreadCount: number;
+    mediaType: string | null;
+    mediaPermalink: string | null;
+    mediaCaption: string | null;
+  }
+
+  const conversations = useMemo((): Conversation[] => {
+    const convos = new Map<string, Conversation>();
+
+    for (const event of events) {
+      let convId: string;
+      let type: 'dm' | 'media';
+
+      if (event.event_type === 'message') {
+        // For DMs: group by the other party
+        // Incoming: other party is sender_id. Outgoing (echo): other party is recipient_id.
+        const otherId = event.direction === 'outgoing'
+          ? event.recipient_id
+          : event.sender_id;
+        convId = `dm_${otherId ?? 'unknown'}`;
+        type = 'dm';
+      } else {
+        // Comments, mentions, shares, reposts: group by media_id
+        convId = `media_${event.media_id ?? event.id}`;
+        type = 'media';
+      }
+
+      const existing = convos.get(convId);
+      const isUnread = event.event_type === 'message'
+        ? event.direction === 'incoming' && !event.processed
+        : !event.processed;
+
+      if (!existing) {
+        convos.set(convId, {
+          id: convId,
+          type,
+          events: [event],
+          otherPartyId: type === 'dm'
+            ? (event.direction === 'outgoing' ? event.recipient_id : event.sender_id)
+            : event.sender_id,
+          otherPartyName: event.sender_name || event.sender_username || (type === 'dm' ? 'Instagram User' : 'Unknown'),
+          otherPartyUsername: event.sender_username,
+          otherPartyAvatar: event.sender_profile_url,
+          lastMessageAt: event.created_at,
+          lastMessageText: event.message_text,
+          unreadCount: isUnread ? 1 : 0,
+          mediaType: event.media_type,
+          mediaPermalink: event.media_permalink,
+          mediaCaption: event.media_caption,
+        });
+      } else {
+        existing.events.push(event);
+        if (event.created_at > existing.lastMessageAt) {
+          existing.lastMessageAt = event.created_at;
+          existing.lastMessageText = event.message_text;
+        }
+        if (isUnread) existing.unreadCount++;
+        // Update sender info if we got better data
+        if (event.sender_username && !existing.otherPartyUsername) {
+          existing.otherPartyUsername = event.sender_username;
+          existing.otherPartyName = event.sender_name || event.sender_username;
+        }
+        if (event.sender_profile_url && !existing.otherPartyAvatar) {
+          existing.otherPartyAvatar = event.sender_profile_url;
+        }
+        if (event.media_type && !existing.mediaType) existing.mediaType = event.media_type;
+        if (event.media_permalink && !existing.mediaPermalink) existing.mediaPermalink = event.media_permalink;
+        if (event.media_caption && !existing.mediaCaption) existing.mediaCaption = event.media_caption;
+      }
+    }
+
+    // Sort conversations by most recent message
+    return Array.from(convos.values()).sort((a, b) =>
+      b.lastMessageAt.localeCompare(a.lastMessageAt)
+    );
+  }, [events]);
+
+  const filteredConversations = useMemo(() => {
+    if (inboxFilter === 'messages') return conversations.filter(c => c.type === 'dm');
+    if (inboxFilter === 'comments') return conversations.filter(c => c.type === 'media');
+    return conversations;
+  }, [conversations, inboxFilter]);
+
+  const selectedConversation = filteredConversations.find(c => c.id === selectedConversationId) || null;
+
+  const handleSendReply = async () => {
+    if (!selectedConversation || !replyText.trim() || !selectedAccount) return;
+    setIsSendingReply(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/instagram-send-reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          account_id: selectedAccount.id,
+          recipient_id: selectedConversation.otherPartyId,
+          message_text: replyText.trim(),
+          reply_to_event_id: selectedConversation.events.find(e => e.direction === 'incoming')?.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        alert(err.error || 'Failed to send reply');
+        return;
+      }
+
+      setReplyText('');
+      // The realtime subscription or a refetch will pick up the new outgoing message
+      await fetchData();
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      alert('Failed to send reply');
+    } finally {
+      setIsSendingReply(false);
+    }
   };
 
   const eventBadgeColor = (type: string) => {
@@ -657,48 +813,230 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           </div>
         </div>
 
-        {/* Inbox tab */}
+        {/* Inbox tab — two-pane conversation view */}
         {activeTab === 'inbox' && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
             {events.length === 0 ? (
               <div className="text-center py-12">
                 <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No events yet</h3>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No messages yet</h3>
                 <p className="text-gray-500 dark:text-gray-400">
-                  Incoming comments, messages, mentions, shares, and reposts will appear here automatically.
+                  Incoming DMs, comments, mentions, shares, and reposts will appear here automatically in real time.
                 </p>
               </div>
-            ) : (
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {events.map((event) => (
-                  <div key={event.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${eventBadgeColor(event.event_type)}`}>
-                            {event.event_type}
-                          </span>
-                          {event.sender_username && (
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">@{event.sender_username}</span>
-                          )}
-                          {event.processed && (
-                            <span className="text-xs text-green-500">processed</span>
-                          )}
+            ) : selectedConversation ? (
+              /* Conversation detail view */
+              <div className="flex flex-col h-[600px]">
+                {/* Conversation header */}
+                <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => setSelectedConversationId(null)}
+                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  {selectedConversation.otherPartyAvatar ? (
+                    <img src={selectedConversation.otherPartyAvatar} alt="" className="w-10 h-10 rounded-full" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
+                      {selectedConversation.type === 'dm' ? (
+                        <User className="w-5 h-5 text-pink-500" />
+                      ) : selectedConversation.mediaType === 'REEL' ? (
+                        <Film className="w-5 h-5 text-pink-500" />
+                      ) : (
+                        <ImageIcon className="w-5 h-5 text-pink-500" />
+                      )}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {selectedConversation.otherPartyName}
+                      {selectedConversation.otherPartyUsername && (
+                        <span className="text-gray-400 font-normal"> @{selectedConversation.otherPartyUsername}</span>
+                      )}
+                    </p>
+                    {selectedConversation.type === 'media' && (
+                      <p className="text-xs text-gray-400">
+                        {selectedConversation.mediaType === 'REEL' ? 'Reel' : 'Post'} comment thread
+                        {selectedConversation.mediaPermalink && (
+                          <a href={selectedConversation.mediaPermalink} target="_blank" rel="noopener noreferrer" className="ml-1 text-pink-500 hover:underline">View on Instagram</a>
+                        )}
+                      </p>
+                    )}
+                    {selectedConversation.type === 'dm' && (
+                      <p className="text-xs text-gray-400">Direct message</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Messages list */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30">
+                  {selectedConversation.events
+                    .slice()
+                    .reverse()
+                    .map((event) => {
+                      const isOutgoing = event.direction === 'outgoing';
+                      return (
+                        <div key={event.id} className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[75%] ${isOutgoing ? 'order-2' : 'order-1'}`}>
+                            <div className={`rounded-2xl px-4 py-2.5 ${
+                              isOutgoing
+                                ? 'bg-pink-500 text-white rounded-br-sm'
+                                : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-sm border border-gray-200 dark:border-gray-700'
+                            }`}>
+                              {event.message_text && (
+                                <p className="text-sm whitespace-pre-wrap break-words">{event.message_text}</p>
+                              )}
+                              {!event.message_text && event.event_type !== 'message' && (
+                                <p className="text-sm italic text-gray-400">{event.event_type} (no text)</p>
+                              )}
+                            </div>
+                            <div className={`flex items-center gap-1 mt-1 ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
+                              {event.event_type !== 'message' && (
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${eventBadgeColor(event.event_type)}`}>
+                                  {event.event_type}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-gray-400">{formatTime(event.created_at)}</span>
+                              {isOutgoing && event.replied_at && (
+                                <CheckCheck className="w-3 h-3 text-pink-400" />
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        {event.message_text && (
-                          <p className="text-sm text-gray-700 dark:text-gray-300">{event.message_text}</p>
-                        )}
-                        {event.media_id && (
-                          <p className="text-xs text-gray-400 mt-1">Media: {event.media_id}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-gray-400">
-                        <Clock className="w-3 h-3" />
-                        {formatDate(event.created_at)}
-                      </div>
+                      );
+                    })}
+                </div>
+
+                {/* Reply box — only for DM conversations */}
+                {selectedConversation.type === 'dm' && (
+                  <div className="border-t border-gray-200 dark:border-gray-700 p-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
+                        placeholder="Type a reply..."
+                        className="flex-1 px-4 py-2.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                        disabled={isSendingReply}
+                      />
+                      <button
+                        onClick={handleSendReply}
+                        disabled={!replyText.trim() || isSendingReply}
+                        className="p-2.5 rounded-full bg-pink-500 text-white hover:bg-pink-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                ))}
+                )}
+              </div>
+            ) : (
+              /* Conversation list view */
+              <div>
+                {/* Filter tabs */}
+                <div className="flex items-center gap-1 px-4 pt-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                  {(['all', 'messages', 'comments'] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setInboxFilter(filter)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        inboxFilter === filter
+                          ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300'
+                          : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                      }`}
+                    >
+                      {filter === 'all' ? 'All' : filter === 'messages' ? 'Messages' : 'Comments & Reels'}
+                    </button>
+                  ))}
+                </div>
+
+                {filteredConversations.length === 0 ? (
+                  <div className="text-center py-12">
+                    <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500 dark:text-gray-400">
+                      {inboxFilter === 'messages' ? 'No direct messages yet.' : inboxFilter === 'comments' ? 'No comments or reel interactions yet.' : 'No conversations yet.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {filteredConversations.map((conv) => (
+                      <button
+                        key={conv.id}
+                        onClick={() => setSelectedConversationId(conv.id)}
+                        className="w-full p-4 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 text-left transition-colors"
+                      >
+                        {/* Avatar */}
+                        {conv.otherPartyAvatar ? (
+                          <img src={conv.otherPartyAvatar} alt="" className="w-11 h-11 rounded-full flex-shrink-0" />
+                        ) : (
+                          <div className="w-11 h-11 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
+                            {conv.type === 'dm' ? (
+                              <User className="w-5 h-5 text-pink-500" />
+                            ) : conv.mediaType === 'REEL' ? (
+                              <Film className="w-5 h-5 text-pink-500" />
+                            ) : (
+                              <ImageIcon className="w-5 h-5 text-pink-500" />
+                            )}
+                          </div>
+                        )}
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {conv.otherPartyName}
+                              </p>
+                              {conv.otherPartyUsername && (
+                                <span className="text-xs text-gray-400 truncate">@{conv.otherPartyUsername}</span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(conv.lastMessageAt)}</span>
+                          </div>
+
+                          {/* Media type badge for comments */}
+                          {conv.type === 'media' && (
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${eventBadgeColor(conv.events[0].event_type)}`}>
+                                {conv.events[0].event_type}
+                              </span>
+                              {conv.mediaType === 'REEL' && (
+                                <span className="flex items-center gap-0.5 text-[10px] text-gray-400">
+                                  <Film className="w-3 h-3" /> Reel
+                                </span>
+                              )}
+                              {conv.mediaType && conv.mediaType !== 'REEL' && (
+                                <span className="text-[10px] text-gray-400">{conv.mediaType}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Last message preview */}
+                          <p className={`text-sm truncate ${conv.unreadCount > 0 ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                            {conv.events[0].direction === 'outgoing' && conv.type === 'dm' && (
+                              <span className="text-gray-400">You: </span>
+                            )}
+                            {conv.lastMessageText || '(no text)'}
+                          </p>
+
+                          {/* Media caption snippet for comment threads */}
+                          {conv.type === 'media' && conv.mediaCaption && (
+                            <p className="text-xs text-gray-400 truncate mt-0.5">On: {conv.mediaCaption}</p>
+                          )}
+                        </div>
+
+                        {/* Unread badge */}
+                        {conv.unreadCount > 0 && (
+                          <span className="flex-shrink-0 flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold text-white bg-pink-500 rounded-full">
+                            {conv.unreadCount}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

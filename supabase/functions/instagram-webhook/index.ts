@@ -18,9 +18,6 @@ Deno.serve(async (req: Request) => {
     );
 
     // Meta webhook verification handshake
-    // When you first register the webhook URL in the Meta dashboard, Meta sends
-    // a GET request with hub.mode=subscribe, hub.verify_token, and hub.challenge.
-    // We must echo back hub.challenge after confirming the verify token matches.
     if (req.method === "GET") {
       const url = new URL(req.url);
       const mode = url.searchParams.get("hub.mode");
@@ -35,74 +32,120 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "text/plain" },
         });
       }
-      return new Response("Forbidden", {
-        status: 403,
-        headers: corsHeaders,
-      });
+      return new Response("Forbidden", { status: 403, headers: corsHeaders });
     }
 
-    // Incoming webhook events (comments, DMs, mentions, etc.)
     if (req.method === "POST") {
       const body = await req.json();
       console.log("Instagram webhook received:", JSON.stringify(body));
 
-      // Meta wraps events in an "entry" array
       const entries: any[] = body?.entry ?? [];
 
       for (const entry of entries) {
         const igUserId = entry?.id ?? null;
+
+        // Resolve the connected account once per entry
+        const account = await resolveAccount(supabaseClient, igUserId);
+        const accessToken = account?.access_token ?? null;
+        const userId = account?.user_id ?? null;
+
+        // Store the page-scoped ID on the account for future matching
+        if (account && igUserId && !account.page_scoped_id) {
+          await supabaseClient
+            .from("instagram_accounts")
+            .update({ page_scoped_id: igUserId })
+            .eq("id", account.id);
+        }
 
         // Comments
         const changes: any[] = entry?.changes ?? [];
         for (const change of changes) {
           if (change?.field === "comments") {
             const value = change?.value ?? {};
+            const mediaId = value?.media?.id ?? null;
+            const mediaMeta = accessToken && mediaId
+              ? await fetchMediaMeta(mediaId, accessToken)
+              : null;
             await storeEvent(supabaseClient, {
               event_id: value?.id ?? null,
               event_type: "comment",
               ig_user_id: igUserId,
               sender_id: value?.from?.id ?? null,
               sender_username: value?.from?.username ?? null,
-              media_id: value?.media?.id ?? null,
+              sender_name: null,
+              sender_profile_url: null,
+              media_id: mediaId,
+              media_type: mediaMeta?.media_type ?? value?.media?.media_type ?? null,
+              media_permalink: mediaMeta?.permalink ?? null,
+              media_caption: mediaMeta?.caption ?? null,
               comment_id: value?.id ?? null,
               message_text: value?.text ?? null,
+              direction: "incoming",
+              recipient_id: null,
               raw_event: change,
-            });
+              user_id: userId,
+            }, accessToken);
           }
         }
 
-        // Direct messages live in the "messaging" array
+        // Direct messages
         const messaging: any[] = entry?.messaging ?? [];
         for (const msg of messaging) {
           const messageText = msg?.message?.text ?? null;
+          const isEcho = msg?.message?.is_echo === true;
+          const senderId = msg?.sender?.id ?? null;
+          const recipientId = msg?.recipient?.id ?? null;
+          // For incoming DMs, the other party is the sender.
+          // For outgoing (echo) DMs, the other party is the recipient.
+          const otherPartyId = isEcho ? recipientId : senderId;
           await storeEvent(supabaseClient, {
             event_id: msg?.message?.mid ?? null,
             event_type: "message",
             ig_user_id: igUserId,
-            sender_id: msg?.sender?.id ?? null,
+            sender_id: senderId,
             sender_username: null,
+            sender_name: null,
+            sender_profile_url: null,
             media_id: null,
+            media_type: null,
+            media_permalink: null,
+            media_caption: null,
             comment_id: null,
             message_text: messageText,
+            direction: isEcho ? "outgoing" : "incoming",
+            recipient_id: recipientId,
             raw_event: msg,
-          });
+            user_id: userId,
+          }, accessToken, otherPartyId);
         }
 
         // Mentions, shares, and reposts
         for (const change of changes) {
           if (change?.field === "mentions") {
             const value = change?.value ?? {};
+            const mediaId = value?.media?.id ?? null;
+            const mediaMeta = accessToken && mediaId
+              ? await fetchMediaMeta(mediaId, accessToken)
+              : null;
             await storeEvent(supabaseClient, {
               event_id: value?.comment_id ?? value?.id ?? null,
               event_type: "mention",
               ig_user_id: igUserId,
               sender_id: value?.from?.id ?? null,
               sender_username: value?.from?.username ?? null,
-              media_id: value?.media?.id ?? null,
+              sender_name: null,
+              sender_profile_url: null,
+              media_id: mediaId,
+              media_type: mediaMeta?.media_type ?? null,
+              media_permalink: mediaMeta?.permalink ?? null,
+              media_caption: mediaMeta?.caption ?? null,
               comment_id: value?.comment_id ?? null,
               message_text: value?.text ?? null,
+              direction: "incoming",
+              recipient_id: null,
               raw_event: change,
-            });
+              user_id: userId,
+            }, accessToken);
           }
           if (change?.field === "shares") {
             const value = change?.value ?? {};
@@ -112,11 +155,19 @@ Deno.serve(async (req: Request) => {
               ig_user_id: igUserId,
               sender_id: value?.from?.id ?? null,
               sender_username: value?.from?.username ?? null,
+              sender_name: null,
+              sender_profile_url: null,
               media_id: value?.media?.id ?? null,
+              media_type: null,
+              media_permalink: null,
+              media_caption: null,
               comment_id: null,
               message_text: value?.text ?? null,
+              direction: "incoming",
+              recipient_id: null,
               raw_event: change,
-            });
+              user_id: userId,
+            }, accessToken);
           }
           if (change?.field === "reposted") {
             const value = change?.value ?? {};
@@ -126,16 +177,23 @@ Deno.serve(async (req: Request) => {
               ig_user_id: igUserId,
               sender_id: value?.from?.id ?? null,
               sender_username: value?.from?.username ?? null,
+              sender_name: null,
+              sender_profile_url: null,
               media_id: value?.media?.id ?? null,
+              media_type: null,
+              media_permalink: null,
+              media_caption: null,
               comment_id: null,
               message_text: value?.text ?? null,
+              direction: "incoming",
+              recipient_id: null,
               raw_event: change,
-            });
+              user_id: userId,
+            }, accessToken);
           }
         }
       }
 
-      // Meta expects a 200 OK to acknowledge receipt
       return new Response(JSON.stringify({ status: "received" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -148,13 +206,91 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     console.error("Instagram webhook error:", error);
-    // Still return 200 so Meta doesn't retry unnecessarily for our internal errors
     return new Response(JSON.stringify({ error: error.message }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
+
+// Resolve the connected Instagram account from the webhook entry ID.
+// Meta may use a different ID format in webhooks vs the Graph API, so we
+// check ig_user_id, page_scoped_id, and sender_id for matches.
+async function resolveAccount(
+  supabaseClient: any,
+  igUserId: string | null,
+): Promise<{ id: string; user_id: string; access_token: string | null; page_scoped_id: string | null } | null> {
+  if (!igUserId) return null;
+
+  // Exact match on ig_user_id
+  const { data: exact } = await supabaseClient
+    .from("instagram_accounts")
+    .select("id, user_id, access_token, page_scoped_id, ig_user_id")
+    .eq("ig_user_id", igUserId)
+    .maybeSingle();
+  if (exact) return exact;
+
+  // Match on page_scoped_id
+  const { data: byPageId } = await supabaseClient
+    .from("instagram_accounts")
+    .select("id, user_id, access_token, page_scoped_id, ig_user_id")
+    .eq("page_scoped_id", igUserId)
+    .maybeSingle();
+  if (byPageId) return byPageId;
+
+  // Broader search: check all accounts for substring matches
+  const { data: allAccounts } = await supabaseClient
+    .from("instagram_accounts")
+    .select("id, user_id, access_token, page_scoped_id, ig_user_id");
+  for (const acct of allAccounts ?? []) {
+    if (acct.ig_user_id && (
+      acct.ig_user_id === igUserId ||
+      acct.ig_user_id.includes(igUserId) ||
+      igUserId.includes(acct.ig_user_id)
+    )) {
+      return acct;
+    }
+  }
+  return null;
+}
+
+// Fetch media metadata (type, permalink, caption) from the Graph API
+async function fetchMediaMeta(mediaId: string, accessToken: string): Promise<{ media_type: string; permalink: string; caption: string } | null> {
+  try {
+    const url = `https://graph.facebook.com/v21.0/${mediaId}?fields=media_type,permalink,caption&access_token=${accessToken}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      media_type: data.media_type ?? null,
+      permalink: data.permalink ?? null,
+      caption: data.caption ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Resolve a sender's profile (name, username, profile pic) from the Graph API.
+// For DMs, Meta only gives us a sender ID — we use the /{sender-id} endpoint.
+async function resolveSenderProfile(
+  senderId: string,
+  accessToken: string,
+): Promise<{ username: string; name: string; profile_pic: string } | null> {
+  try {
+    const url = `https://graph.facebook.com/v21.0/${senderId}?fields=username,name,profile_pic&access_token=${accessToken}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      username: data.username ?? null,
+      name: data.name ?? null,
+      profile_pic: data.profile_pic ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
 
 async function storeEvent(
   supabaseClient: any,
@@ -164,47 +300,32 @@ async function storeEvent(
     ig_user_id: string | null;
     sender_id: string | null;
     sender_username: string | null;
+    sender_name: string | null;
+    sender_profile_url: string | null;
     media_id: string | null;
+    media_type: string | null;
+    media_permalink: string | null;
+    media_caption: string | null;
     comment_id: string | null;
     message_text: string | null;
+    direction: string;
+    recipient_id: string | null;
     raw_event: any;
+    user_id: string | null;
   },
+  accessToken: string | null = null,
+  otherPartyId: string | null = null,
 ) {
-  // Try to resolve the user_id from the connected Instagram account.
-  // Meta may send the ig_user_id in different formats depending on the event type,
-  // so we try exact match first, then fall back to matching on sender_id (for DMs
-  // where the recipient id is the connected account).
-  let userId: string | null = null;
-  const lookups: string[] = [event.ig_user_id, event.sender_id].filter(Boolean) as string[];
-  for (const id of lookups) {
-    const { data: account } = await supabaseClient
+  let userId = event.user_id;
+
+  // If we still don't have a user_id, try matching by sender_id (for echo messages)
+  if (!userId && event.sender_id) {
+    const { data: acct } = await supabaseClient
       .from("instagram_accounts")
       .select("user_id")
-      .eq("ig_user_id", id)
+      .or(`ig_user_id.eq.${event.sender_id},page_scoped_id.eq.${event.sender_id}`)
       .maybeSingle();
-    if (account?.user_id) {
-      userId = account.user_id;
-      break;
-    }
-  }
-
-  // If still not found, try a broader search: get all accounts and check if
-  // the ig_user_id from the webhook matches as a substring or if the stored
-  // ig_user_id contains the webhook id (Meta sometimes uses different ID scopes)
-  if (!userId && event.ig_user_id) {
-    const { data: allAccounts } = await supabaseClient
-      .from("instagram_accounts")
-      .select("id, user_id, ig_user_id");
-    for (const acct of allAccounts ?? []) {
-      if (acct.ig_user_id && (
-        acct.ig_user_id === event.ig_user_id ||
-        acct.ig_user_id.includes(event.ig_user_id) ||
-        event.ig_user_id.includes(acct.ig_user_id)
-      )) {
-        userId = acct.user_id;
-        break;
-      }
-    }
+    if (acct?.user_id) userId = acct.user_id;
   }
 
   // Deduplicate by event_id — Meta retries events
@@ -217,16 +338,37 @@ async function storeEvent(
     if (existing) return;
   }
 
+  // For DMs, try to resolve the other party's profile info
+  let senderUsername = event.sender_username;
+  let senderName = event.sender_name;
+  let senderProfileUrl = event.sender_profile_url;
+
+  if (!senderUsername && otherPartyId && accessToken && event.event_type === "message") {
+    const profile = await resolveSenderProfile(otherPartyId, accessToken);
+    if (profile) {
+      senderUsername = profile.username;
+      senderName = profile.name;
+      senderProfileUrl = profile.profile_pic;
+    }
+  }
+
   await supabaseClient.from("instagram_webhook_events").insert({
     user_id: userId,
     event_id: event.event_id,
     event_type: event.event_type,
     ig_user_id: event.ig_user_id,
     sender_id: event.sender_id,
-    sender_username: event.sender_username,
+    sender_username: senderUsername,
+    sender_name: senderName,
+    sender_profile_url: senderProfileUrl,
     media_id: event.media_id,
+    media_type: event.media_type,
+    media_permalink: event.media_permalink,
+    media_caption: event.media_caption,
     comment_id: event.comment_id,
     message_text: event.message_text,
+    direction: event.direction,
+    recipient_id: event.recipient_id,
     raw_event: event.raw_event,
   });
 }
