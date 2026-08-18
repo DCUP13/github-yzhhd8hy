@@ -205,11 +205,12 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   }, [selectedAccountId]);
 
   const fetchAccountData = async (account: IgAccount, userId: string) => {
-    // Fetch events for this account's owner
+    // Fetch events for this account — try both user_id and ig_user_id matching
+    // since webhook events may have user_id null if the account lookup failed
     const [eventsRes, rulesRes, postsRes, snapshotsRes] = await Promise.all([
       supabase.from('instagram_webhook_events')
         .select('*')
-        .eq('user_id', account.user_id)
+        .or(`user_id.eq.${account.user_id},ig_user_id.eq.${account.ig_user_id}`)
         .order('created_at', { ascending: false })
         .limit(100),
       supabase.from('instagram_auto_rules')
@@ -272,7 +273,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           event: 'INSERT',
           schema: 'public',
           table: 'instagram_webhook_events',
-          filter: `user_id=eq.${selectedAccount.user_id}`,
+          filter: `ig_user_id=eq.${selectedAccount.ig_user_id}`,
         },
         (payload) => {
           const newEvent = payload.new as WebhookEvent;

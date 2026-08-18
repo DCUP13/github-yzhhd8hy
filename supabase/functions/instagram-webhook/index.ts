@@ -170,15 +170,41 @@ async function storeEvent(
     raw_event: any;
   },
 ) {
-  // Try to resolve the user_id from the connected Instagram account
+  // Try to resolve the user_id from the connected Instagram account.
+  // Meta may send the ig_user_id in different formats depending on the event type,
+  // so we try exact match first, then fall back to matching on sender_id (for DMs
+  // where the recipient id is the connected account).
   let userId: string | null = null;
-  if (event.ig_user_id) {
+  const lookups: string[] = [event.ig_user_id, event.sender_id].filter(Boolean) as string[];
+  for (const id of lookups) {
     const { data: account } = await supabaseClient
       .from("instagram_accounts")
       .select("user_id")
-      .eq("ig_user_id", event.ig_user_id)
+      .eq("ig_user_id", id)
       .maybeSingle();
-    if (account) userId = account.user_id;
+    if (account?.user_id) {
+      userId = account.user_id;
+      break;
+    }
+  }
+
+  // If still not found, try a broader search: get all accounts and check if
+  // the ig_user_id from the webhook matches as a substring or if the stored
+  // ig_user_id contains the webhook id (Meta sometimes uses different ID scopes)
+  if (!userId && event.ig_user_id) {
+    const { data: allAccounts } = await supabaseClient
+      .from("instagram_accounts")
+      .select("id, user_id, ig_user_id");
+    for (const acct of allAccounts ?? []) {
+      if (acct.ig_user_id && (
+        acct.ig_user_id === event.ig_user_id ||
+        acct.ig_user_id.includes(event.ig_user_id) ||
+        event.ig_user_id.includes(acct.ig_user_id)
+      )) {
+        userId = acct.user_id;
+        break;
+      }
+    }
   }
 
   // Deduplicate by event_id — Meta retries events
