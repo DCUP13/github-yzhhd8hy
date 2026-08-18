@@ -118,6 +118,7 @@ Deno.serve(async (req: Request) => {
     let igUserId: string | null = null;
     let igUsername: string | null = null;
     let igProfilePic: string | null = null;
+    let pageAccessToken: string | null = null;
 
     for (const page of pages) {
       const igUrl = `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`;
@@ -126,6 +127,7 @@ Deno.serve(async (req: Request) => {
         const igBody = await igRes.json();
         if (igBody.instagram_business_account?.id) {
           igUserId = igBody.instagram_business_account.id;
+          pageAccessToken = page.access_token;
           // Fetch profile data
           const profileUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${page.access_token}`;
           const profileRes = await fetch(profileUrl);
@@ -157,11 +159,16 @@ Deno.serve(async (req: Request) => {
       .eq("ig_user_id", igUserId)
       .maybeSingle();
 
+    // Store the Page access token — this is what the Instagram Graph API needs
+    // for sending DMs, fetching media metadata, and resolving sender profiles.
+    // Fall back to the long-lived user token if the page token wasn't captured.
+    const tokenToStore = pageAccessToken ?? longLivedToken;
+
     const payload = {
       user_id: userId,
       ig_user_id: igUserId,
       username: igUsername,
-      access_token: longLivedToken,
+      access_token: tokenToStore,
       connected: true,
       auth_method: "oauth",
       profile_picture_url: igProfilePic,
