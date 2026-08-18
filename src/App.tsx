@@ -191,6 +191,9 @@ export default function App() {
 
       if (event === 'SIGNED_IN' && session) {
         setAppView('dashboard');
+        if (window.location.pathname !== '/') {
+          window.history.replaceState({}, '', '/');
+        }
         (async () => {
           try {
             // Mark any pending invitation for this user's email as accepted
