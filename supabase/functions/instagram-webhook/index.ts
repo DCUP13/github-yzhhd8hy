@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        // Mentions / other field-based changes
+        // Mentions, shares, and reposts
         for (const change of changes) {
           if (change?.field === "mentions") {
             const value = change?.value ?? {};
@@ -100,6 +100,34 @@ Deno.serve(async (req: Request) => {
               sender_username: value?.from?.username ?? null,
               media_id: value?.media?.id ?? null,
               comment_id: value?.comment_id ?? null,
+              message_text: value?.text ?? null,
+              raw_event: change,
+            });
+          }
+          if (change?.field === "shares") {
+            const value = change?.value ?? {};
+            await storeEvent(supabaseClient, {
+              event_id: value?.id ?? null,
+              event_type: "share",
+              ig_user_id: igUserId,
+              sender_id: value?.from?.id ?? null,
+              sender_username: value?.from?.username ?? null,
+              media_id: value?.media?.id ?? null,
+              comment_id: null,
+              message_text: value?.text ?? null,
+              raw_event: change,
+            });
+          }
+          if (change?.field === "reposted") {
+            const value = change?.value ?? {};
+            await storeEvent(supabaseClient, {
+              event_id: value?.id ?? null,
+              event_type: "repost",
+              ig_user_id: igUserId,
+              sender_id: value?.from?.id ?? null,
+              sender_username: value?.from?.username ?? null,
+              media_id: value?.media?.id ?? null,
+              comment_id: null,
               message_text: value?.text ?? null,
               raw_event: change,
             });

@@ -18,7 +18,7 @@ import { OrganizationProvider } from './contexts/OrganizationContext';
 import { supabase } from './lib/supabase';
 import type { Template } from './features/templates/types';
 import { DashboardProvider } from './contexts/DashboardContext';
-import { useRouter, type PublicRoute } from './lib/router';
+import { useRouter, useAppRouter, type PublicRoute, type AppView } from './lib/router';
 import { HomePage } from './components/public/HomePage';
 import { FeaturesPage } from './components/public/FeaturesPage';
 import { AboutPage } from './components/public/AboutPage';
@@ -30,8 +30,6 @@ import { AuthPage } from './components/public/AuthPage';
 import { PrivacyPolicy, TermsOfService, CookiePolicy, DataProcessingAgreement, RefundPolicy, AcceptableUsePolicy, AccessibilityADA } from './components/public/LegalPages';
 import { NotFoundPage } from './components/public/NotFoundPage';
 import { Lock as LockIcon, Menu } from 'lucide-react';
-
-type AppView = 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses' | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'team' | 'support';
 
 interface ThemeContextType {
   darkMode: boolean;
@@ -78,7 +76,8 @@ function FeatureNotEnabled({ featureName }: { featureName: string }) {
 
 export default function App() {
   const { route: publicRoute, navigate } = useRouter();
-  const [appView, setAppView] = useState<AppView | null>(null);
+  const { appView, queryParams, navigateToApp } = useAppRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -161,7 +160,7 @@ export default function App() {
         }
 
         if (session) {
-          setAppView('dashboard');
+          setIsAuthenticated(true);
           await fetchUserSettings(session.user.id);
           await fetchUserRole(session.user.id);
         }
@@ -190,9 +189,12 @@ export default function App() {
       if (event === 'INITIAL_SESSION') return;
 
       if (event === 'SIGNED_IN' && session) {
-        setAppView('dashboard');
-        if (window.location.pathname !== '/') {
-          window.history.replaceState({}, '', '/');
+        setIsAuthenticated(true);
+        // If we're on a public page (e.g. /login), go to dashboard
+        // Otherwise stay on the current app page
+        const currentPath = window.location.pathname;
+        if (!currentPath.startsWith('/app/')) {
+          navigateToApp('dashboard');
         }
         (async () => {
           try {
@@ -210,7 +212,7 @@ export default function App() {
           }
         })();
       } else if (event === 'SIGNED_OUT') {
-        setAppView(null);
+        setIsAuthenticated(false);
         setDarkMode(false);
         setIsSuperAdmin(false);
         navigate('home');
@@ -243,10 +245,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (appView) {
+    if (isAuthenticated) {
       fetchTemplates();
     }
-  }, [appView]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (darkMode) {
@@ -276,14 +278,14 @@ export default function App() {
       if (error) throw error;
       setDarkMode(newDarkMode);
     } catch (error) {
-      console.error('Error updating dark mode:', error);
+      console.error('Error updating dark mode setting:', error);
       alert('Failed to update dark mode setting. Please try again.');
     }
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    setAppView(null);
+    setIsAuthenticated(false);
     navigate('home');
   };
 
@@ -296,7 +298,19 @@ export default function App() {
   }
 
   // Signed-in app
-  if (appView) {
+  if (isAuthenticated && appView) {
+    const sidebarProps = {
+      onSignOut: handleSignOut,
+      currentView: appView,
+      onNavigate: (view: AppView) => {
+        navigateToApp(view);
+        setSidebarOpen(false);
+      },
+      isSuperAdmin,
+      featureFlags,
+      unreadChatCount,
+    };
+
     return (
       <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
         <TemplatesContext.Provider value={{ templates, fetchTemplates }}>
@@ -307,24 +321,7 @@ export default function App() {
               <div className="flex min-h-screen bg-white dark:bg-gray-900">
                 {/* Desktop sidebar — fixed */}
                 <div className="hidden lg:block fixed inset-y-0 left-0 w-64 flex-shrink-0">
-                  <Sidebar
-                    onSignOut={handleSignOut}
-                    onHomeClick={() => setAppView('dashboard')}
-                    onAppClick={() => setAppView('app')}
-                    onSettingsClick={() => setAppView('settings')}
-                    onTemplatesClick={() => setAppView('templates')}
-                    onEmailsClick={() => setAppView('emails')}
-                    onAddressesClick={() => setAppView('addresses')}
-                    onPromptsClick={() => setAppView('prompts')}
-                    onContactsClick={() => setAppView('contacts')}
-                    onAnalyticsClick={() => setAppView('analytics')}
-                    onInstagramClick={() => setAppView('instagram')}
-                    onTeamClick={() => setAppView('team')}
-                    onSupportClick={() => setAppView('support')}
-                    isSuperAdmin={isSuperAdmin}
-                    featureFlags={featureFlags}
-                    unreadChatCount={unreadChatCount}
-                  />
+                  <Sidebar {...sidebarProps} />
                 </div>
 
                 {/* Mobile sidebar — slide-in drawer */}
@@ -332,25 +329,10 @@ export default function App() {
                   <div className="lg:hidden fixed inset-0 z-50">
                     <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
                     <div className="absolute inset-y-0 left-0 w-64 bg-blue-800 dark:bg-gray-800 shadow-xl">
-                      <Sidebar
-                        onSignOut={handleSignOut}
-                        onHomeClick={() => setAppView('dashboard')}
-                        onAppClick={() => setAppView('app')}
-                        onSettingsClick={() => setAppView('settings')}
-                        onTemplatesClick={() => setAppView('templates')}
-                        onEmailsClick={() => setAppView('emails')}
-                        onAddressesClick={() => setAppView('addresses')}
-                        onPromptsClick={() => setAppView('prompts')}
-                        onContactsClick={() => setAppView('contacts')}
-                        onAnalyticsClick={() => setAppView('analytics')}
-                        onInstagramClick={() => setAppView('instagram')}
-                        onTeamClick={() => setAppView('team')}
-                        onSupportClick={() => setAppView('support')}
-                        isSuperAdmin={isSuperAdmin}
-                        featureFlags={featureFlags}
-                        unreadChatCount={unreadChatCount}
-                        onNavigate={() => setSidebarOpen(false)}
-                      />
+                      <Sidebar {...sidebarProps} onNavigate={(view: AppView) => {
+                        navigateToApp(view);
+                        setSidebarOpen(false);
+                      }} />
                     </div>
                   </div>
                 )}
@@ -365,7 +347,7 @@ export default function App() {
 
                 <div className="flex-1 lg:ml-64 pt-12 lg:pt-0">
                   {appView === 'dashboard' && (
-                    <Dashboard onSignOut={handleSignOut} currentView={appView} onNavigateAnalytics={() => setAppView('analytics')} />
+                    <Dashboard onSignOut={handleSignOut} currentView={appView} onNavigateAnalytics={() => navigateToApp('analytics')} />
                   )}
                   {appView === 'app' && (
                     <AppPage onSignOut={handleSignOut} currentView={appView} />
@@ -389,11 +371,11 @@ export default function App() {
                     <Contacts onSignOut={handleSignOut} currentView={appView} />
                   )}
                   {appView === 'analytics' && (
-                    <Analytics onSignOut={handleSignOut} currentView={appView} />
+                    <Analytics onSignOut={handleSignOut} currentView={appView} queryParams={queryParams} navigateToApp={navigateToApp} />
                   )}
                   {appView === 'instagram' && (
                     isSuperAdmin || featureFlags.instagram ? (
-                      <Instagram onSignOut={handleSignOut} currentView={appView} />
+                      <Instagram onSignOut={handleSignOut} currentView={appView} queryParams={queryParams} navigateToApp={navigateToApp} />
                     ) : (
                       <FeatureNotEnabled featureName="Instagram" />
                     )
@@ -413,6 +395,11 @@ export default function App() {
         </TemplatesContext.Provider>
       </ThemeContext.Provider>
     );
+  }
+
+  // If authenticated but no app view in URL, redirect to dashboard
+  if (isAuthenticated && !appView) {
+    navigateToApp('dashboard');
   }
 
   // Public marketing site with URL routing

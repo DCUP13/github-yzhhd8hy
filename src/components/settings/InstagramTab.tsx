@@ -1,294 +1,556 @@
-import React, { useState, useEffect } from 'react';
-import { Instagram as InstagramIcon, Check, AlertCircle, Link2, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Instagram as InstagramIcon, Check, AlertCircle, Link2, Eye, EyeOff, Plus, Trash2, RefreshCw, Key, Zap } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
-interface InstagramTabProps {
-  userId?: string;
+interface IgAccountRow {
+  id: string;
+  ig_user_id: string | null;
+  username: string | null;
+  access_token: string | null;
+  connected: boolean;
+  auth_method: string;
+  profile_picture_url: string | null;
+  followers_count: number | null;
+  follows_count: number | null;
+  media_count: number | null;
+  token_expired: boolean;
 }
 
-export function InstagramTab({ userId }: InstagramTabProps = {}) {
-  const [igUserId, setIgUserId] = useState('');
-  const [username, setUsername] = useState('');
-  const [accessToken, setAccessToken] = useState('');
-  const [connected, setConnected] = useState(false);
-  const [accountId, setAccountId] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+interface RefreshSettings {
+  auto_refresh_enabled: boolean;
+  refresh_interval_hours: number;
+  last_refresh_at: string | null;
+}
+
+export function InstagramTab() {
+  const [accounts, setAccounts] = useState<IgAccountRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [useOAuth, setUseOAuth] = useState(true);
+  const [manualForm, setManualForm] = useState({ ig_user_id: '', username: '', access_token: '' });
   const [showToken, setShowToken] = useState(false);
-  const [hasExistingToken, setHasExistingToken] = useState(false);
+  const [editingTokenFor, setEditingTokenFor] = useState<string | null>(null);
+  const [tokenValue, setTokenValue] = useState('');
+  const [refreshSettings, setRefreshSettings] = useState<RefreshSettings>({
+    auto_refresh_enabled: false,
+    refresh_interval_hours: 6,
+    last_refresh_at: null,
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [oauthStarting, setOauthStarting] = useState(false);
 
-  useEffect(() => {
-    fetchAccount();
-  }, []);
-
-  useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let active = true;
-
-    (async () => {
-      const currentUserId = await getCurrentUserId();
-      if (!currentUserId || !active) return;
-
-      channel = supabase
-        .channel(`instagram_rt_${currentUserId}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'instagram_accounts', filter: `user_id=eq.${currentUserId}` },
-          (payload) => {
-            const d = payload.new as Record<string, unknown>;
-            setIgUserId(String(d.ig_user_id || ''));
-            setUsername(String(d.username || ''));
-            setAccessToken(String(d.access_token || ''));
-            setConnected(Boolean(d.connected));
-            setHasExistingToken(!!d.access_token);
-            if (d.id) setAccountId(String(d.id));
-          }
-        )
-        .subscribe();
-    })();
-
-    return () => {
-      active = false;
-      if (channel) supabase.removeChannel(channel);
-    };
-  }, [userId]);
-
-  const getCurrentUserId = async (): Promise<string | null> => {
-    if (userId) return userId;
-    const { data: { user } } = await supabase.auth.getUser();
-    return user?.id || null;
-  };
-
-  const fetchAccount = async () => {
+  const fetchAccounts = useCallback(async () => {
     try {
-      const currentUserId = await getCurrentUserId();
-      if (!currentUserId) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
       const { data, error } = await supabase
         .from('instagram_accounts')
         .select('*')
-        .eq('user_id', currentUserId)
-        .maybeSingle();
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
 
       if (error) {
-        console.error('Error fetching Instagram account:', error);
+        console.error('Error fetching Instagram accounts:', error);
         return;
       }
 
-      if (data) {
-        setAccountId(data.id);
-        setIgUserId(data.ig_user_id || '');
-        setUsername(data.username || '');
-        setAccessToken(data.access_token || '');
-        setConnected(data.connected || false);
-        setHasExistingToken(!!data.access_token);
+      setAccounts(data || []);
+
+      const { data: settings } = await supabase
+        .from('instagram_refresh_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (settings) {
+        setRefreshSettings({
+          auto_refresh_enabled: settings.auto_refresh_enabled ?? false,
+          refresh_interval_hours: settings.refresh_interval_hours ?? 6,
+          last_refresh_at: settings.last_refresh_at ?? null,
+        });
       }
     } catch (error) {
-      console.error('Error fetching Instagram account:', error);
+      console.error('Error fetching Instagram accounts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAccounts();
+
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel('instagram_accounts_rt')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'instagram_accounts' },
+        () => fetchAccounts()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchAccounts]);
+
+  // Check for OAuth callback params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('oauth') === 'success') {
+      setShowManualForm(false);
+      // Clean up URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
+
+  const handleOAuthConnect = async () => {
+    setOauthStarting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/instagram-oauth-start`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        alert(err.error || 'Failed to start OAuth flow');
+        return;
+      }
+
+      const { auth_url } = await response.json();
+      window.location.href = auth_url;
+    } catch (error) {
+      console.error('OAuth start error:', error);
+      alert('Failed to start OAuth flow. Make sure INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET are set in your Supabase secrets.');
+    } finally {
+      setOauthStarting(false);
     }
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
+  const handleManualSave = async () => {
+    if (!manualForm.ig_user_id || !manualForm.access_token) {
+      alert('Instagram User ID and Access Token are required');
+      return;
+    }
+
     try {
-      const currentUserId = await getCurrentUserId();
-      if (!currentUserId) throw new Error('User not authenticated');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Check if this account already exists
+      const { data: existing } = await supabase
+        .from('instagram_accounts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('ig_user_id', manualForm.ig_user_id)
+        .maybeSingle();
 
       const payload = {
-        user_id: currentUserId,
-        ig_user_id: igUserId || null,
-        username: username || null,
-        access_token: accessToken || null,
-        connected: !!(igUserId && accessToken),
+        user_id: user.id,
+        ig_user_id: manualForm.ig_user_id,
+        username: manualForm.username || null,
+        access_token: manualForm.access_token,
+        connected: true,
+        auth_method: 'manual',
+        token_expired: false,
         updated_at: new Date().toISOString(),
       };
 
-      if (accountId) {
-        const { error } = await supabase
-          .from('instagram_accounts')
-          .update(payload)
-          .eq('id', accountId);
-        if (error) throw error;
+      if (existing) {
+        await supabase.from('instagram_accounts').update(payload).eq('id', existing.id);
       } else {
-        const { data, error } = await supabase
-          .from('instagram_accounts')
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw error;
-        if (data) setAccountId(data.id);
+        await supabase.from('instagram_accounts').insert(payload);
       }
 
-      setConnected(!!(igUserId && accessToken));
-      setHasExistingToken(!!accessToken);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setManualForm({ ig_user_id: '', username: '', access_token: '' });
+      setShowManualForm(false);
+      await fetchAccounts();
     } catch (error) {
-      console.error('Error saving Instagram settings:', error);
-      alert('Failed to save Instagram settings');
-    } finally {
-      setIsSaving(false);
+      console.error('Error saving manual account:', error);
+      alert('Failed to save account');
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!confirm('Disconnect your Instagram account?')) return;
+  const handleDisconnect = async (id: string) => {
+    if (!confirm('Disconnect this Instagram account?')) return;
     try {
-      if (accountId) {
-        const { error } = await supabase
-          .from('instagram_accounts')
-          .update({ connected: false, access_token: null, updated_at: new Date().toISOString() })
-          .eq('id', accountId);
-        if (error) throw error;
-      }
-      setConnected(false);
-      setAccessToken('');
-      setHasExistingToken(false);
+      await supabase.from('instagram_accounts').delete().eq('id', id);
+      await fetchAccounts();
     } catch (error) {
       console.error('Error disconnecting:', error);
-      alert('Failed to disconnect');
     }
   };
 
-  const displayToken = hasExistingToken && !showToken ? '••••••••••••••••' : accessToken;
+  const handleSync = async (accountId: string) => {
+    setSyncingId(accountId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/instagram-sync-insights`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ account_id: accountId }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        alert(err.error || 'Failed to sync insights');
+        return;
+      }
+
+      await fetchAccounts();
+    } catch (error) {
+      console.error('Error syncing insights:', error);
+      alert('Failed to sync insights');
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
+  const handleSaveRefreshSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      await supabase
+        .from('instagram_refresh_settings')
+        .upsert({
+          user_id: user.id,
+          auto_refresh_enabled: refreshSettings.auto_refresh_enabled,
+          refresh_interval_hours: refreshSettings.refresh_interval_hours,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+      await fetchAccounts();
+    } catch (error) {
+      console.error('Error saving refresh settings:', error);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleUpdateToken = async (accountId: string) => {
+    if (!tokenValue) {
+      alert('Please enter a new access token');
+      return;
+    }
+    try {
+      await supabase
+        .from('instagram_accounts')
+        .update({ access_token: tokenValue, token_expired: false, connected: true, updated_at: new Date().toISOString() })
+        .eq('id', accountId);
+      setEditingTokenFor(null);
+      setTokenValue('');
+      await fetchAccounts();
+    } catch (error) {
+      console.error('Error updating token:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Connection status */}
-      <div className={`rounded-lg p-4 ${connected ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'}`}>
-        <div className="flex items-center gap-3">
-          {connected ? (
-            <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-          )}
-          <div>
-            <p className="text-sm font-medium text-gray-900 dark:text-white">
-              {connected ? `Connected as @${username || 'unknown'}` : 'Not connected'}
+      {/* Connected accounts */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Connected Accounts</h3>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        {accounts.length === 0 ? (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+              <p className="text-sm text-gray-700 dark:text-gray-300">No Instagram accounts connected yet. Connect one below to get started.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {accounts.map((acct) => (
+              <div key={acct.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    {acct.profile_picture_url ? (
+                      <img src={acct.profile_picture_url} alt="" className="w-10 h-10 rounded-full" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
+                        <InstagramIcon className="w-5 h-5 text-pink-500" />
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">@{acct.username || 'unknown'}</p>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          acct.auth_method === 'oauth'
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
+                          {acct.auth_method === 'oauth' ? 'OAuth' : 'Manual'}
+                        </span>
+                        {acct.token_expired && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                            Token expired
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {acct.followers_count != null && `${acct.followers_count.toLocaleString()} followers`}
+                        {acct.media_count != null && ` · ${acct.media_count.toLocaleString()} posts`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleSync(acct.id)}
+                      disabled={syncingId === acct.id}
+                      className="p-1.5 text-gray-400 hover:text-pink-500 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20 disabled:opacity-50"
+                      title="Sync insights"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${syncingId === acct.id ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                      onClick={() => handleDisconnect(acct.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                      title="Disconnect"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Token expired — show update token field */}
+                {acct.token_expired && editingTokenFor === acct.id && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type={showToken ? 'text' : 'password'}
+                      value={tokenValue}
+                      onChange={(e) => setTokenValue(e.target.value)}
+                      placeholder="New access token"
+                      className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <button onClick={() => setShowToken(!showToken)} className="p-1.5 text-gray-400">
+                      {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={() => handleUpdateToken(acct.id)}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
+                    >
+                      Update
+                    </button>
+                    <button
+                      onClick={() => { setEditingTokenFor(null); setTokenValue(''); }}
+                      className="px-3 py-1.5 text-sm text-gray-500"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                {acct.token_expired && editingTokenFor !== acct.id && (
+                  <button
+                    onClick={() => { setEditingTokenFor(acct.id); setTokenValue(''); }}
+                    className="mt-2 text-xs text-pink-600 dark:text-pink-400 hover:underline"
+                  >
+                    Update access token
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Connect new account */}
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Plus className="w-4 h-4 text-gray-400" />
+          <h4 className="text-sm font-medium text-gray-900 dark:text-white">Connect New Account</h4>
+        </div>
+
+        {/* Connection method toggle */}
+        <div className="flex items-center gap-1 mb-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1">
+          <button
+            onClick={() => setUseOAuth(true)}
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              useOAuth ? 'bg-white dark:bg-gray-800 text-pink-600 dark:text-pink-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <Zap className="w-4 h-4" /> Instagram Login
+          </button>
+          <button
+            onClick={() => setUseOAuth(false)}
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              !useOAuth ? 'bg-white dark:bg-gray-800 text-pink-600 dark:text-pink-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <Key className="w-4 h-4" /> Manual
+          </button>
+        </div>
+
+        {useOAuth ? (
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+            <p className="text-xs text-gray-600 dark:text-gray-300 mb-3">
+              Click the button below to authorize your Instagram Business or Creator account through Meta's secure login. No need to copy IDs or tokens manually.
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {connected
-                ? 'Your Instagram account is linked and ready to receive webhook events.'
-                : 'Enter your Instagram account details below to connect.'}
+            <button
+              onClick={handleOAuthConnect}
+              disabled={oauthStarting}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50"
+            >
+              <InstagramIcon className="w-4 h-4" />
+              {oauthStarting ? 'Redirecting...' : 'Connect with Instagram'}
+            </button>
+            <p className="mt-2 text-xs text-gray-400">
+              Requires INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET in Supabase secrets.
             </p>
           </div>
+        ) : (
+          <div className="space-y-3">
+            {!showManualForm ? (
+              <button
+                onClick={() => setShowManualForm(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
+              >
+                <Plus className="w-4 h-4" /> Add Account Manually
+              </button>
+            ) : (
+              <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Instagram User ID</label>
+                  <input
+                    type="text"
+                    value={manualForm.ig_user_id}
+                    onChange={(e) => setManualForm(prev => ({ ...prev, ig_user_id: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Instagram-scoped user ID from Meta"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Username (optional)</label>
+                  <input
+                    type="text"
+                    value={manualForm.username}
+                    onChange={(e) => setManualForm(prev => ({ ...prev, username: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="@your_username"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Access Token</label>
+                  <div className="relative">
+                    <input
+                      type={showToken ? 'text' : 'password'}
+                      value={manualForm.access_token}
+                      onChange={(e) => setManualForm(prev => ({ ...prev, access_token: e.target.value }))}
+                      className="w-full px-3 py-2 pr-10 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"
+                      placeholder="Long-lived access token"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowToken(!showToken)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                    >
+                      {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleManualSave}
+                    className="px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
+                  >
+                    Save Account
+                  </button>
+                  <button
+                    onClick={() => { setShowManualForm(false); setManualForm({ ig_user_id: '', username: '', access_token: '' }); }}
+                    className="px-4 py-2 text-sm text-gray-500"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Auto-refresh settings */}
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <RefreshCw className="w-4 h-4 text-gray-400" />
+          <h4 className="text-sm font-medium text-gray-900 dark:text-white">Auto-Refresh Settings</h4>
+        </div>
+        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 space-y-3">
+          <label className="flex items-center justify-between">
+            <span className="text-sm text-gray-700 dark:text-gray-300">Enable auto-refresh</span>
+            <button
+              onClick={() => setRefreshSettings(prev => ({ ...prev, auto_refresh_enabled: !prev.auto_refresh_enabled }))}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${refreshSettings.auto_refresh_enabled ? 'bg-pink-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+            >
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${refreshSettings.auto_refresh_enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+          </label>
+          {refreshSettings.auto_refresh_enabled && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Refresh frequency</label>
+              <select
+                value={refreshSettings.refresh_interval_hours}
+                onChange={(e) => setRefreshSettings(prev => ({ ...prev, refresh_interval_hours: parseInt(e.target.value) }))}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value={1}>Every 1 hour</option>
+                <option value={6}>Every 6 hours</option>
+                <option value={12}>Every 12 hours</option>
+                <option value={24}>Every 24 hours</option>
+              </select>
+            </div>
+          )}
+          {refreshSettings.last_refresh_at && (
+            <p className="text-xs text-gray-400">
+              Last sync: {new Date(refreshSettings.last_refresh_at).toLocaleString()}
+            </p>
+          )}
+          <button
+            onClick={handleSaveRefreshSettings}
+            disabled={savingSettings}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
+          >
+            {savingSettings ? 'Saving...' : 'Save Settings'}
+          </button>
         </div>
       </div>
 
       {/* Webhook info */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
         <div className="flex items-start gap-3">
-          <Link2 className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+          <Link2 className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="flex-1">
             <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1">Webhook Setup</h4>
             <p className="text-xs text-gray-600 dark:text-gray-300 mb-2">
-              Your webhook URL and verification token are configured on the server side. Contact your platform administrator if you need the webhook address for your Meta App dashboard.
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Once your webhook is verified by Meta, incoming comments, messages, and mentions will appear in your Instagram inbox automatically.
+              Your webhook URL and verification token are configured on the server side. Incoming comments, messages, mentions, shares, and reposts will appear in your Instagram inbox automatically.
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Account form */}
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Instagram User ID
-          </label>
-          <input
-            type="text"
-            value={igUserId}
-            onChange={(e) => setIgUserId(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="Your Instagram-scoped user ID from Meta"
-          />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Found in your Meta App dashboard after connecting your Instagram Business/Creator account.
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Username
-          </label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            placeholder="@your_instagram_username"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Long-Lived Access Token
-          </label>
-          <div className="relative">
-            <textarea
-              value={displayToken}
-              onChange={(e) => {
-                setAccessToken(e.target.value);
-                setHasExistingToken(false);
-              }}
-              rows={3}
-              className="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
-              placeholder="Paste your long-lived access token from Meta"
-            />
-            {hasExistingToken && (
-              <button
-                type="button"
-                onClick={() => setShowToken(!showToken)}
-                className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                title={showToken ? 'Hide token' : 'Show token'}
-              >
-                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            )}
-          </div>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Generate a long-lived token in your Meta App dashboard. This is used to publish posts and reply to comments. For security, the token is hidden once saved.
-          </p>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg shadow-sm text-white ${
-            isSaving ? 'bg-pink-400 cursor-wait' : 'bg-pink-600 hover:bg-pink-700'
-          }`}
-        >
-          {isSaving ? 'Saving...' : 'Save Settings'}
-        </button>
-        {connected && (
-          <button
-            onClick={handleDisconnect}
-            className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
-          >
-            Disconnect
-          </button>
-        )}
-        {saveSuccess && (
-          <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
-            <Check className="w-4 h-4" /> Saved
-          </span>
-        )}
-      </div>
-
-      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-        <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Meta App Setup Guide</h4>
-        <ol className="space-y-1 text-xs text-gray-500 dark:text-gray-400 list-decimal list-inside">
-          <li>Create a Meta app at developers.facebook.com and add the Instagram Graph API product.</li>
-          <li>Subscribe your Instagram Business or Creator account to the app.</li>
-          <li>Configure the webhook in your Meta App dashboard using the server-side verify token.</li>
-          <li>Subscribe to the fields: comments, messages, and mentions.</li>
-          <li>Generate a long-lived access token and paste it above.</li>
-        </ol>
       </div>
     </div>
   );
