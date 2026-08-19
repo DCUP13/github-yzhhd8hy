@@ -914,7 +914,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
               </div>
             ) : selectedConversation ? (
               /* Conversation detail view */
-              <div className="flex flex-col h-[calc(100vh-300px)] min-h-[450px] max-h-[700px]">
+              <div className="flex flex-col h-[calc(100vh-340px)] min-h-[320px] sm:h-[calc(100vh-300px)] sm:min-h-[450px] sm:max-h-[700px]">
                 {/* Conversation header */}
                 <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                   <button
