@@ -62,6 +62,8 @@ interface IgAccount {
   token_expired: boolean;
   auth_method: string;
   user_id: string;
+  owner_profile_id?: string | null;
+  page_scoped_id?: string | null;
 }
 
 interface Snapshot {
@@ -590,22 +592,16 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       }
     }
 
-    // Detect self-chats: conversations with only outgoing messages where sender is the account owner
+    // Detect self-chats: only when the recipient is the account owner's own profile
+    const ownerId = selectedAccount?.owner_profile_id;
     for (const conv of convos.values()) {
-      if (conv.type === 'dm' && conv.otherPartyName === 'Instagram User') {
-        const hasIncoming = conv.events.some(e => e.direction === 'incoming');
-        if (!hasIncoming) {
-          const outgoingEvent = conv.events.find(e => e.direction === 'outgoing');
-          if (outgoingEvent?.sender_username) {
-            const isSelfChat = accounts.some(a => a.username === outgoingEvent.sender_username);
-            if (isSelfChat) {
-              conv.isSelfChat = true;
-              conv.otherPartyName = outgoingEvent.sender_name || outgoingEvent.sender_username;
-              conv.otherPartyUsername = outgoingEvent.sender_username;
-              conv.otherPartyAvatar = outgoingEvent.sender_profile_url || selectedAccount?.profile_picture_url || null;
-            }
-          }
-        }
+      if (conv.type !== 'dm') continue;
+      if (!conv.otherPartyId || !ownerId) continue;
+      if (conv.otherPartyId === ownerId) {
+        conv.isSelfChat = true;
+        conv.otherPartyName = selectedAccount?.username || 'You';
+        conv.otherPartyUsername = selectedAccount?.username || null;
+        conv.otherPartyAvatar = selectedAccount?.profile_picture_url || null;
       }
     }
 
@@ -918,7 +914,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
               </div>
             ) : selectedConversation ? (
               /* Conversation detail view */
-              <div className="flex flex-col h-[calc(100vh-380px)] min-h-[400px]">
+              <div className="flex flex-col h-[calc(100vh-340px)] min-h-[400px]">
                 {/* Conversation header */}
                 <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                   <button
@@ -1035,7 +1031,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
                 {/* Reply box — always visible at the bottom, never scrolls */}
                 {selectedConversation.type === 'dm' && (
-                  <div className="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 flex-shrink-0">
+                  <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 flex-shrink-0">
                     {selectedConversation.otherPartyId ? (
                       <div className="flex items-center gap-2">
                         <input
