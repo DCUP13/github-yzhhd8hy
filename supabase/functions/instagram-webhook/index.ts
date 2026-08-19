@@ -75,9 +75,9 @@ Deno.serve(async (req: Request) => {
           const messageText = msg?.message?.text ?? null;
           if (!messageText && !msg?.message?.attachment) continue;
           const isEcho = msg?.message?.is_echo === true;
+          const isSelfMessage = msg?.message?.is_self === true;
           const senderId = msg?.sender?.id ?? null;
           const recipientId = msg?.recipient?.id ?? null;
-          const isSelfMessage = isEcho && senderId && recipientId && senderId === recipientId;
           const otherPartyId = isEcho ? recipientId : senderId;
           await storeEvent(supabaseClient, {
             event_id: msg?.message?.mid ?? null, event_type: "message", ig_user_id: igUserId,
