@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
-    const scope = "instagram_basic,instagram_content_publish,instagram_manage_messages,pages_show_list,pages_read_engagement";
+    const scope = "instagram_basic,instagram_content_publish,instagram_manage_messages,pages_show_list,pages_read_engagement,pages_manage_engagement,pages_messaging,business_basic_msg,business_manage_messages";
 
     // Generate a secure state parameter containing the user ID
     const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now() }));

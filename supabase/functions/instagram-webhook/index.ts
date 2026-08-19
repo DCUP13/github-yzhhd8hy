@@ -88,10 +88,15 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        // Direct messages
+        // Direct messages — only store actual text messages, skip read receipts,
+        // reactions, delivery confirmations, and edit metadata
         const messaging: any[] = entry?.messaging ?? [];
         for (const msg of messaging) {
+          // Skip non-message events: read receipts, reactions, deliveries, edits
+          if (msg.read || msg.delivery || msg.reaction || msg.message_edit) continue;
+          // Only store if there's actual message content
           const messageText = msg?.message?.text ?? null;
+          if (!messageText && !msg?.message?.attachment) continue;
           const isEcho = msg?.message?.is_echo === true;
           const senderId = msg?.sender?.id ?? null;
           const recipientId = msg?.recipient?.id ?? null;

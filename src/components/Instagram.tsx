@@ -501,16 +501,33 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       if (event.event_type === 'message') {
         // For DMs: group by the other party
         // Incoming: other party is sender_id. Outgoing (echo): other party is recipient_id.
-        const otherId = event.direction === 'outgoing'
-          ? event.recipient_id
-          : event.sender_id;
-        convId = `dm_${otherId ?? 'unknown'}`;
+        // Fall back to raw_event recipient/sender if the column is null (old events).
+        let otherId: string | null = null;
+        if (event.direction === 'outgoing') {
+          otherId = event.recipient_id
+            ?? (event as any).raw_event?.recipient?.id
+            ?? null;
+        } else {
+          otherId = event.sender_id
+            ?? (event as any).raw_event?.sender?.id
+            ?? null;
+        }
+        // Skip events with no identifiable other party — they can't be grouped
+        if (!otherId) continue;
+        convId = `dm_${otherId}`;
         type = 'dm';
       } else {
         // Comments, mentions, shares, reposts: group by media_id
         convId = `media_${event.media_id ?? event.id}`;
         type = 'media';
       }
+
+      // Determine the other party ID for this event
+      const eventOtherPartyId = type === 'dm'
+        ? (event.direction === 'outgoing'
+          ? (event.recipient_id ?? (event as any).raw_event?.recipient?.id ?? null)
+          : (event.sender_id ?? (event as any).raw_event?.sender?.id ?? null))
+        : event.sender_id;
 
       const existing = convos.get(convId);
       const isUnread = event.event_type === 'message'
@@ -522,9 +539,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           id: convId,
           type,
           events: [event],
-          otherPartyId: type === 'dm'
-            ? (event.direction === 'outgoing' ? event.recipient_id : event.sender_id)
-            : event.sender_id,
+          otherPartyId: eventOtherPartyId,
           otherPartyName: event.sender_name || event.sender_username || (type === 'dm' ? 'Instagram User' : 'Unknown'),
           otherPartyUsername: event.sender_username,
           otherPartyAvatar: event.sender_profile_url,
@@ -542,6 +557,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           existing.lastMessageText = event.message_text;
         }
         if (isUnread) existing.unreadCount++;
+        // Update otherPartyId if we found a non-null one
+        if (!existing.otherPartyId && eventOtherPartyId) {
+          existing.otherPartyId = eventOtherPartyId;
+        }
         // Update sender info if we got better data
         if (event.sender_username && !existing.otherPartyUsername) {
           existing.otherPartyUsername = event.sender_username;
@@ -572,6 +591,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
   const handleSendReply = async () => {
     if (!selectedConversation || !replyText.trim() || !selectedAccount) return;
+    if (!selectedConversation.otherPartyId) {
+      alert('Cannot reply to this conversation — the recipient could not be identified.');
+      return;
+    }
     setIsSendingReply(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -826,9 +849,9 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
               </div>
             ) : selectedConversation ? (
               /* Conversation detail view */
-              <div className="flex flex-col h-[600px]">
+              <div className="flex flex-col h-[calc(100vh-380px)] min-h-[400px]">
                 {/* Conversation header */}
-                <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                   <button
                     onClick={() => setSelectedConversationId(null)}
                     className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg"
@@ -869,8 +892,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                   </div>
                 </div>
 
-                {/* Messages list */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30">
+                {/* Messages list — scrolls independently */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30 min-h-0">
                   {selectedConversation.events
                     .slice()
                     .reverse()
@@ -908,27 +931,33 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                     })}
                 </div>
 
-                {/* Reply box — only for DM conversations */}
+                {/* Reply box — always visible at the bottom, never scrolls */}
                 {selectedConversation.type === 'dm' && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 p-3">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
-                        placeholder="Type a reply..."
-                        className="flex-1 px-4 py-2.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                        disabled={isSendingReply}
-                      />
-                      <button
-                        onClick={handleSendReply}
-                        disabled={!replyText.trim() || isSendingReply}
-                        className="p-2.5 rounded-full bg-pink-500 text-white hover:bg-pink-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <Send className="w-4 h-4" />
-                      </button>
-                    </div>
+                  <div className="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 flex-shrink-0">
+                    {selectedConversation.otherPartyId ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
+                          placeholder="Type a reply..."
+                          className="flex-1 px-4 py-2.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                          disabled={isSendingReply}
+                        />
+                        <button
+                          onClick={handleSendReply}
+                          disabled={!replyText.trim() || isSendingReply}
+                          className="p-2.5 rounded-full bg-pink-500 text-white hover:bg-pink-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 text-center py-2">
+                        This conversation doesn't have a valid recipient ID to reply to.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
