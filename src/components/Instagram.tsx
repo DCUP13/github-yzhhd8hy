@@ -490,6 +490,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     mediaType: string | null;
     mediaPermalink: string | null;
     mediaCaption: string | null;
+    isSelfChat: boolean;
   }
 
   const conversations = useMemo((): Conversation[] => {
@@ -561,6 +562,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           mediaType: event.media_type,
           mediaPermalink: event.media_permalink,
           mediaCaption: event.media_caption,
+          isSelfChat: false,
         });
       } else {
         existing.events.push(event);
@@ -588,11 +590,30 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       }
     }
 
+    // Detect self-chats: conversations with only outgoing messages where sender is the account owner
+    for (const conv of convos.values()) {
+      if (conv.type === 'dm' && conv.otherPartyName === 'Instagram User') {
+        const hasIncoming = conv.events.some(e => e.direction === 'incoming');
+        if (!hasIncoming) {
+          const outgoingEvent = conv.events.find(e => e.direction === 'outgoing');
+          if (outgoingEvent?.sender_username) {
+            const isSelfChat = accounts.some(a => a.username === outgoingEvent.sender_username);
+            if (isSelfChat) {
+              conv.isSelfChat = true;
+              conv.otherPartyName = outgoingEvent.sender_name || outgoingEvent.sender_username;
+              conv.otherPartyUsername = outgoingEvent.sender_username;
+              conv.otherPartyAvatar = outgoingEvent.sender_profile_url || selectedAccount?.profile_picture_url || null;
+            }
+          }
+        }
+      }
+    }
+
     // Sort conversations by most recent message
     return Array.from(convos.values()).sort((a, b) =>
       b.lastMessageAt.localeCompare(a.lastMessageAt)
     );
-  }, [events]);
+  }, [events, accounts, selectedAccount]);
 
   const filteredConversations = useMemo(() => {
     if (inboxFilter === 'messages') return conversations.filter(c => c.type === 'dm');
@@ -642,6 +663,41 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       alert('Failed to send reply');
     } finally {
       setIsSendingReply(false);
+    }
+  };
+
+  const handleDeleteConversation = async (conv: Conversation) => {
+    if (!confirm(`Delete this conversation with ${conv.otherPartyName}? This cannot be undone.`)) return;
+    try {
+      if (conv.type === 'dm' && conv.otherPartyId) {
+        const { error: err1 } = await supabase
+          .from('instagram_webhook_events')
+          .delete()
+          .eq('event_type', 'message')
+          .eq('direction', 'incoming')
+          .eq('sender_id', conv.otherPartyId);
+        const { error: err2 } = await supabase
+          .from('instagram_webhook_events')
+          .delete()
+          .eq('event_type', 'message')
+          .eq('direction', 'outgoing')
+          .eq('recipient_id', conv.otherPartyId);
+        if (err1 || err2) throw err1 || err2;
+      } else if (conv.type === 'media') {
+        const mediaId = conv.events[0]?.media_id;
+        if (mediaId) {
+          const { error } = await supabase
+            .from('instagram_webhook_events')
+            .delete()
+            .eq('media_id', mediaId);
+          if (error) throw error;
+        }
+      }
+      setSelectedConversationId(null);
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      alert('Failed to delete conversation. You may not have permission to delete some messages.');
     }
   };
 
@@ -871,6 +927,13 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                   >
                     <ArrowLeft className="w-5 h-5" />
                   </button>
+                  <button
+                    onClick={() => handleDeleteConversation(selectedConversation)}
+                    className="p-1 text-gray-400 hover:text-red-500 rounded-lg ml-auto"
+                    title="Delete conversation"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                   {selectedConversation.otherPartyAvatar ? (
                     <img src={selectedConversation.otherPartyAvatar} alt="" className="w-10 h-10 rounded-full" />
                   ) : (
@@ -887,7 +950,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                       {selectedConversation.otherPartyName}
-                      {selectedConversation.otherPartyUsername && (
+                      {selectedConversation.isSelfChat && (
+                        <span className="text-xs text-pink-500 font-normal ml-1">(You)</span>
+                      )}
+                      {selectedConversation.otherPartyUsername && !selectedConversation.isSelfChat && (
                         <span className="text-gray-400 font-normal"> @{selectedConversation.otherPartyUsername}</span>
                       )}
                     </p>
@@ -1027,10 +1093,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 ) : (
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
                     {filteredConversations.map((conv) => (
-                      <button
+                      <div
                         key={conv.id}
                         onClick={() => setSelectedConversationId(conv.id)}
-                        className="w-full p-4 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 text-left transition-colors"
+                        className="w-full p-4 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 text-left transition-colors cursor-pointer"
                       >
                         {/* Avatar */}
                         {conv.otherPartyAvatar ? (
@@ -1092,13 +1158,21 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                           )}
                         </div>
 
-                        {/* Unread badge */}
-                        {conv.unreadCount > 0 && (
-                          <span className="flex-shrink-0 flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold text-white bg-pink-500 rounded-full">
-                            {conv.unreadCount}
-                          </span>
-                        )}
-                      </button>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          {conv.unreadCount > 0 && (
+                            <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold text-white bg-pink-500 rounded-full">
+                              {conv.unreadCount}
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv); }}
+                            className="p-1 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="Delete conversation"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
