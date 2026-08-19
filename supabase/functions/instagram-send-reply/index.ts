@@ -6,58 +6,83 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-function getApiBase(accessToken: string): string {
-  return accessToken.startsWith("IGAA")
-    ? "https://graph.instagram.com"
-    : "https://graph.facebook.com";
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const body = await req.json().catch(() => ({}));
-    const { account_id, recipient_id, message_text, reply_to_event_id } = body as {
-      account_id?: string;
-      recipient_id?: string;
-      message_text?: string;
-      reply_to_event_id?: string;
-    };
-
-    if (!account_id || !recipient_id || !message_text) {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields: account_id, recipient_id, message_text" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Load the account
-    const { data: account, error: accountError } = await supabase
+    const { data: { user }, error: userErr } = await supabaseClient.auth.getUser(token);
+    if (userErr || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const body = await req.json();
+    const { account_id, recipient_id, message_text, reply_to_event_id } = body;
+
+    if (!account_id || !recipient_id || !message_text) {
+      return new Response(JSON.stringify({ error: "Missing required fields: account_id, recipient_id, message_text" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: account, error: acctErr } = await supabaseClient
       .from("instagram_accounts")
-      .select("id, access_token, page_scoped_id, user_id")
+      .select("id, user_id, access_token, ig_user_id, page_scoped_id, username")
       .eq("id", account_id)
       .maybeSingle();
 
-    if (accountError || !account?.access_token) {
-      return new Response(
-        JSON.stringify({ error: "Account not found or no access token" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (acctErr || !account) {
+      return new Response(JSON.stringify({ error: "Account not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Send the message via Instagram API
-    const apiBase = getApiBase(account.access_token);
-    const sendUrl = `${apiBase}/v21.0/${account.page_scoped_id}/messages?access_token=${account.access_token}`;
+    if (account.user_id !== user.id) {
+      const { data: share } = await supabaseClient
+        .from("instagram_account_shares")
+        .select("permissions")
+        .eq("account_id", account_id)
+        .eq("shared_with_user_id", user.id)
+        .maybeSingle();
+      if (!share || !share.permissions?.reply) {
+        return new Response(JSON.stringify({ error: "You don't have permission to reply from this account" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
-    const sendResponse = await fetch(sendUrl, {
+    if (!account.access_token) {
+      return new Response(JSON.stringify({ error: "No access token for this account" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Use the Instagram Graph API (graph.instagram.com) for IG-format tokens,
+    // and the Facebook Graph API (graph.facebook.com) for FB Page tokens.
+    const isIgToken = account.access_token.startsWith("IGAA");
+    const apiBase = isIgToken
+      ? "https://graph.instagram.com"
+      : "https://graph.facebook.com";
+    const senderId = account.ig_user_id;
+    const sendUrl = `${apiBase}/v21.0/${senderId}/messages`;
+
+    const sendRes = await fetch(`${sendUrl}?access_token=${account.access_token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -66,25 +91,35 @@ Deno.serve(async (req: Request) => {
       }),
     });
 
-    if (!sendResponse.ok) {
-      const errText = await sendResponse.text();
-      console.error("Instagram send error:", errText);
-      return new Response(
-        JSON.stringify({ error: "Failed to send Instagram message", details: errText }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (!sendRes.ok) {
+      const errBody = await sendRes.text();
+      console.error("Instagram send reply failed:", errBody);
+      let errorMsg = "Failed to send message";
+      let windowClosed = false;
+      try {
+        const errJson = JSON.parse(errBody);
+        errorMsg = errJson?.error?.message ?? errorMsg;
+        // Detect the 24-hour messaging window error
+        if (errorMsg.includes("allowed window") || errorMsg.includes("24 hour") || errJson?.error?.code === 10) {
+          windowClosed = true;
+          errorMsg = "The 24-hour messaging window has closed. Instagram only allows replies within 24 hours of the person's last message to you. After that, standard replies are blocked.";
+        }
+      } catch { /* ignore */ }
+      return new Response(JSON.stringify({ error: errorMsg, window_closed: windowClosed }), {
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const sendData = await sendResponse.json();
-    const messageId = sendData?.message_id ?? `manual_${Date.now()}`;
+    const sendData = await sendRes.json();
+    const messageId = sendData?.message_id ?? null;
 
-    // Store the outgoing message in webhook events
-    await supabase.from("instagram_webhook_events").insert({
-      event_id: messageId,
+    await supabaseClient.from("instagram_webhook_events").insert({
+      user_id: account.user_id,
+      event_id: messageId ?? `reply_${Date.now()}`,
       event_type: "message",
-      ig_user_id: account.page_scoped_id,
-      sender_id: account.page_scoped_id,
-      sender_username: null,
+      ig_user_id: account.page_scoped_id ?? account.ig_user_id,
+      sender_id: account.page_scoped_id ?? account.ig_user_id,
+      sender_username: account.username ?? null,
       sender_name: null,
       sender_profile_url: null,
       media_id: null,
@@ -95,26 +130,29 @@ Deno.serve(async (req: Request) => {
       message_text: message_text,
       direction: "outgoing",
       recipient_id: recipient_id,
-      raw_event: { manual_reply: true, message_id: messageId },
+      reply_text: message_text,
+      replied_at: new Date().toISOString(),
+      raw_event: { sent_from_app: true, message_id: messageId, recipient_id },
     });
 
-    // Mark the original incoming event as replied
     if (reply_to_event_id) {
-      await supabase
+      await supabaseClient
         .from("instagram_webhook_events")
-        .update({ reply_text: message_text, replied_at: new Date().toISOString() })
+        .update({
+          processed: true,
+          reply_text: message_text,
+          replied_at: new Date().toISOString(),
+        })
         .eq("id", reply_to_event_id);
     }
 
-    return new Response(
-      JSON.stringify({ success: true, message_id: messageId }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ success: true, message_id: messageId }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    console.error("instagram-send-reply error:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    console.error("Send reply error:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
