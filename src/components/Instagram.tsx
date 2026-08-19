@@ -262,8 +262,9 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     // Fetch prompts for this user (for the prompt selector)
     const { data: promptsData } = await supabase
       .from('prompts')
-      .select('id, title, reply_mode')
+      .select('id, title, reply_mode, category')
       .eq('user_id', account.user_id)
+      .eq('category', 'Instagram')
       .order('updated_at', { ascending: false });
     setAvailablePrompts(promptsData || []);
 
@@ -1860,7 +1861,7 @@ function ShareModal({ accountId, orgMembers, onClose, onShared }: {
 function AutoresponderTab({ accountId, settings, prompts, isSaving, onSave }: {
   accountId: string;
   settings: { enabled: boolean; prompt_id: string | null; cooldown_minutes: number } | null;
-  prompts: Array<{ id: string; title: string; reply_mode: string }>;
+  prompts: Array<{ id: string; title: string; reply_mode: string; category: string }>;
   isSaving: boolean;
   onSave: (settings: { enabled: boolean; prompt_id: string | null; cooldown_minutes: number }) => void;
 }) {

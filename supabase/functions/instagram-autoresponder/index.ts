@@ -50,6 +50,7 @@ async function runPrompt(
   context: {
     message: string;
     conversation: string;
+    senderUsername?: string;
   },
 ): Promise<string> {
   const businessData = prompt.use_business_data ? (prompt.business_data || '') : '';
@@ -57,6 +58,7 @@ async function runPrompt(
     business_data: businessData,
     message: context.message,
     conversation: context.conversation,
+    sender_username: context.senderUsername || '',
   };
 
   if (prompt.reply_mode === 'two_step' && prompt.step1_content && prompt.step2_content) {
@@ -111,7 +113,7 @@ Deno.serve(async (req: Request) => {
     // Fetch the incoming message event
     const { data: event, error: eventError } = await supabase
       .from("instagram_webhook_events")
-      .select("id, sender_id, message_text, direction, event_type, created_at")
+      .select("id, sender_id, sender_username, message_text, direction, event_type, created_at")
       .eq("id", event_id)
       .maybeSingle();
 
@@ -242,6 +244,7 @@ Deno.serve(async (req: Request) => {
     const generatedReply = await runPrompt(prompt, {
       message: event.message_text,
       conversation: conversationText,
+      senderUsername: event.sender_username || '',
     });
 
     // Send the reply via Instagram Graph API
