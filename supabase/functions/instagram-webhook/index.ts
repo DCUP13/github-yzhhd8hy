@@ -78,7 +78,7 @@ Deno.serve(async (req: Request) => {
           const senderId = msg?.sender?.id ?? null;
           const recipientId = msg?.recipient?.id ?? null;
           const otherPartyId = isEcho ? recipientId : senderId;
-          await storeEvent(supabaseClient, {
+          const storedEvent = await storeEvent(supabaseClient, {
             event_id: msg?.message?.mid ?? null, event_type: "message", ig_user_id: igUserId,
             sender_id: senderId, sender_username: null, sender_name: null, sender_profile_url: null,
             media_id: null, media_type: null, media_permalink: null, media_caption: null,
@@ -86,6 +86,18 @@ Deno.serve(async (req: Request) => {
             direction: isEcho ? "outgoing" : "incoming", recipient_id: recipientId,
             raw_event: msg, user_id: userId,
           }, accessToken, otherPartyId);
+
+          // Trigger autoresponder for incoming (non-echo) DMs
+          if (!isEcho && storedEvent && account && senderId && messageText) {
+            tryFireAutoresponder(supabaseClient, {
+              eventId: storedEvent.id,
+              accountId: account.id,
+              senderId,
+              messageText,
+              senderName: storedEvent.sender_name ?? storedEvent.sender_username ?? 'Someone',
+              igUserId,
+            });
+          }
         }
 
         for (const change of changes) {
@@ -236,7 +248,7 @@ async function storeEvent(
   },
   accessToken: string | null = null,
   otherPartyId: string | null = null,
-) {
+): Promise<{ id: string; sender_name: string | null; sender_username: string | null } | null> {
   let userId = event.user_id;
 
   if (!userId && event.sender_id) {
@@ -254,7 +266,7 @@ async function storeEvent(
       .select("id")
       .eq("event_id", event.event_id)
       .maybeSingle();
-    if (existing) return;
+    if (existing) return null;
   }
 
   let senderUsername = event.sender_username;
@@ -270,7 +282,7 @@ async function storeEvent(
     }
   }
 
-  await supabaseClient.from("instagram_webhook_events").insert({
+  const { data, error } = await supabaseClient.from("instagram_webhook_events").insert({
     user_id: userId, event_id: event.event_id, event_type: event.event_type,
     ig_user_id: event.ig_user_id, sender_id: event.sender_id,
     sender_username: senderUsername, sender_name: senderName, sender_profile_url: senderProfileUrl,
@@ -279,5 +291,60 @@ async function storeEvent(
     comment_id: event.comment_id, message_text: event.message_text,
     direction: event.direction, recipient_id: event.recipient_id,
     raw_event: event.raw_event,
-  });
+  }).select("id, sender_name, sender_username").single();
+
+  if (error) {
+    console.error("storeEvent insert error:", error);
+    return null;
+  }
+  return data;
+}
+
+// Fire-and-forget: triggers the autoresponder edge function asynchronously
+async function tryFireAutoresponder(
+  supabaseClient: any,
+  params: {
+    eventId: string;
+    accountId: string;
+    senderId: string;
+    messageText: string;
+    senderName: string;
+    igUserId: string | null;
+  },
+) {
+  try {
+    // Fetch recent conversation history for context
+    const { data: recentMessages } = await supabaseClient
+      .from("instagram_webhook_events")
+      .select("direction, message_text, created_at")
+      .or(`sender_id.eq.${params.senderId},recipient_id.eq.${params.senderId}`)
+      .eq("event_type", "message")
+      .order("created_at", { ascending: true })
+      .limit(10);
+
+    const conversationHistory = (recentMessages ?? [])
+      .map((m: any) => `${m.direction === 'outgoing' ? 'You' : 'Them'}: ${m.message_text ?? '(no text)'}`)
+      .join('\n');
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    await fetch(`${supabaseUrl}/functions/v1/instagram-autoresponder`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        event_id: params.eventId,
+        account_id: params.accountId,
+        sender_id: params.senderId,
+        message_text: params.messageText,
+        conversation_history: conversationHistory,
+        sender_name: params.senderName,
+      }),
+    });
+  } catch (err) {
+    console.error("Autoresponder trigger error (non-fatal):", err);
+  }
 }
