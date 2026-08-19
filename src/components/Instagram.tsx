@@ -78,7 +78,7 @@ interface Snapshot {
   created_at: string;
 }
 
-type TabType = 'inbox' | 'posts' | 'rules' | 'stats' | 'sharing';
+type TabType = 'inbox' | 'posts' | 'rules' | 'autoresponder' | 'stats' | 'sharing';
 
 export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }: InstagramProps) {
   const initialTab = (queryParams.tab as TabType) || 'inbox';
@@ -110,6 +110,9 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   const [replyText, setReplyText] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [inboxFilter, setInboxFilter] = useState<'all' | 'messages' | 'comments'>('all');
+  const [autoresponderSettings, setAutoresponderSettings] = useState<{ enabled: boolean; prompt_id: string | null; cooldown_minutes: number } | null>(null);
+  const [availablePrompts, setAvailablePrompts] = useState<Array<{ id: string; title: string; reply_mode: string }>>([]);
+  const [isSavingAutoresponder, setIsSavingAutoresponder] = useState(false);
 
   const allAccounts = [...accounts, ...sharedAccounts];
   const selectedAccount = allAccounts.find(a => a.id === selectedAccountId) || allAccounts[0] || null;
@@ -247,6 +250,22 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     if (!rulesRes.error) setRules(rulesRes.data || []);
     if (!postsRes.error) setPosts(postsRes.data || []);
     if (!snapshotsRes.error) setSnapshots(snapshotsRes.data || []);
+
+    // Fetch autoresponder settings for this account
+    const { data: arSettings } = await supabase
+      .from('instagram_autoresponder_settings')
+      .select('enabled, prompt_id, cooldown_minutes')
+      .eq('account_id', account.id)
+      .maybeSingle();
+    setAutoresponderSettings(arSettings || null);
+
+    // Fetch prompts for this user (for the prompt selector)
+    const { data: promptsData } = await supabase
+      .from('prompts')
+      .select('id, title, reply_mode')
+      .eq('user_id', account.user_id)
+      .order('updated_at', { ascending: false });
+    setAvailablePrompts(promptsData || []);
 
     // Fetch shares if this is own account
     const isOwn = accounts.some(a => a.id === account.id);
@@ -888,6 +907,17 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
               </button>
               {accounts.some(a => a.id === selectedAccountId) && (
                 <button
+                  onClick={() => handleTabChange('autoresponder')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'autoresponder' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Bot className="w-4 h-4" />
+                    AI Autoresponder
+                  </div>
+                </button>
+              )}
+              {accounts.some(a => a.id === selectedAccountId) && (
+                <button
                   onClick={() => handleTabChange('sharing')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'sharing' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                 >
@@ -1337,6 +1367,42 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           </div>
         )}
 
+        {/* AI Autoresponder tab */}
+        {activeTab === 'autoresponder' && selectedAccount && (
+          <AutoresponderTab
+            accountId={selectedAccount.id}
+            settings={autoresponderSettings}
+            prompts={availablePrompts}
+            isSaving={isSavingAutoresponder}
+            onSave={async (newSettings) => {
+              setIsSavingAutoresponder(true);
+              try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+
+                const { error } = await supabase
+                  .from('instagram_autoresponder_settings')
+                  .upsert({
+                    account_id: selectedAccount.id,
+                    user_id: user.id,
+                    enabled: newSettings.enabled,
+                    prompt_id: newSettings.prompt_id || null,
+                    cooldown_minutes: newSettings.cooldown_minutes,
+                    updated_at: new Date().toISOString(),
+                  }, { onConflict: 'account_id' });
+
+                if (error) throw error;
+                setAutoresponderSettings(newSettings);
+              } catch (error) {
+                console.error('Error saving autoresponder settings:', error);
+                alert('Failed to save autoresponder settings');
+              } finally {
+                setIsSavingAutoresponder(false);
+              }
+            }}
+          />
+        )}
+
         {/* Sharing tab */}
         {activeTab === 'sharing' && selectedAccount && (
           <div className="space-y-6">
@@ -1784,6 +1850,158 @@ function ShareModal({ accountId, orgMembers, onClose, onShared }: {
             className="px-4 py-2 text-sm font-medium rounded-lg text-white bg-pink-600 hover:bg-pink-700 disabled:opacity-50"
           >
             {isSaving ? 'Sharing...' : 'Share'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AutoresponderTab({ accountId, settings, prompts, isSaving, onSave }: {
+  accountId: string;
+  settings: { enabled: boolean; prompt_id: string | null; cooldown_minutes: number } | null;
+  prompts: Array<{ id: string; title: string; reply_mode: string }>;
+  isSaving: boolean;
+  onSave: (settings: { enabled: boolean; prompt_id: string | null; cooldown_minutes: number }) => void;
+}) {
+  const [enabled, setEnabled] = useState(settings?.enabled ?? false);
+  const [promptId, setPromptId] = useState(settings?.prompt_id ?? '');
+  const [cooldown, setCooldown] = useState(settings?.cooldown_minutes ?? 30);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    setEnabled(settings?.enabled ?? false);
+    setPromptId(settings?.prompt_id ?? '');
+    setCooldown(settings?.cooldown_minutes ?? 30);
+    setHasChanges(false);
+  }, [settings, accountId]);
+
+  const changes = { enabled, prompt_id: promptId, cooldown_minutes: cooldown };
+  void changes;
+
+  const handleSave = () => {
+    onSave({
+      enabled,
+      prompt_id: promptId || null,
+      cooldown_minutes: cooldown,
+    });
+    setHasChanges(false);
+  };
+
+  const twoStepPrompts = prompts.filter(p => p.reply_mode === 'two_step');
+  const singleStepPrompts = prompts.filter(p => p.reply_mode !== 'two_step');
+
+  return (
+    <div className="space-y-6">
+      {/* Info banner */}
+      <div className="bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 border border-pink-200 dark:border-pink-800 rounded-xl p-5">
+        <div className="flex items-start gap-3">
+          <Bot className="w-5 h-5 text-pink-500 flex-shrink-0 mt-0.5" />
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">AI Autoresponder for Instagram DMs</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              When enabled, incoming direct messages are automatically answered using your chosen prompt and the OpenAI API. The AI reads the incoming message and your conversation history, then generates a contextually appropriate reply — just like the email autoresponder.
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <Info className="w-3.5 h-3.5 text-pink-400" />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Supports both single-step and two-step prompts. Two-step prompts run Step 1 first, then feed the result into Step 2 for a more refined reply.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6">
+        {/* Enable toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900 dark:text-white">Enable AI Autoresponder</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Automatically reply to incoming DMs using AI</p>
+          </div>
+          <button
+            onClick={() => { setEnabled(!enabled); setHasChanges(true); }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+          >
+            <span className="inline-block transform rounded-full bg-white transition-transform" style={{ width: '18px', height: '18px', transform: enabled ? 'translateX(24px)' : 'translateX(4px)' }} />
+          </button>
+        </div>
+
+        {/* Prompt selector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Prompt</label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            Choose a prompt from your Prompts library. Prompts marked as "2-Step" will run two AI calls in sequence.
+          </p>
+          <select
+            value={promptId}
+            onChange={(e) => { setPromptId(e.target.value); setHasChanges(true); }}
+            disabled={!enabled}
+            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+          >
+            <option value="">Select a prompt...</option>
+            {twoStepPrompts.length > 0 && (
+              <optgroup label="Two-Step Prompts">
+                {twoStepPrompts.map(p => (
+                  <option key={p.id} value={p.id}>{p.title} (2-Step)</option>
+                ))}
+              </optgroup>
+            )}
+            {singleStepPrompts.length > 0 && (
+              <optgroup label="Single-Step Prompts">
+                {singleStepPrompts.map(p => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          {prompts.length === 0 && (
+            <p className="text-xs text-amber-500 mt-2">
+              No prompts found. Create prompts in the Prompts page first.
+            </p>
+          )}
+        </div>
+
+        {/* Cooldown setting */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cooldown (minutes)</label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            Minimum time to wait before auto-replying to the same person again. Prevents sending multiple AI replies if someone sends several messages quickly.
+          </p>
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            value={cooldown}
+            onChange={(e) => { setCooldown(parseInt(e.target.value) || 30); setHasChanges(true); }}
+            disabled={!enabled}
+            className="w-32 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+          />
+        </div>
+
+        {/* 24-hour window notice */}
+        <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+          <Clock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            Instagram only allows replies within 24 hours of a user's last message. Auto-replies won't be sent after the 24-hour window closes.
+          </p>
+        </div>
+
+        {/* Save button */}
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges || isSaving}
+            className="inline-flex items-center px-5 py-2.5 text-sm font-medium rounded-lg text-white bg-pink-600 hover:bg-pink-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                Saving...
+              </>
+            ) : (
+              'Save Settings'
+            )}
           </button>
         </div>
       </div>

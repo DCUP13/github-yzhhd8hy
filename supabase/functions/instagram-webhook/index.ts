@@ -280,4 +280,51 @@ async function storeEvent(
     direction: event.direction, recipient_id: event.recipient_id,
     raw_event: event.raw_event,
   });
+
+  // Trigger the Instagram autoresponder for incoming DMs
+  if (
+    event.direction === "incoming" &&
+    event.event_type === "message" &&
+    event.message_text &&
+    userId
+  ) {
+    // Find the account for this user
+    const { data: acct } = await supabaseClient
+      .from("instagram_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (acct?.id) {
+      // Check if autoresponder is enabled
+      const { data: arSettings } = await supabaseClient
+        .from("instagram_autoresponder_settings")
+        .select("enabled")
+        .eq("account_id", acct.id)
+        .maybeSingle();
+
+      if (arSettings?.enabled) {
+        // Fetch the event we just stored
+        const { data: storedEvent } = await supabaseClient
+          .from("instagram_webhook_events")
+          .select("id")
+          .eq("event_id", event.event_id)
+          .maybeSingle();
+
+        if (storedEvent?.id) {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+          fetch(`${supabaseUrl}/functions/v1/instagram-autoresponder`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+            },
+            body: JSON.stringify({ account_id: acct.id, event_id: storedEvent.id }),
+          }).catch((err) => console.error("Autoresponder trigger error:", err));
+        }
+      }
+    }
+  }
 }
