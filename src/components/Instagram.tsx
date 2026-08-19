@@ -523,23 +523,30 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       let type: 'dm' | 'media';
 
       if (event.event_type === 'message') {
-        // For DMs: group by the other party
-        // Incoming: other party is sender_id. Outgoing (echo): other party is recipient_id.
-        // Fall back to raw_event recipient/sender if the column is null (old events).
-        let otherId: string | null = null;
-        if (event.direction === 'outgoing') {
-          otherId = event.recipient_id
-            ?? (event as any).raw_event?.recipient?.id
-            ?? null;
+        const isSelf = (event as any).raw_event?.message?.is_self === true ||
+          (event as any).raw_event?.sent_from_autoresponder === true && event.recipient_id === selectedAccount?.owner_profile_id;
+        if (isSelf && selectedAccount?.owner_profile_id) {
+          convId = `dm_${selectedAccount.owner_profile_id}`;
+          type = 'dm';
         } else {
-          otherId = event.sender_id
-            ?? (event as any).raw_event?.sender?.id
-            ?? null;
+          // For DMs: group by the other party
+          // Incoming: other party is sender_id. Outgoing (echo): other party is recipient_id.
+          // Fall back to raw_event recipient/sender if the column is null (old events).
+          let otherId: string | null = null;
+          if (event.direction === 'outgoing') {
+            otherId = event.recipient_id
+              ?? (event as any).raw_event?.recipient?.id
+              ?? null;
+          } else {
+            otherId = event.sender_id
+              ?? (event as any).raw_event?.sender?.id
+              ?? null;
+          }
+          // Skip events with no identifiable other party — they can't be grouped
+          if (!otherId) continue;
+          convId = `dm_${otherId}`;
+          type = 'dm';
         }
-        // Skip events with no identifiable other party — they can't be grouped
-        if (!otherId) continue;
-        convId = `dm_${otherId}`;
-        type = 'dm';
       } else {
         // Comments, mentions, shares, reposts: group by media_id
         convId = `media_${event.media_id ?? event.id}`;
@@ -547,10 +554,14 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       }
 
       // Determine the other party ID for this event
+      const isSelfEvent = (event as any).raw_event?.message?.is_self === true ||
+        ((event as any).raw_event?.sent_from_autoresponder === true && event.recipient_id === selectedAccount?.owner_profile_id);
       const eventOtherPartyId = type === 'dm'
-        ? (event.direction === 'outgoing'
-          ? (event.recipient_id ?? (event as any).raw_event?.recipient?.id ?? null)
-          : (event.sender_id ?? (event as any).raw_event?.sender?.id ?? null))
+        ? (isSelfEvent && selectedAccount?.owner_profile_id
+          ? selectedAccount.owner_profile_id
+          : (event.direction === 'outgoing'
+            ? (event.recipient_id ?? (event as any).raw_event?.recipient?.id ?? null)
+            : (event.sender_id ?? (event as any).raw_event?.sender?.id ?? null)))
         : event.sender_id;
 
       const existing = convos.get(convId);
@@ -562,11 +573,18 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
       // For DMs, only use sender info from incoming messages to identify the other party.
       // Outgoing message sender is the account owner, not the other person.
-      const partyName = isIncoming
-        ? (event.sender_name || event.sender_username || null)
-        : null;
-      const partyUsername = isIncoming ? (event.sender_username || null) : null;
-      const partyAvatar = isIncoming ? (event.sender_profile_url || null) : null;
+      // For self-chats, the other party is the account owner.
+      const partyName = isSelfEvent
+        ? (selectedAccount?.username || null)
+        : (isIncoming
+          ? (event.sender_name || event.sender_username || null)
+          : null);
+      const partyUsername = isSelfEvent
+        ? (selectedAccount?.username || null)
+        : (isIncoming ? (event.sender_username || null) : null);
+      const partyAvatar = isSelfEvent
+        ? (selectedAccount?.profile_picture_url || null)
+        : (isIncoming ? (event.sender_profile_url || null) : null);
 
       if (!existing) {
         convos.set(convId, {
@@ -584,7 +602,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           mediaType: event.media_type,
           mediaPermalink: event.media_permalink,
           mediaCaption: event.media_caption,
-          isSelfChat: false,
+          isSelfChat: isSelfEvent,
         });
       } else {
         existing.events.push(event);
@@ -686,19 +704,13 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     if (!confirm(`Delete this conversation with ${conv.otherPartyName}? This cannot be undone.`)) return;
     try {
       if (conv.type === 'dm' && conv.otherPartyId) {
-        const { error: err1 } = await supabase
+        // For self-chats, events may have different sender_id/recipient_id values
+        const eventIds = conv.events.map(e => e.id);
+        const { error: delErr } = await supabase
           .from('instagram_webhook_events')
           .delete()
-          .eq('event_type', 'message')
-          .eq('direction', 'incoming')
-          .eq('sender_id', conv.otherPartyId);
-        const { error: err2 } = await supabase
-          .from('instagram_webhook_events')
-          .delete()
-          .eq('event_type', 'message')
-          .eq('direction', 'outgoing')
-          .eq('recipient_id', conv.otherPartyId);
-        if (err1 || err2) throw err1 || err2;
+          .in('id', eventIds);
+        if (delErr) throw delErr;
       } else if (conv.type === 'media') {
         const mediaId = conv.events[0]?.media_id;
         if (mediaId) {

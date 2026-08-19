@@ -113,7 +113,7 @@ Deno.serve(async (req: Request) => {
     // Fetch the incoming message event
     const { data: event, error: eventError } = await supabase
       .from("instagram_webhook_events")
-      .select("id, sender_id, sender_username, message_text, direction, event_type, created_at")
+      .select("id, sender_id, recipient_id, sender_username, message_text, direction, event_type, created_at, raw_event")
       .eq("id", event_id)
       .maybeSingle();
 
@@ -137,6 +137,9 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    const isSelfMessage = (event as any).raw_event?.message?.is_self === true;
+    const replyRecipientId = isSelfMessage ? event.recipient_id : event.sender_id;
 
     // Fetch the account
     const { data: account, error: acctError } = await supabase
@@ -259,7 +262,7 @@ Deno.serve(async (req: Request) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        recipient: { id: event.sender_id },
+        recipient: { id: replyRecipientId },
         message: { text: generatedReply },
       }),
     });
@@ -293,7 +296,7 @@ Deno.serve(async (req: Request) => {
       comment_id: null,
       message_text: generatedReply,
       direction: "outgoing",
-      recipient_id: event.sender_id,
+      recipient_id: replyRecipientId,
       reply_text: generatedReply,
       replied_at: new Date().toISOString(),
       auto_replied: true,
@@ -315,7 +318,7 @@ Deno.serve(async (req: Request) => {
     await supabase
       .from("instagram_autoresponder_settings")
       .update({
-        last_replied_recipient: event.sender_id,
+        last_replied_recipient: replyRecipientId,
         last_replied_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
