@@ -903,7 +903,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
         {/* Inbox tab — two-pane conversation view */}
         {activeTab === 'inbox' && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm">
             {events.length === 0 ? (
               <div className="text-center py-12">
                 <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -914,7 +914,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
               </div>
             ) : selectedConversation ? (
               /* Conversation detail view */
-              <div className="flex flex-col h-[calc(100vh-340px)] min-h-[320px] sm:h-[calc(100vh-300px)] sm:min-h-[450px] sm:max-h-[700px]">
+              <div className="flex flex-col">
                 {/* Conversation header */}
                 <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                   <button
@@ -968,7 +968,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 </div>
 
                 {/* Messages list — scrolls independently */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30 min-h-0">
+                <div className="overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30 max-h-[45vh]">
                   {selectedConversation.events
                     .slice()
                     .reverse()
@@ -1031,7 +1031,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
                 {/* Reply box — always visible at the bottom, never scrolls */}
                 {selectedConversation.type === 'dm' && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 flex-shrink-0">
+                  <div className="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 z-10">
                     {selectedConversation.otherPartyId ? (
                       <div className="flex items-center gap-2">
                         <input
