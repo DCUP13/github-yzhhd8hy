@@ -537,15 +537,23 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
       const isIncoming = event.direction === 'incoming';
 
+      // For DMs, only use sender info from incoming messages to identify the other party.
+      // Outgoing message sender is the account owner, not the other person.
+      const partyName = isIncoming
+        ? (event.sender_name || event.sender_username || null)
+        : null;
+      const partyUsername = isIncoming ? (event.sender_username || null) : null;
+      const partyAvatar = isIncoming ? (event.sender_profile_url || null) : null;
+
       if (!existing) {
         convos.set(convId, {
           id: convId,
           type,
           events: [event],
           otherPartyId: eventOtherPartyId,
-          otherPartyName: event.sender_name || event.sender_username || (type === 'dm' ? 'Instagram User' : 'Unknown'),
-          otherPartyUsername: event.sender_username,
-          otherPartyAvatar: event.sender_profile_url,
+          otherPartyName: partyName || (type === 'dm' ? 'Instagram User' : 'Unknown'),
+          otherPartyUsername: partyUsername,
+          otherPartyAvatar: partyAvatar,
           lastMessageAt: event.created_at,
           lastMessageText: event.message_text,
           lastIncomingAt: isIncoming ? event.created_at : null,
@@ -564,17 +572,15 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           existing.lastIncomingAt = event.created_at;
         }
         if (isUnread) existing.unreadCount++;
-        // Update otherPartyId if we found a non-null one
         if (!existing.otherPartyId && eventOtherPartyId) {
           existing.otherPartyId = eventOtherPartyId;
         }
-        // Update sender info if we got better data
-        if (event.sender_username && !existing.otherPartyUsername) {
-          existing.otherPartyUsername = event.sender_username;
-          existing.otherPartyName = event.sender_name || event.sender_username;
+        if (partyUsername && (!existing.otherPartyUsername || existing.otherPartyName === 'Instagram User')) {
+          existing.otherPartyUsername = partyUsername;
+          existing.otherPartyName = partyName || partyUsername;
         }
-        if (event.sender_profile_url && !existing.otherPartyAvatar) {
-          existing.otherPartyAvatar = event.sender_profile_url;
+        if (partyAvatar && !existing.otherPartyAvatar) {
+          existing.otherPartyAvatar = partyAvatar;
         }
         if (event.media_type && !existing.mediaType) existing.mediaType = event.media_type;
         if (event.media_permalink && !existing.mediaPermalink) existing.mediaPermalink = event.media_permalink;
