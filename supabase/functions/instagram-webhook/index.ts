@@ -77,13 +77,14 @@ Deno.serve(async (req: Request) => {
           const isEcho = msg?.message?.is_echo === true;
           const senderId = msg?.sender?.id ?? null;
           const recipientId = msg?.recipient?.id ?? null;
+          const isSelfMessage = isEcho && senderId && recipientId && senderId === recipientId;
           const otherPartyId = isEcho ? recipientId : senderId;
           await storeEvent(supabaseClient, {
             event_id: msg?.message?.mid ?? null, event_type: "message", ig_user_id: igUserId,
             sender_id: senderId, sender_username: null, sender_name: null, sender_profile_url: null,
             media_id: null, media_type: null, media_permalink: null, media_caption: null,
             comment_id: null, message_text: messageText,
-            direction: isEcho ? "outgoing" : "incoming", recipient_id: recipientId,
+            direction: isSelfMessage ? "incoming" : (isEcho ? "outgoing" : "incoming"), recipient_id: recipientId,
             raw_event: msg, user_id: userId,
           }, accessToken, otherPartyId);
         }
