@@ -485,6 +485,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     otherPartyAvatar: string | null;
     lastMessageAt: string;
     lastMessageText: string | null;
+    lastIncomingAt: string | null;
     unreadCount: number;
     mediaType: string | null;
     mediaPermalink: string | null;
@@ -534,6 +535,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         ? event.direction === 'incoming' && !event.processed
         : !event.processed;
 
+      const isIncoming = event.direction === 'incoming';
+
       if (!existing) {
         convos.set(convId, {
           id: convId,
@@ -545,6 +548,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           otherPartyAvatar: event.sender_profile_url,
           lastMessageAt: event.created_at,
           lastMessageText: event.message_text,
+          lastIncomingAt: isIncoming ? event.created_at : null,
           unreadCount: isUnread ? 1 : 0,
           mediaType: event.media_type,
           mediaPermalink: event.media_permalink,
@@ -555,6 +559,9 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         if (event.created_at > existing.lastMessageAt) {
           existing.lastMessageAt = event.created_at;
           existing.lastMessageText = event.message_text;
+        }
+        if (isIncoming && (!existing.lastIncomingAt || event.created_at > existing.lastIncomingAt)) {
+          existing.lastIncomingAt = event.created_at;
         }
         if (isUnread) existing.unreadCount++;
         // Update otherPartyId if we found a non-null one
@@ -930,6 +937,29 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                       );
                     })}
                 </div>
+
+                {/* 24-hour window warning */}
+                {selectedConversation.type === 'dm' && (() => {
+                  const lastIncoming = selectedConversation.lastIncomingAt;
+                  if (!lastIncoming) return null;
+                  const hoursSince = (Date.now() - new Date(lastIncoming).getTime()) / 3600000;
+                  const windowClosed = hoursSince > 24;
+                  const hoursLeft = Math.max(0, 24 - hoursSince);
+                  if (!windowClosed && hoursLeft > 4) return null;
+                  return (
+                    <div className={`px-4 py-2 text-xs flex items-center gap-2 flex-shrink-0 ${
+                      windowClosed
+                        ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'
+                        : 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300'
+                    }`}>
+                      <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                      {windowClosed
+                        ? `The 24-hour messaging window has closed (last message was ${Math.round(hoursSince)}h ago). Instagram only allows replies within 24 hours of a user's last message. Standard replies will be rejected.`
+                        : `Only ${Math.round(hoursLeft)}h left to reply — Instagram closes the messaging window 24 hours after the user's last message.`
+                      }
+                    </div>
+                  );
+                })()}
 
                 {/* Reply box — always visible at the bottom, never scrolls */}
                 {selectedConversation.type === 'dm' && (

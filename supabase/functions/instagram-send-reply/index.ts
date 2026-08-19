@@ -95,11 +95,17 @@ Deno.serve(async (req: Request) => {
       const errBody = await sendRes.text();
       console.error("Instagram send reply failed:", errBody);
       let errorMsg = "Failed to send message";
+      let windowClosed = false;
       try {
         const errJson = JSON.parse(errBody);
         errorMsg = errJson?.error?.message ?? errorMsg;
+        // Detect the 24-hour messaging window error
+        if (errorMsg.includes("allowed window") || errorMsg.includes("24 hour") || errJson?.error?.code === 10) {
+          windowClosed = true;
+          errorMsg = "The 24-hour messaging window has closed. Instagram only allows replies within 24 hours of the person's last message to you. After that, standard replies are blocked.";
+        }
       } catch { /* ignore */ }
-      return new Response(JSON.stringify({ error: errorMsg }), {
+      return new Response(JSON.stringify({ error: errorMsg, window_closed: windowClosed }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
