@@ -17,21 +17,18 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // Verify the caller is authenticated
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "");
     if (!token) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const { data: { user }, error: userErr } = await supabaseClient.auth.getUser(token);
     if (userErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -40,64 +37,58 @@ Deno.serve(async (req: Request) => {
 
     if (!account_id || !recipient_id || !message_text) {
       return new Response(JSON.stringify({ error: "Missing required fields: account_id, recipient_id, message_text" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch the Instagram account and verify ownership
     const { data: account, error: acctErr } = await supabaseClient
       .from("instagram_accounts")
-      .select("id, user_id, access_token, ig_user_id, page_scoped_id")
+      .select("id, user_id, access_token, ig_user_id, page_scoped_id, username")
       .eq("id", account_id)
       .maybeSingle();
 
     if (acctErr || !account) {
       return new Response(JSON.stringify({ error: "Account not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Verify the user owns this account
     if (account.user_id !== user.id) {
-      // Check if the account is shared with this user with reply permission
       const { data: share } = await supabaseClient
         .from("instagram_account_shares")
         .select("permissions")
         .eq("account_id", account_id)
         .eq("shared_with_user_id", user.id)
         .maybeSingle();
-
       if (!share || !share.permissions?.reply) {
         return new Response(JSON.stringify({ error: "You don't have permission to reply from this account" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
 
     if (!account.access_token) {
       return new Response(JSON.stringify({ error: "No access token for this account" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Send the DM via the Instagram Messaging API
-    // The sender is the connected IG account, recipient is the other party
+    // Use the Instagram Graph API (graph.instagram.com) for IG-format tokens,
+    // and the Facebook Graph API (graph.facebook.com) for FB Page tokens.
+    const isIgToken = account.access_token.startsWith("IGAA");
+    const apiBase = isIgToken
+      ? "https://graph.instagram.com"
+      : "https://graph.facebook.com";
     const senderId = account.ig_user_id;
-    const sendUrl = `https://graph.facebook.com/v21.0/${senderId}/messages`;
-
-    const sendBody: any = {
-      recipient: { id: recipient_id },
-      message: { text: message_text },
-    };
+    const sendUrl = `${apiBase}/v21.0/${senderId}/messages`;
 
     const sendRes = await fetch(`${sendUrl}?access_token=${account.access_token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sendBody),
+      body: JSON.stringify({
+        recipient: { id: recipient_id },
+        message: { text: message_text },
+      }),
     });
 
     if (!sendRes.ok) {
@@ -109,15 +100,13 @@ Deno.serve(async (req: Request) => {
         errorMsg = errJson?.error?.message ?? errorMsg;
       } catch { /* ignore */ }
       return new Response(JSON.stringify({ error: errorMsg }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const sendData = await sendRes.json();
     const messageId = sendData?.message_id ?? null;
 
-    // Store the outgoing message in webhook_events so it appears in the conversation
     await supabaseClient.from("instagram_webhook_events").insert({
       user_id: account.user_id,
       event_id: messageId ?? `reply_${Date.now()}`,
@@ -140,7 +129,6 @@ Deno.serve(async (req: Request) => {
       raw_event: { sent_from_app: true, message_id: messageId, recipient_id },
     });
 
-    // If replying to a specific event, mark it as processed
     if (reply_to_event_id) {
       await supabaseClient
         .from("instagram_webhook_events")
@@ -152,18 +140,13 @@ Deno.serve(async (req: Request) => {
         .eq("id", reply_to_event_id);
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      message_id: messageId,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ success: true, message_id: messageId }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("Send reply error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
