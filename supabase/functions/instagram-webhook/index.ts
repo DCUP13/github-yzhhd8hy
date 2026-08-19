@@ -316,14 +316,16 @@ async function storeEvent(
 
         if (storedEvent?.id) {
           const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+          // Queue the message for the autoresponder (creates/resets a timer)
           fetch(`${supabaseUrl}/functions/v1/instagram-autoresponder`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+              Authorization: `Bearer ${serviceKey}`,
             },
             body: JSON.stringify({ account_id: acct.id, event_id: storedEvent.id }),
-          }).catch((err) => console.error("Autoresponder trigger error:", err));
+          }).catch((err) => console.error("Autoresponder queue error:", err));
         }
       }
     }

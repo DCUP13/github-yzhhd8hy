@@ -110,7 +110,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   const [replyText, setReplyText] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [inboxFilter, setInboxFilter] = useState<'all' | 'messages' | 'comments'>('all');
-  const [autoresponderSettings, setAutoresponderSettings] = useState<{ enabled: boolean; prompt_id: string | null; cooldown_minutes: number } | null>(null);
+  const [autoresponderSettings, setAutoresponderSettings] = useState<{ enabled: boolean; prompt_id: string | null; response_delay_seconds: number } | null>(null);
   const [availablePrompts, setAvailablePrompts] = useState<Array<{ id: string; title: string; reply_mode: string }>>([]);
   const [isSavingAutoresponder, setIsSavingAutoresponder] = useState(false);
 
@@ -254,7 +254,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     // Fetch autoresponder settings for this account
     const { data: arSettings } = await supabase
       .from('instagram_autoresponder_settings')
-      .select('enabled, prompt_id, cooldown_minutes')
+      .select('enabled, prompt_id, response_delay_seconds')
       .eq('account_id', account.id)
       .maybeSingle();
     setAutoresponderSettings(arSettings || null);
@@ -1400,7 +1400,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                     user_id: user.id,
                     enabled: newSettings.enabled,
                     prompt_id: newSettings.prompt_id || null,
-                    cooldown_minutes: newSettings.cooldown_minutes,
+                    response_delay_seconds: newSettings.response_delay_seconds,
                     updated_at: new Date().toISOString(),
                   }, { onConflict: 'account_id' });
 
@@ -1872,31 +1872,31 @@ function ShareModal({ accountId, orgMembers, onClose, onShared }: {
 
 function AutoresponderTab({ accountId, settings, prompts, isSaving, onSave }: {
   accountId: string;
-  settings: { enabled: boolean; prompt_id: string | null; cooldown_minutes: number } | null;
+  settings: { enabled: boolean; prompt_id: string | null; response_delay_seconds: number } | null;
   prompts: Array<{ id: string; title: string; reply_mode: string; category: string }>;
   isSaving: boolean;
-  onSave: (settings: { enabled: boolean; prompt_id: string | null; cooldown_minutes: number }) => void;
+  onSave: (settings: { enabled: boolean; prompt_id: string | null; response_delay_seconds: number }) => void;
 }) {
   const [enabled, setEnabled] = useState(settings?.enabled ?? false);
   const [promptId, setPromptId] = useState(settings?.prompt_id ?? '');
-  const [cooldown, setCooldown] = useState(settings?.cooldown_minutes ?? 30);
+  const [delaySeconds, setDelaySeconds] = useState(settings?.response_delay_seconds ?? 15);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     setEnabled(settings?.enabled ?? false);
     setPromptId(settings?.prompt_id ?? '');
-    setCooldown(settings?.cooldown_minutes ?? 30);
+    setDelaySeconds(settings?.response_delay_seconds ?? 15);
     setHasChanges(false);
   }, [settings, accountId]);
 
-  const changes = { enabled, prompt_id: promptId, cooldown_minutes: cooldown };
+  const changes = { enabled, prompt_id: promptId, response_delay_seconds: delaySeconds };
   void changes;
 
   const handleSave = () => {
     onSave({
       enabled,
       prompt_id: promptId || null,
-      cooldown_minutes: cooldown,
+      response_delay_seconds: delaySeconds,
     });
     setHasChanges(false);
   };
@@ -1975,18 +1975,18 @@ function AutoresponderTab({ accountId, settings, prompts, isSaving, onSave }: {
           )}
         </div>
 
-        {/* Cooldown setting */}
+        {/* Response delay setting */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cooldown (minutes)</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Response Delay (seconds)</label>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-            Minimum time to wait before auto-replying to the same person again. Prevents sending multiple AI replies if someone sends several messages quickly.
+            When a message arrives, the AI waits this many seconds before responding. If multiple messages come in during this window, they are combined into a single AI response — so quick back-to-back messages get one reply instead of several.
           </p>
           <input
             type="number"
-            min={1}
-            max={1440}
-            value={cooldown}
-            onChange={(e) => { setCooldown(parseInt(e.target.value) || 30); setHasChanges(true); }}
+            min={5}
+            max={300}
+            value={delaySeconds}
+            onChange={(e) => { setDelaySeconds(parseInt(e.target.value) || 15); setHasChanges(true); }}
             disabled={!enabled}
             className="w-32 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
           />
