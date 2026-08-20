@@ -14,6 +14,7 @@ interface InstagramProps {
 interface WebhookEvent {
   id: string;
   event_type: string;
+  ig_user_id: string | null;
   sender_id: string | null;
   sender_username: string | null;
   sender_name: string | null;
@@ -241,11 +242,14 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   }, [selectedAccountId]);
 
   const fetchAccountData = async (account: IgAccount, userId: string) => {
-    // Fetch events for this account — filter by user_id which is what RLS enforces
+    // Fetch events for this specific account — filter by user_id (RLS) and
+    // ig_user_id (which stores the page_scoped_id of the receiving account)
+    // so only messages belonging to the selected account are shown.
     const [eventsRes, rulesRes, postsRes, snapshotsRes] = await Promise.all([
       supabase.from('instagram_webhook_events')
         .select('*')
         .eq('user_id', account.user_id)
+        .eq('ig_user_id', account.page_scoped_id)
         .order('created_at', { ascending: false })
         .limit(100),
       supabase.from('instagram_auto_rules')
@@ -333,6 +337,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         },
         (payload) => {
           const newEvent = payload.new as WebhookEvent;
+          // Only show events for the selected account (ig_user_id = page_scoped_id)
+          if (newEvent.ig_user_id !== selectedAccount.page_scoped_id) return;
           setEvents(prev => [newEvent, ...prev].slice(0, 100));
           if (activeTab !== 'inbox') {
             setNewEventCount(prev => prev + 1);
