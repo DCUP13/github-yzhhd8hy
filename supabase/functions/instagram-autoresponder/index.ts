@@ -176,32 +176,70 @@ async function ensureQueued(supabase: any, account_id: string, event_id: string)
   const delaySeconds = settings.response_delay_seconds || 15;
   const fireAt = new Date(Date.now() + delaySeconds * 1000).toISOString();
 
+  let queueItemId: string;
+
   if (existing) {
     // Reset the timer — push fire_at forward so we wait for more messages
     await supabase
       .from("instagram_response_queue")
       .update({ fire_at: fireAt, trigger_event_id: event_id, updated_at: new Date().toISOString() })
       .eq("id", existing.id);
-    return { success: true, queued: true, queue_id: existing.id, reset_timer: true };
+    queueItemId = existing.id;
+  } else {
+    // Create a new queue item
+    const { data: queueItem, error: queueError } = await supabase
+      .from("instagram_response_queue")
+      .insert({
+        account_id,
+        user_id: event.user_id || (await supabase.from("instagram_webhook_events").select("user_id").eq("id", event_id).maybeSingle()).data?.user_id,
+        recipient_id: recipientId,
+        trigger_event_id: event_id,
+        fire_at: fireAt,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (queueError) return { error: "Failed to create queue item", details: queueError.message };
+    queueItemId = queueItem.id;
   }
 
-  // Create a new queue item
-  const { data: queueItem, error: queueError } = await supabase
-    .from("instagram_response_queue")
-    .insert({
-      account_id,
-      user_id: event.user_id || (await supabase.from("instagram_webhook_events").select("user_id").eq("id", event_id).maybeSingle()).data?.user_id,
-      recipient_id: recipientId,
-      trigger_event_id: event_id,
-      fire_at: fireAt,
-      status: "pending",
-    })
-    .select("id")
-    .single();
+  // Wait for the delay to expire, polling to detect if a newer message reset the timer.
+  // The webhook calls us fire-and-forget, so we can stay alive for the delay period.
+  // Cap at 25s to avoid edge function timeout; for longer delays the cron (every 1 min) is the backup.
+  const maxWaitMs = 25000;
+  const startTime = Date.now();
 
-  if (queueError) return { error: "Failed to create queue item", details: queueError.message };
+  while (Date.now() - startTime < maxWaitMs) {
+    const { data: item } = await supabase
+      .from("instagram_response_queue")
+      .select("fire_at, status")
+      .eq("id", queueItemId)
+      .maybeSingle();
 
-  return { success: true, queued: true, queue_id: queueItem.id };
+    if (!item || item.status !== "pending") {
+      return { success: true, queued: true, queue_id: queueItemId, already_handled: true };
+    }
+
+    const fireAtMs = new Date(item.fire_at).getTime();
+    const nowMs = Date.now();
+
+    if (fireAtMs <= nowMs) {
+      // Timer has fired — process the queue item now
+      const result = await processQueueItem(supabase, queueItemId);
+      return { success: true, queued: true, queue_id: queueItemId, processed: result };
+    }
+
+    // Sleep until fire_at or until we hit the max wait, in small increments
+    const remainingToFire = fireAtMs - nowMs;
+    const remainingToMax = maxWaitMs - (nowMs - startTime);
+    const sleepMs = Math.min(remainingToFire, remainingToMax, 3000);
+    if (sleepMs <= 0) break;
+    await new Promise(resolve => setTimeout(resolve, sleepMs));
+  }
+
+  // Ran out of time (delay > 25s) — the cron job will pick this up within a minute
+  return { success: true, queued: true, queue_id: queueItemId, waiting_for_cron: true };
 }
 
 async function processQueueItem(supabase: any, queue_id: string): Promise<any> {
