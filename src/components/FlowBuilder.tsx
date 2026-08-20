@@ -3,8 +3,10 @@ import {
   Plus, Trash2, ArrowRight, ArrowDown, MessageSquare, Link as LinkIcon,
   FileText, Image as ImageIcon, GitBranch, Clock, Save, X, Copy,
   Play, ChevronUp, ChevronDown, Zap, AlertCircle, CheckCircle2,
+  Share2, Link2, Link2Off,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { ShareSettingsDialog } from './ShareSettingsDialog';
 
 export interface Flow {
   id: string;
@@ -18,6 +20,8 @@ export interface Flow {
   first_step_id: string | null;
   created_at: string;
   updated_at: string;
+  settings_group_id?: string | null;
+  is_synced_copy?: boolean;
 }
 
 interface LocalStep {
@@ -45,9 +49,17 @@ export interface FlowSession {
   started_at: string;
 }
 
+interface IgAccount {
+  id: string;
+  username: string | null;
+  profile_picture_url: string | null;
+  user_id: string;
+}
+
 interface FlowBuilderProps {
   accountId: string;
   userId: string;
+  allAccounts?: IgAccount[];
 }
 
 let tempIdCounter = 0;
@@ -73,7 +85,7 @@ function dbStepToLocal(s: any): LocalStep {
   };
 }
 
-export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
+export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilderProps) {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
@@ -87,6 +99,8 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
   const [newFlowTrigger, setNewFlowTrigger] = useState<'comment_keyword' | 'dm_keyword'>('comment_keyword');
   const [newFlowKeyword, setNewFlowKeyword] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [sharingFlow, setSharingFlow] = useState<Flow | null>(null);
+  const [syncStatuses, setSyncStatuses] = useState<Map<string, { shared: boolean; synced: boolean; count: number }>>(new Map());
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -405,6 +419,11 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
         }
       }
 
+      // Sync to other accounts if this flow is part of a synced group
+      if (selectedFlow.is_synced_copy && selectedFlow.settings_group_id) {
+        await supabase.rpc('sync_flow_to_group', { p_flow_id: selectedFlow.id });
+      }
+
       // Reload from DB
       await loadFlow(selectedFlow.id);
       await fetchFlows();
@@ -425,6 +444,27 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
   };
 
   const formatDate = (ds: string) => new Date(ds).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const fetchSyncStatuses = useCallback(async () => {
+    if (flows.length === 0) return;
+    const groupIds = flows.filter(f => f.settings_group_id).map(f => f.settings_group_id);
+    if (groupIds.length === 0) return;
+    const { data: subs } = await supabase
+      .from('instagram_settings_subscriptions')
+      .select('group_id, account_id, synced')
+      .in('group_id', groupIds);
+    const map = new Map<string, { shared: boolean; synced: boolean; count: number }>();
+    for (const f of flows) {
+      if (!f.settings_group_id) { map.set(f.id, { shared: false, synced: false, count: 0 }); continue; }
+      const flowSubs = (subs || []).filter(s => s.group_id === f.settings_group_id);
+      const syncedCount = flowSubs.filter(s => s.synced).length;
+      const isSynced = f.is_synced_copy ?? false;
+      map.set(f.id, { shared: flowSubs.length > 1, synced: isSynced, count: flowSubs.length });
+    }
+    setSyncStatuses(map);
+  }, [flows]);
+
+  useEffect(() => { fetchSyncStatuses(); }, [fetchSyncStatuses]);
 
   if (isLoading) {
     return (
@@ -512,6 +552,22 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
                     >
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${flow.active ? 'translate-x-5' : 'translate-x-1'}`} />
                     </button>
+                    {(() => {
+                      const status = syncStatuses.get(flow.id);
+                      return status && status.shared ? (
+                        <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${status.synced ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
+                          {status.synced ? <Link2 className="w-2.5 h-2.5" /> : <Link2Off className="w-2.5 h-2.5" />}
+                          {status.synced ? `Synced (${status.count})` : `Independent (${status.count})`}
+                        </span>
+                      ) : null;
+                    })()}
+                    <button
+                      onClick={() => setSharingFlow(flow)}
+                      className="p-1.5 text-gray-400 hover:text-pink-500 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20"
+                      title="Share to other accounts"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleDuplicateFlow(flow)}
                       className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
@@ -596,6 +652,19 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
           </div>
         )}
 
+        {sharingFlow && (
+          <ShareSettingsDialog
+            settingType="flow"
+            settingId={sharingFlow.id}
+            settingName={sharingFlow.name}
+            settingAccountId={accountId}
+            ownerUserId={userId}
+            allAccounts={allAccounts}
+            onClose={() => setSharingFlow(null)}
+            onShared={() => { setSharingFlow(null); fetchFlows(); }}
+          />
+        )}
+
         {toast && (
           <div className="fixed bottom-6 right-6 z-50 bg-gray-900 dark:bg-gray-700 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-green-400" />
@@ -632,6 +701,23 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {selectedFlow.is_synced_copy && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+              <Link2 className="w-2.5 h-2.5" /> Synced — edits propagate
+            </span>
+          )}
+          {selectedFlow.settings_group_id && !selectedFlow.is_synced_copy && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+              <Link2Off className="w-2.5 h-2.5" /> Independent — edits are local
+            </span>
+          )}
+          <button
+            onClick={() => setSharingFlow(selectedFlow)}
+            className="inline-flex items-center px-2 py-1 text-xs font-medium text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-lg"
+            title="Share to other accounts"
+          >
+            <Share2 className="w-3.5 h-3.5 mr-1" /> Share
+          </button>
           <button
             onClick={() => handleToggleFlow(selectedFlow)}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${selectedFlow.active ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
@@ -754,6 +840,19 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
             ))}
           </div>
         </div>
+      )}
+
+      {sharingFlow && (
+        <ShareSettingsDialog
+          settingType="flow"
+          settingId={sharingFlow.id}
+          settingName={sharingFlow.name}
+          settingAccountId={accountId}
+          ownerUserId={userId}
+          allAccounts={allAccounts}
+          onClose={() => setSharingFlow(null)}
+          onShared={() => { setSharingFlow(null); fetchFlows(); }}
+        />
       )}
 
       {toast && (

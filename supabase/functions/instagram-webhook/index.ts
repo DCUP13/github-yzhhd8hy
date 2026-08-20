@@ -416,11 +416,12 @@ interface AutoRuleContext {
 async function processAutoRules(supabaseClient: any, ctx: AutoRuleContext) {
   if (!ctx.accessToken) return;
 
-  // Fetch active rules for this user
+  // Fetch active rules for this user, scoped to this account
   const { data: rules } = await supabaseClient
     .from("instagram_auto_rules")
     .select("*")
     .eq("user_id", ctx.userId)
+    .eq("account_id", ctx.accountId)
     .eq("active", true);
 
   if (!rules || rules.length === 0) {

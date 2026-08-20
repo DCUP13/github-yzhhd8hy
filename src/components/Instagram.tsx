@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Instagram as InstagramIcon, MessageSquare, Send, Plus, Trash2, RefreshCw, Zap, Clock, User, Image as ImageIcon, Share2, Users, X, BarChart3, TrendingUp, Heart, Eye, Bookmark, Play, ChevronDown, Film, ArrowLeft, CheckCheck, HelpCircle, Info, Bot, GitBranch, Link as LinkIcon, FileText, CreditCard as Edit2, Save } from 'lucide-react';
+import { Instagram as InstagramIcon, MessageSquare, Send, Plus, Trash2, RefreshCw, Zap, Clock, User, Image as ImageIcon, Share2, Users, X, BarChart3, TrendingUp, Heart, Eye, Bookmark, Play, ChevronDown, Film, ArrowLeft, CheckCheck, HelpCircle, Info, Bot, GitBranch, Link as LinkIcon, FileText, CreditCard as Edit2, Save, Link2, Link2Off } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
 import { FlowBuilder } from './FlowBuilder';
+import { ShareSettingsDialog } from './ShareSettingsDialog';
 
 interface InstagramProps {
   onSignOut: () => void;
@@ -46,6 +47,9 @@ interface AutoRule {
   media_url: string | null;
   media_type: string | null;
   send_once_per_user: boolean;
+  account_id?: string | null;
+  settings_group_id?: string | null;
+  is_synced_copy?: boolean;
 }
 
 interface IgPost {
@@ -107,6 +111,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [showPostModal, setShowPostModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [sharingRule, setSharingRule] = useState<AutoRule | null>(null);
+  const [sharingAutoresponder, setSharingAutoresponder] = useState(false);
+  const [autoresponderSettingId, setAutoresponderSettingId] = useState<string>('');
+  const [settingsGroups, setSettingsGroups] = useState<Array<{ id: string; setting_type: string; name: string; group_subscriptions: Array<{ account_id: string; synced: boolean }> }>>([]);
   const [newRule, setNewRule] = useState({
     trigger_keyword: '',
     reply_text: '',
@@ -255,6 +263,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       supabase.from('instagram_auto_rules')
         .select('*')
         .eq('user_id', account.user_id)
+        .eq('account_id', account.id)
         .order('created_at', { ascending: false }),
       supabase.from('instagram_posts')
         .select('*')
@@ -279,10 +288,11 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     // Fetch autoresponder settings for this account
     const { data: arSettings } = await supabase
       .from('instagram_autoresponder_settings')
-      .select('enabled, prompt_id, response_delay_seconds')
+      .select('id, enabled, prompt_id, response_delay_seconds')
       .eq('account_id', account.id)
       .maybeSingle();
     setAutoresponderSettings(arSettings || null);
+    setAutoresponderSettingId(arSettings?.id || '');
 
     // Fetch prompts for this user (for the prompt selector)
     const { data: promptsData } = await supabase
@@ -449,6 +459,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
       const ruleData = {
         user_id: user.id,
+        account_id: selectedAccount?.id || null,
         trigger_keyword: newRule.trigger_keyword,
         reply_text: newRule.reply_text,
         media_id: newRule.media_id || null,
@@ -466,6 +477,11 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           .update({ ...ruleData, updated_at: new Date().toISOString() })
           .eq('id', editingRuleId);
         if (error) throw error;
+        // Sync to other accounts if this rule is part of a synced group
+        const editedRule = rules.find(r => r.id === editingRuleId);
+        if (editedRule?.is_synced_copy && editedRule?.settings_group_id) {
+          await supabase.rpc('sync_rule_to_group', { p_rule_id: editingRuleId });
+        }
       } else {
         const { error } = await supabase
           .from('instagram_auto_rules')
@@ -518,6 +534,9 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         .update({ active: !rule.active, updated_at: new Date().toISOString() })
         .eq('id', rule.id);
       if (error) throw error;
+      if (rule.is_synced_copy && rule.settings_group_id) {
+        await supabase.rpc('sync_rule_to_group', { p_rule_id: rule.id });
+      }
       await fetchData();
     } catch (error) {
       console.error('Error toggling rule:', error);
@@ -1483,6 +1502,23 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                           </div>
                         </div>
                         <div className="flex items-center gap-2 ml-4">
+                          {rule.is_synced_copy && (
+                            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                              <Link2 className="w-2.5 h-2.5" /> Synced
+                            </span>
+                          )}
+                          {rule.settings_group_id && !rule.is_synced_copy && (
+                            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                              <Link2Off className="w-2.5 h-2.5" /> Independent
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setSharingRule(rule)}
+                            className="p-1.5 text-gray-400 hover:text-pink-500 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20"
+                            title="Share to other accounts"
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleEditRule(rule)}
                             className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
@@ -1517,6 +1553,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           <FlowBuilder
             accountId={selectedAccount.id}
             userId={selectedAccount.user_id}
+            allAccounts={allAccounts.map(a => ({ id: a.id, username: a.username, profile_picture_url: a.profile_picture_url, user_id: a.user_id }))}
           />
         )}
 
@@ -1527,15 +1564,26 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
             settings={autoresponderSettings}
             prompts={availablePrompts}
             isSaving={isSavingAutoresponder}
+            allAccounts={allAccounts.map(a => ({ id: a.id, username: a.username, profile_picture_url: a.profile_picture_url, user_id: a.user_id }))}
+            userId={selectedAccount.user_id}
+            onShare={() => setSharingAutoresponder(true)}
             onSave={async (newSettings) => {
               setIsSavingAutoresponder(true);
               try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
 
+                // Fetch the existing settings record to get the id and group info
+                const { data: existing } = await supabase
+                  .from('instagram_autoresponder_settings')
+                  .select('id, settings_group_id, is_synced_copy')
+                  .eq('account_id', selectedAccount.id)
+                  .maybeSingle();
+
                 const { error } = await supabase
                   .from('instagram_autoresponder_settings')
                   .upsert({
+                    id: existing?.id,
                     account_id: selectedAccount.id,
                     user_id: user.id,
                     enabled: newSettings.enabled,
@@ -1546,6 +1594,11 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
                 if (error) throw error;
                 setAutoresponderSettings(newSettings);
+
+                // Sync to other accounts if this is a synced copy
+                if (existing?.is_synced_copy && existing?.settings_group_id && existing?.id) {
+                  await supabase.rpc('sync_autoresponder_to_group', { p_settings_id: existing.id });
+                }
               } catch (error) {
                 console.error('Error saving autoresponder settings:', error);
                 alert('Failed to save autoresponder settings');
@@ -1556,64 +1609,18 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           />
         )}
 
-        {/* Sharing tab */}
+        {/* Sharing tab — central control panel */}
         {activeTab === 'sharing' && selectedAccount && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Share2 className="w-5 h-5 text-pink-500" />
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Share with Teammates</h3>
-                </div>
-                {orgMembers.length > 0 && (
-                  <button
-                    onClick={() => setShowShareModal(true)}
-                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
-                  >
-                    <Plus className="w-4 h-4 mr-1" /> Add Share
-                  </button>
-                )}
-              </div>
-              {orgMembers.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  You need to be part of an organization with other members to share your Instagram account.
-                </p>
-              ) : shares.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  You haven't shared this Instagram account with anyone yet. Click "Add Share" to let teammates view your inbox, collaborate on replies, and help manage posts.
-                </p>
-              ) : (
-                <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {shares.map((share) => (
-                    <div key={share.id} className="flex items-center justify-between py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-                          <User className="w-4 h-4 text-blue-500" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{share.profile?.email || 'Unknown'}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {share.permissions?.reply ? 'Can reply' : 'View only'}
-                            {share.permissions?.post ? ' · Can post' : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          await supabase.from('instagram_account_shares').delete().eq('id', share.id);
-                          await fetchData();
-                        }}
-                        className="p-1.5 text-red-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
-                        title="Revoke access"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <SharingControlPanel
+            accounts={accounts}
+            selectedAccount={selectedAccount}
+            userId={selectedAccount.user_id}
+            orgMembers={orgMembers}
+            shares={shares}
+            showShareModal={showShareModal}
+            setShowShareModal={setShowShareModal}
+            onRefresh={fetchData}
+          />
         )}
 
         {/* Share Modal */}
@@ -1623,6 +1630,34 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
             orgMembers={orgMembers}
             onClose={() => setShowShareModal(false)}
             onShared={() => { setShowShareModal(false); fetchData(); }}
+          />
+        )}
+
+        {/* Rule share dialog */}
+        {sharingRule && selectedAccount && (
+          <ShareSettingsDialog
+            settingType="rule"
+            settingId={sharingRule.id}
+            settingName={sharingRule.trigger_keyword}
+            settingAccountId={selectedAccount.id}
+            ownerUserId={selectedAccount.user_id}
+            allAccounts={allAccounts.map(a => ({ id: a.id, username: a.username, profile_picture_url: a.profile_picture_url, user_id: a.user_id }))}
+            onClose={() => setSharingRule(null)}
+            onShared={() => { setSharingRule(null); fetchData(); }}
+          />
+        )}
+
+        {/* Autoresponder share dialog */}
+        {sharingAutoresponder && selectedAccount && autoresponderSettingId && (
+          <ShareSettingsDialog
+            settingType="autoresponder"
+            settingId={autoresponderSettingId}
+            settingName="Autoresponder Settings"
+            settingAccountId={selectedAccount.id}
+            ownerUserId={selectedAccount.user_id}
+            allAccounts={allAccounts.map(a => ({ id: a.id, username: a.username, profile_picture_url: a.profile_picture_url, user_id: a.user_id }))}
+            onClose={() => setSharingAutoresponder(false)}
+            onShared={() => { setSharingAutoresponder(false); fetchData(); }}
           />
         )}
 
@@ -2101,17 +2136,21 @@ function ShareModal({ accountId, orgMembers, onClose, onShared }: {
   );
 }
 
-function AutoresponderTab({ accountId, settings, prompts, isSaving, onSave }: {
+function AutoresponderTab({ accountId, settings, prompts, isSaving, onSave, allAccounts, userId, onShare }: {
   accountId: string;
   settings: { enabled: boolean; prompt_id: string | null; response_delay_seconds: number } | null;
   prompts: Array<{ id: string; title: string; reply_mode: string; category: string }>;
   isSaving: boolean;
+  allAccounts: Array<{ id: string; username: string | null; profile_picture_url: string | null; user_id: string }>;
+  userId: string;
+  onShare: () => void;
   onSave: (settings: { enabled: boolean; prompt_id: string | null; response_delay_seconds: number }) => void;
 }) {
   const [enabled, setEnabled] = useState(settings?.enabled ?? false);
   const [promptId, setPromptId] = useState(settings?.prompt_id ?? '');
   const [delaySeconds, setDelaySeconds] = useState(settings?.response_delay_seconds ?? 15);
   const [hasChanges, setHasChanges] = useState(false);
+  const [syncInfo, setSyncInfo] = useState<{ shared: boolean; syncedCount: number; totalCount: number } | null>(null);
 
   useEffect(() => {
     setEnabled(settings?.enabled ?? false);
@@ -2119,6 +2158,26 @@ function AutoresponderTab({ accountId, settings, prompts, isSaving, onSave }: {
     setDelaySeconds(settings?.response_delay_seconds ?? 15);
     setHasChanges(false);
   }, [settings, accountId]);
+
+  // Fetch sync status for this autoresponder
+  useEffect(() => {
+    const fetchSyncInfo = async () => {
+      const { data: ars } = await supabase
+        .from('instagram_autoresponder_settings')
+        .select('id, settings_group_id, is_synced_copy')
+        .eq('account_id', accountId)
+        .maybeSingle();
+      if (!ars?.settings_group_id) { setSyncInfo(null); return; }
+      const { data: subs } = await supabase
+        .from('instagram_settings_subscriptions')
+        .select('account_id, synced')
+        .eq('group_id', ars.settings_group_id);
+      const total = (subs || []).length;
+      const synced = (subs || []).filter(s => s.synced).length;
+      setSyncInfo({ shared: total > 1, syncedCount: synced, totalCount: total });
+    };
+    fetchSyncInfo();
+  }, [accountId, isSaving]);
 
   const changes = { enabled, prompt_id: promptId, response_delay_seconds: delaySeconds };
   void changes;
@@ -2157,6 +2216,26 @@ function AutoresponderTab({ accountId, settings, prompts, isSaving, onSave }: {
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6">
+        {/* Sync status + share button */}
+        <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex items-center gap-2">
+            {syncInfo && syncInfo.shared ? (
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium ${syncInfo.syncedCount > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
+                {syncInfo.syncedCount > 0 ? <Link2 className="w-2.5 h-2.5" /> : <Link2Off className="w-2.5 h-2.5" />}
+                {syncInfo.syncedCount > 0 ? `Synced to ${syncInfo.syncedCount} account${syncInfo.syncedCount !== 1 ? 's' : ''}` : 'Independent'}
+              </span>
+            ) : (
+              <span className="text-xs text-gray-400">Not shared</span>
+            )}
+          </div>
+          <button
+            onClick={onShare}
+            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-lg"
+          >
+            <Share2 className="w-3.5 h-3.5 mr-1.5" /> Share to accounts
+          </button>
+        </div>
+
         {/* Enable toggle */}
         <div className="flex items-center justify-between">
           <div>
@@ -2249,6 +2328,298 @@ function AutoresponderTab({ accountId, settings, prompts, isSaving, onSave }: {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, shares, showShareModal, setShowShareModal, onRefresh }: {
+  accounts: IgAccount[];
+  selectedAccount: IgAccount;
+  userId: string;
+  orgMembers: Array<{ user_id: string; email: string; role: string }>;
+  shares: Array<{ id: string; shared_with_user_id: string; permissions: Record<string, boolean>; created_at: string; profile?: { email: string } | null }>;
+  showShareModal: boolean;
+  setShowShareModal: (v: boolean) => void;
+  onRefresh: () => void;
+}) {
+  const [groups, setGroups] = useState<Array<{ id: string; setting_type: string; name: string }>>([]);
+  const [subscriptions, setSubscriptions] = useState<Map<string, Array<{ account_id: string; synced: boolean }>>>(new Map());
+  const [isLoading, setIsLoading] = useState(true);
+  const [isApplyingAll, setIsApplyingAll] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  const fetchGroups = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: groupsData } = await supabase
+        .from('instagram_settings_groups')
+        .select('id, setting_type, name')
+        .eq('owner_user_id', user.id)
+        .order('created_at', { ascending: false });
+      setGroups(groupsData || []);
+      if (groupsData && groupsData.length > 0) {
+        const groupIds = groupsData.map(g => g.id);
+        const { data: subs } = await supabase
+          .from('instagram_settings_subscriptions')
+          .select('group_id, account_id, synced')
+          .in('group_id', groupIds);
+        const map = new Map<string, Array<{ account_id: string; synced: boolean }>>();
+        for (const g of groupsData) {
+          map.set(g.id, (subs || []).filter(s => s.group_id === g.id).map(s => ({ account_id: s.account_id, synced: s.synced })));
+        }
+        setSubscriptions(map);
+      }
+    } catch (err) {
+      console.error('Error fetching groups:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchGroups(); }, [fetchGroups]);
+
+  const handleShareAllToAccount = async (accountId: string) => {
+    setIsApplyingAll(accountId);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase.rpc('share_all_settings_to_account', {
+        p_account_id: accountId,
+        p_owner_user_id: user.id,
+      });
+      if (error) throw error;
+      showToast('All settings shared to account');
+      await fetchGroups();
+    } catch (err) {
+      console.error('Error sharing all settings:', err);
+      showToast('Failed to share all settings');
+    } finally {
+      setIsApplyingAll(null);
+    }
+  };
+
+  const handleToggleSync = async (groupId: string, accountId: string, currentSynced: boolean) => {
+    try {
+      if (currentSynced) {
+        await supabase.rpc('unsubscribe_account_from_group', { p_group_id: groupId, p_account_id: accountId });
+        showToast('Account is now independent for this setting');
+      } else {
+        await supabase.rpc('resubscribe_account_to_group', { p_group_id: groupId, p_account_id: accountId });
+        showToast('Account re-synced');
+      }
+      await fetchGroups();
+    } catch (err) {
+      console.error('Error toggling sync:', err);
+    }
+  };
+
+  const handleRemoveFromAccount = async (groupId: string, accountId: string) => {
+    try {
+      await supabase
+        .from('instagram_settings_subscriptions')
+        .delete()
+        .eq('group_id', groupId)
+        .eq('account_id', accountId);
+      await supabase.from('instagram_conversation_flows').delete().eq('settings_group_id', groupId).eq('account_id', accountId);
+      await supabase.from('instagram_auto_rules').delete().eq('settings_group_id', groupId).eq('account_id', accountId);
+      await supabase.from('instagram_autoresponder_settings').delete().eq('settings_group_id', groupId).eq('account_id', accountId);
+      showToast('Setting removed from account');
+      await fetchGroups();
+    } catch (err) {
+      console.error('Error removing setting:', err);
+    }
+  };
+
+  const typeLabel = (t: string) => t === 'flow' ? 'Flow' : t === 'rule' ? 'Rule' : 'Autoresponder';
+  const typeIcon = (t: string) => t === 'flow' ? <GitBranch className="w-3.5 h-3.5" /> : t === 'rule' ? <Zap className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />;
+  const typeColor = (t: string) => t === 'flow' ? 'text-pink-500' : t === 'rule' ? 'text-blue-500' : 'text-green-500';
+
+  return (
+    <div className="space-y-6">
+      {/* Linked Accounts section */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Users className="w-5 h-5 text-pink-500" />
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Linked Accounts</h3>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          These are all your linked Instagram accounts. Click "Share All Settings" to push every flow, rule, and autoresponder setting to that account as synced copies.
+        </p>
+        <div className="space-y-2">
+          {accounts.map(account => (
+            <div key={account.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                {account.profile_picture_url ? (
+                  <img src={account.profile_picture_url} alt="" className="w-8 h-8 rounded-full" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
+                    {(account.username || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{account.username || 'Unknown'}</p>
+                  <p className="text-xs text-gray-400">{groups.length} settings available to share</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleShareAllToAccount(account.id)}
+                disabled={isApplyingAll === account.id || groups.length === 0}
+                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50"
+              >
+                {isApplyingAll === account.id ? (
+                  <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" /> Sharing...</>
+                ) : (
+                  <><Share2 className="w-3 h-3 mr-1" /> Share All Settings</>
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Settings Overview section */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Share2 className="w-5 h-5 text-pink-500" />
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Settings Overview</h3>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          All your shared settings and which accounts they're active on. Toggle sync per account, or remove a setting from an account.
+        </p>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : groups.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4 text-center">
+            No shared settings yet. Share a flow, rule, or autoresponder to other accounts using the share button on each one.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {groups.map(group => {
+              const subs = subscriptions.get(group.id) || [];
+              return (
+                <div key={group.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={typeColor(group.setting_type)}>{typeIcon(group.setting_type)}</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">{group.name}</span>
+                    <span className="text-[10px] text-gray-400 uppercase tracking-wide">{typeLabel(group.setting_type)}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {subs.length === 0 ? (
+                      <p className="text-xs text-gray-400">Not shared to any account yet</p>
+                    ) : (
+                      subs.map(sub => {
+                        const acct = accounts.find(a => a.id === sub.account_id);
+                        return (
+                          <div key={sub.account_id} className="flex items-center justify-between py-1.5">
+                            <div className="flex items-center gap-2">
+                              {acct?.profile_picture_url ? (
+                                <img src={acct.profile_picture_url} alt="" className="w-5 h-5 rounded-full" />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-white text-[10px]">
+                                  {(acct?.username || '?').charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <span className="text-xs text-gray-700 dark:text-gray-300">{acct?.username || 'Unknown'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleToggleSync(group.id, sub.account_id, sub.synced)}
+                                className={`inline-flex items-center px-2 py-1 text-[10px] font-medium rounded ${
+                                  sub.synced
+                                    ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                                    : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                }`}
+                              >
+                                {sub.synced ? <><Link2Off className="w-2.5 h-2.5 mr-0.5" /> Unsync</> : <><Link2 className="w-2.5 h-2.5 mr-0.5" /> Re-sync</>}
+                              </button>
+                              <button
+                                onClick={() => handleRemoveFromAccount(group.id, sub.account_id)}
+                                className="p-1 text-gray-400 hover:text-red-500 rounded"
+                                title="Remove from this account"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Teammate sharing section */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <User className="w-5 h-5 text-pink-500" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Share with Teammates</h3>
+          </div>
+          {orgMembers.length > 0 && (
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
+            >
+              <Plus className="w-4 h-4 mr-1" /> Add Share
+            </button>
+          )}
+        </div>
+        {orgMembers.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            You need to be part of an organization with other members to share your Instagram account.
+          </p>
+        ) : shares.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            You haven't shared this Instagram account with anyone yet. Click "Add Share" to let teammates view your inbox, collaborate on replies, and help manage posts.
+          </p>
+        ) : (
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {shares.map((share) => (
+              <div key={share.id} className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
+                    <User className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{share.profile?.email || 'Unknown'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {share.permissions?.reply ? 'Can reply' : 'View only'}
+                      {share.permissions?.post ? ' · Can post' : ''}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    await supabase.from('instagram_account_shares').delete().eq('id', share.id);
+                    onRefresh();
+                  }}
+                  className="p-1.5 text-red-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                  title="Revoke access"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-gray-900 dark:bg-gray-700 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
+          <span className="text-sm">{toast}</span>
+        </div>
+      )}
     </div>
   );
 }
