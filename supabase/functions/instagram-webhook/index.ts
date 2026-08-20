@@ -135,6 +135,7 @@ Deno.serve(async (req: Request) => {
               pageScopedId: flowAccount.page_scoped_id,
               username: flowAccount.username,
               isSelfMessage,
+              recipientId,
             });
           }
         }
@@ -563,6 +564,7 @@ interface FlowStartContext {
   igUserId: string | null;
   pageScopedId: string | null;
   username: string | null;
+  recipientId: string | null;
 }
 
 /**
@@ -627,6 +629,7 @@ async function startFlowSession(supabaseClient: any, ctx: FlowStartContext) {
       pageScopedId: ctx.pageScopedId,
       senderId: ctx.senderId,
       userId: ctx.userId,
+      recipientId: ctx.recipientId,
     });
   }
 }
@@ -639,6 +642,7 @@ interface FlowStepContext {
   pageScopedId: string | null;
   senderId: string;
   userId: string;
+  recipientId: string | null;
 }
 
 /**
@@ -660,18 +664,20 @@ async function executeFlowStep(supabaseClient: any, ctx: FlowStepContext) {
     return;
   }
 
-  // Use ig_user_id as the sender for the API call (matching the autoresponder),
-  // not page_scoped_id — Instagram rejects sends where sender and recipient are
-  // the same ID, which happens with self-messages when using page_scoped_id.
+  // Use ig_user_id as the sender for the API call (matching the autoresponder).
+  // For self-messages, use recipientId (the inbox ID) as the DM recipient,
+  // matching how the autoresponder sends — Instagram rejects sending to the
+  // page_scoped_id but accepts the inbox recipient_id.
   const senderIdForDm = ctx.igUserId || ctx.pageScopedId;
   if (!senderIdForDm) return;
+  const dmRecipientId = ctx.recipientId || ctx.senderId;
 
   // Send the step's message
   if (step.message_text || step.link_url || step.media_url) {
     const result = await sendInstagramDM(
       ctx.accessToken,
       senderIdForDm,
-      ctx.senderId,
+      dmRecipientId,
       {
         text: step.message_text || undefined,
         linkUrl: step.link_url || undefined,
@@ -690,7 +696,7 @@ async function executeFlowStep(supabaseClient: any, ctx: FlowStepContext) {
         sender_id: ctx.pageScopedId ?? ctx.igUserId,
         message_text: step.message_text || "",
         direction: "outgoing",
-        recipient_id: ctx.senderId,
+        recipient_id: dmRecipientId,
         reply_text: step.message_text || "",
         replied_at: new Date().toISOString(),
         auto_replied: true,
@@ -748,6 +754,7 @@ interface FlowReplyContext {
   pageScopedId: string | null;
   username: string | null;
   isSelfMessage: boolean;
+  recipientId: string | null;
 }
 
 /**
@@ -827,6 +834,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
             igUserId: ctx.igUserId,
             pageScopedId: ctx.pageScopedId,
             username: ctx.username,
+            recipientId: ctx.recipientId,
           });
         }
       }
@@ -861,6 +869,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
           pageScopedId: ctx.pageScopedId,
           senderId: ctx.senderId,
           userId: ctx.userId,
+          recipientId: ctx.recipientId,
         });
       }
       continue;
@@ -878,6 +887,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
         pageScopedId: ctx.pageScopedId,
         senderId: ctx.senderId,
         userId: ctx.userId,
+        recipientId: ctx.recipientId,
       });
       continue;
     }
@@ -957,6 +967,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
         pageScopedId: ctx.pageScopedId,
         senderId: ctx.senderId,
         userId: ctx.userId,
+        recipientId: ctx.recipientId,
       });
     } else {
       // No next step — flow complete
