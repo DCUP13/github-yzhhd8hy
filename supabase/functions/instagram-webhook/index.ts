@@ -1064,37 +1064,19 @@ async function storeEvent(
     event.message_text &&
     userId
   ) {
-    // Resolve the specific account that received this message. The webhook's
-    // entry.id (stored as ig_user_id) identifies the Instagram account — match
-    // it first, then fall back to page_scoped_id, so every linked account can
-    // fire its own autoresponder rather than always using the first one.
-    let acctId: string | null = null;
+    const { data: acct } = await supabaseClient
+      .from("instagram_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
-    if (event.ig_user_id) {
-      const { data: acctByIg } = await supabaseClient
-        .from("instagram_accounts")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("ig_user_id", event.ig_user_id)
-        .maybeSingle();
-      acctId = acctByIg?.id ?? null;
-    }
-
-    if (!acctId && event.ig_user_id) {
-      const { data: acctByPage } = await supabaseClient
-        .from("instagram_accounts")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("page_scoped_id", event.ig_user_id)
-        .maybeSingle();
-      acctId = acctByPage?.id ?? null;
-    }
-
-    if (acctId) {
+    if (acct?.id) {
       const { data: arSettings } = await supabaseClient
         .from("instagram_autoresponder_settings")
         .select("enabled")
-        .eq("account_id", acctId)
+        .eq("account_id", acct.id)
         .maybeSingle();
 
       if (arSettings?.enabled) {
@@ -1118,7 +1100,7 @@ async function storeEvent(
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${serviceKey}`,
               },
-              body: JSON.stringify({ account_id: acctId, event_id: eventIdToUse }),
+              body: JSON.stringify({ account_id: acct.id, event_id: eventIdToUse }),
             }).catch((err) => console.error("Autoresponder queue error:", err));
           }
         }
