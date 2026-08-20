@@ -61,6 +61,23 @@ Deno.serve(async (req: Request) => {
     } else if (action === "sync_autoresponder") {
       const { error } = await supabase.rpc("sync_autoresponder_to_group", { p_settings_id });
       result = { data: null, error: error?.message ?? null };
+    } else if (action === "sync_account") {
+      const { error } = await supabase.rpc("sync_account_settings", {
+        p_source_account_id,
+        p_target_account_id: p_account_id,
+        p_user_id,
+      });
+      result = { data: null, error: error?.message ?? null };
+    } else if (action === "unsync_account") {
+      const { error } = await supabase.rpc("unsync_account_settings", { p_account_id });
+      result = { data: null, error: error?.message ?? null };
+    } else if (action === "resync_account") {
+      const { error } = await supabase.rpc("resync_account_settings", {
+        p_source_account_id,
+        p_target_account_id: p_account_id,
+        p_user_id,
+      });
+      result = { data: null, error: error?.message ?? null };
     } else {
       return new Response(JSON.stringify({ error: "Unknown action" }), {
         status: 400,
