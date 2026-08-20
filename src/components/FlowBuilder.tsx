@@ -361,15 +361,24 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
         if (error) console.error('Update step error:', error);
       }
 
-      // Set first_step_id to the first step (by order)
+      // Set first_step_id to the first step (by order) and verify it was saved
       if (localSteps.length > 0) {
         const firstStep = [...localSteps].sort((a, b) => a.step_order - b.step_order)[0];
         const firstRealId = idMap.get(firstStep.tempId);
         if (firstRealId) {
-          await supabase
+          const { error: fsError } = await supabase
             .from('instagram_conversation_flows')
             .update({ first_step_id: firstRealId, updated_at: new Date().toISOString() })
             .eq('id', selectedFlow.id);
+          if (fsError) {
+            console.error('Failed to set first_step_id:', fsError);
+            // Retry once — the FK constraint may have been missing in older schemas
+            const { error: retryError } = await supabase
+              .from('instagram_conversation_flows')
+              .update({ first_step_id: firstRealId, updated_at: new Date().toISOString() })
+              .eq('id', selectedFlow.id);
+            if (retryError) console.error('Retry also failed for first_step_id:', retryError);
+          }
         }
       } else {
         await supabase

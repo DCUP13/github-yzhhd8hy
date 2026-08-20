@@ -574,11 +574,35 @@ async function startFlowSession(supabaseClient: any, ctx: FlowStartContext) {
     return;
   }
 
-  // Execute the first step
-  if (ctx.firstStepId) {
+  // Resolve the first step — use firstStepId from the flow, or fall back to the
+  // lowest-order step if it was never set (safety net for older flows).
+  let stepIdToExecute = ctx.firstStepId;
+  if (!stepIdToExecute) {
+    const { data: firstStep } = await supabaseClient
+      .from("instagram_flow_steps")
+      .select("id")
+      .eq("flow_id", ctx.flowId)
+      .order("step_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    stepIdToExecute = firstStep?.id ?? null;
+    if (stepIdToExecute) {
+      await supabaseClient
+        .from("instagram_flow_sessions")
+        .update({ current_step_id: stepIdToExecute })
+        .eq("id", session.id);
+      // Also repair the flow's first_step_id so future sessions don't need this fallback
+      await supabaseClient
+        .from("instagram_conversation_flows")
+        .update({ first_step_id: stepIdToExecute })
+        .eq("id", ctx.flowId);
+    }
+  }
+
+  if (stepIdToExecute) {
     await executeFlowStep(supabaseClient, {
       sessionId: session.id,
-      stepId: ctx.firstStepId,
+      stepId: stepIdToExecute,
       accessToken: ctx.accessToken,
       igUserId: ctx.igUserId,
       pageScopedId: ctx.pageScopedId,
@@ -763,6 +787,35 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
   if (!ctx.accessToken) return;
 
   for (const session of sessions) {
+    // Recover sessions that are "active" but have no current_step_id (can happen
+    // when first_step_id was null at creation time). Try to find and execute the
+    // first step for the flow.
+    if (session.status === "active" && !session.current_step_id) {
+      const { data: firstStep } = await supabaseClient
+        .from("instagram_flow_steps")
+        .select("id")
+        .eq("flow_id", session.flow_id)
+        .order("step_order", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (firstStep) {
+        await supabaseClient
+          .from("instagram_flow_sessions")
+          .update({ current_step_id: firstStep.id })
+          .eq("id", session.id);
+        await executeFlowStep(supabaseClient, {
+          sessionId: session.id,
+          stepId: firstStep.id,
+          accessToken: ctx.accessToken,
+          igUserId: ctx.igUserId,
+          pageScopedId: ctx.pageScopedId,
+          senderId: ctx.senderId,
+          userId: ctx.userId,
+        });
+      }
+      continue;
+    }
+
     if (session.status !== "waiting_reply") continue;
 
     // Check 24h window
