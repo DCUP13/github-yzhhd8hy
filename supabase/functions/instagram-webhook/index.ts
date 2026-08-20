@@ -106,23 +106,34 @@ Deno.serve(async (req: Request) => {
             raw_event: msg, user_id: userId,
           }, accessToken, otherPartyId, true);
 
+          // For self-messages, the webhook entry.id is the recipient ID (e.g.
+          // the page inbox ID), which may not match any stored account field.
+          // Fall back to resolving the account by sender_id so flow processing
+          // still works.
+          let flowAccount = account;
+          let flowUserId = userId;
+          if (!flowAccount && senderId) {
+            flowAccount = await resolveAccount(supabaseClient, senderId);
+            flowUserId = flowAccount?.user_id ?? null;
+          }
+
           // Process conversation flow replies for incoming DMs.
           // Self-messages (DMing yourself) are also processed so you can test
           // flows from your own account. Echo-only messages (outgoing to others)
           // are still skipped.
-          const shouldProcessFlow = userId && account && senderId && messageText && storedEventId
+          const shouldProcessFlow = flowUserId && flowAccount && senderId && messageText && storedEventId
             && (!isEcho || isSelfMessage);
           if (shouldProcessFlow) {
             await processFlowReply(supabaseClient, {
-              userId,
-              accountId: account.id,
+              userId: flowUserId,
+              accountId: flowAccount.id,
               senderId,
               messageText,
               eventId: storedEventId,
-              accessToken: account.access_token,
-              igUserId: account.ig_user_id,
-              pageScopedId: account.page_scoped_id,
-              username: account.username,
+              accessToken: flowAccount.access_token,
+              igUserId: flowAccount.ig_user_id,
+              pageScopedId: flowAccount.page_scoped_id,
+              username: flowAccount.username,
               isSelfMessage,
             });
           }
