@@ -574,6 +574,8 @@ async function startFlowSession(supabaseClient: any, ctx: FlowStartContext) {
     return;
   }
 
+  console.log("startFlowSession: session created:", session.id, "firstStepId:", ctx.firstStepId);
+
   // Resolve the first step — use firstStepId from the flow, or fall back to the
   // lowest-order step if it was never set (safety net for older flows).
   let stepIdToExecute = ctx.firstStepId;
@@ -730,6 +732,8 @@ interface FlowReplyContext {
  * If so, process the reply according to the current step's branch type.
  */
 async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
+  console.log("processFlowReply called:", { userId: ctx.userId, senderId: ctx.senderId, messageText: ctx.messageText, accountId: ctx.accountId, hasToken: !!ctx.accessToken, igUserId: ctx.igUserId, pageScopedId: ctx.pageScopedId });
+
   // Find active or waiting sessions for this sender across all flows owned by this user
   const { data: sessions } = await supabaseClient
     .from("instagram_flow_sessions")
@@ -737,6 +741,8 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
     .eq("user_id", ctx.userId)
     .eq("sender_id", ctx.senderId)
     .in("status", ["waiting_reply", "active"]);
+
+  console.log("processFlowReply: sessions found:", sessions?.length ?? 0);
 
   if (!sessions || sessions.length === 0) {
     // Check for DM-triggered flows
@@ -753,6 +759,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
         const msgLower = ctx.messageText.toLowerCase();
         for (const flow of flows) {
           const keyword = (flow.trigger_keyword || "").toLowerCase().trim();
+          console.log("processFlowReply: checking flow:", flow.id, "keyword:", keyword, "match:", msgLower.includes(keyword));
           if (!keyword) continue;
           if (!msgLower.includes(keyword)) continue;
 
@@ -766,6 +773,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
             .maybeSingle();
           if (existing) continue;
 
+          console.log("processFlowReply: starting flow session for flow:", flow.id, "firstStepId:", flow.first_step_id);
           await startFlowSession(supabaseClient, {
             flowId: flow.id,
             userId: ctx.userId,
