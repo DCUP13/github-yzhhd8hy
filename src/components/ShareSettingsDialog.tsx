@@ -115,16 +115,37 @@ export function ShareSettingsDialog({
     return newGroupId;
   };
 
+  const callShareApi = async (body: Record<string, unknown>): Promise<{ error: string | null }> => {
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/share-settings`;
+    const { data: session } = await supabase.auth.getSession();
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ error: 'Request failed' }));
+      return { error: errData.error || `Request failed (${response.status})` };
+    }
+    const json = await response.json();
+    return { error: json.error ?? null };
+  };
+
   const handleShareToAccount = async (accountId: string) => {
     setIsApplying(true);
     setError('');
     try {
       const gid = await ensureGroup();
-      const { error: rpcError } = await supabase.rpc('apply_settings_group_to_account', {
+      const { error: apiError } = await callShareApi({
+        action: 'apply',
         p_group_id: gid,
         p_account_id: accountId,
       });
-      if (rpcError) throw rpcError;
+      if (apiError) throw new Error(apiError);
       setSubscriptions(prev => { const m = new Map(prev); m.set(accountId, true); return m; });
       showToast(`Shared to ${allAccounts.find(a => a.id === accountId)?.username || 'account'}`);
     } catch (err) {
@@ -142,20 +163,22 @@ export function ShareSettingsDialog({
     try {
       if (currentSynced) {
         // Unsubscribe — make independent
-        const { error: rpcError } = await supabase.rpc('unsubscribe_account_from_group', {
+        const { error: apiError } = await callShareApi({
+          action: 'unsubscribe',
           p_group_id: groupId,
           p_account_id: accountId,
         });
-        if (rpcError) throw rpcError;
+        if (apiError) throw new Error(apiError);
         setSubscriptions(prev => { const m = new Map(prev); m.set(accountId, false); return m; });
         showToast('Account is now independent — edits stay local');
       } else {
         // Re-subscribe — overwrite with group version
-        const { error: rpcError } = await supabase.rpc('resubscribe_account_to_group', {
+        const { error: apiError } = await callShareApi({
+          action: 'resubscribe',
           p_group_id: groupId,
           p_account_id: accountId,
         });
-        if (rpcError) throw rpcError;
+        if (apiError) throw new Error(apiError);
         setSubscriptions(prev => { const m = new Map(prev); m.set(accountId, true); return m; });
         showToast('Account re-synced — edits will propagate');
       }
@@ -174,14 +197,14 @@ export function ShareSettingsDialog({
       const gid = await ensureGroup();
       for (const account of otherAccounts) {
         if (!subscriptions.has(account.id)) {
-          const { error: rpcError } = await supabase.rpc('apply_settings_group_to_account', {
+          const { error: apiError } = await callShareApi({
+            action: 'apply',
             p_group_id: gid,
             p_account_id: account.id,
           });
-          if (rpcError) {
-            console.error('Share error for', account.username, rpcError);
-            const msg = rpcError.message || 'Unknown error';
-            setError(`Failed to share to ${account.username || 'account'}: ${msg}`);
+          if (apiError) {
+            console.error('Share error for', account.username, apiError);
+            setError(`Failed to share to ${account.username || 'account'}: ${apiError}`);
             continue;
           }
           setSubscriptions(prev => { const m = new Map(prev); m.set(account.id, true); return m; });

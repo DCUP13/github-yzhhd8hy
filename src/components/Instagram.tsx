@@ -2443,18 +2443,38 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
 
+  const callShareApi = async (body: Record<string, unknown>): Promise<{ error: string | null }> => {
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/share-settings`;
+    const { data: session } = await supabase.auth.getSession();
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ error: 'Request failed' }));
+      return { error: errData.error || `Request failed (${response.status})` };
+    }
+    const json = await response.json();
+    return { error: json.error ?? null };
+  };
+
   const handleShareAllToAccount = async (accountId: string) => {
     setIsApplyingAll(accountId);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      // Auto-create groups for unshared settings on the current account, then share all to target
-      const { error } = await supabase.rpc('share_all_settings_from_to', {
+      const { error: apiError } = await callShareApi({
+        action: 'share_all_from_to',
         p_source_account_id: selectedAccount.id,
-        p_target_account_id: accountId,
+        p_account_id: accountId,
         p_user_id: user.id,
       });
-      if (error) throw error;
+      if (apiError) throw new Error(apiError);
       showToast('All settings shared to account');
       await fetchGroups();
       onRefresh();
@@ -2470,10 +2490,12 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
   const handleToggleSync = async (groupId: string, accountId: string, currentSynced: boolean) => {
     try {
       if (currentSynced) {
-        await supabase.rpc('unsubscribe_account_from_group', { p_group_id: groupId, p_account_id: accountId });
+        const { error: apiError } = await callShareApi({ action: 'unsubscribe', p_group_id: groupId, p_account_id: accountId });
+        if (apiError) throw new Error(apiError);
         showToast('Account is now independent for this setting');
       } else {
-        await supabase.rpc('resubscribe_account_to_group', { p_group_id: groupId, p_account_id: accountId });
+        const { error: apiError } = await callShareApi({ action: 'resubscribe', p_group_id: groupId, p_account_id: accountId });
+        if (apiError) throw new Error(apiError);
         showToast('Account re-synced');
       }
       await fetchGroups();
