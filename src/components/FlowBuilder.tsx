@@ -421,7 +421,17 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
 
       // Sync to other accounts if this flow is part of a synced group
       if (selectedFlow.is_synced_copy && selectedFlow.settings_group_id) {
-        await supabase.rpc('sync_flow_to_group', { p_flow_id: selectedFlow.id });
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/share-settings`;
+        const { data: session } = await supabase.auth.getSession();
+        await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ action: 'sync_flow', p_flow_id: selectedFlow.id }),
+        });
       }
 
       // Reload from DB

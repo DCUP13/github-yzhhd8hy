@@ -13,7 +13,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { action, p_group_id, p_account_id, p_owner_user_id, p_source_account_id, p_user_id } = await req.json();
+    const { action, p_group_id, p_account_id, p_owner_user_id, p_source_account_id, p_user_id, p_flow_id, p_rule_id, p_settings_id } = await req.json();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -51,6 +51,15 @@ Deno.serve(async (req: Request) => {
         p_target_account_id: p_account_id,
         p_user_id,
       });
+      result = { data: null, error: error?.message ?? null };
+    } else if (action === "sync_flow") {
+      const { error } = await supabase.rpc("sync_flow_to_group", { p_flow_id });
+      result = { data: null, error: error?.message ?? null };
+    } else if (action === "sync_rule") {
+      const { error } = await supabase.rpc("sync_rule_to_group", { p_rule_id });
+      result = { data: null, error: error?.message ?? null };
+    } else if (action === "sync_autoresponder") {
+      const { error } = await supabase.rpc("sync_autoresponder_to_group", { p_settings_id });
       result = { data: null, error: error?.message ?? null };
     } else {
       return new Response(JSON.stringify({ error: "Unknown action" }), {
