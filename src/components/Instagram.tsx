@@ -2460,7 +2460,8 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
       onRefresh();
     } catch (err) {
       console.error('Error sharing all settings:', err);
-      showToast('Failed to share all settings');
+      const msg = err instanceof Error ? err.message : (err as any)?.message || 'Failed to share all settings';
+      showToast(msg);
     } finally {
       setIsApplyingAll(null);
     }

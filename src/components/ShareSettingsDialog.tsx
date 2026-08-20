@@ -128,7 +128,8 @@ export function ShareSettingsDialog({
       setSubscriptions(prev => { const m = new Map(prev); m.set(accountId, true); return m; });
       showToast(`Shared to ${allAccounts.find(a => a.id === accountId)?.username || 'account'}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to share');
+      const msg = err instanceof Error ? err.message : (err as any)?.message || 'Failed to share';
+      setError(msg);
     } finally {
       setIsApplying(false);
     }
@@ -159,7 +160,8 @@ export function ShareSettingsDialog({
         showToast('Account re-synced — edits will propagate');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle sync');
+      const msg = err instanceof Error ? err.message : (err as any)?.message || 'Failed to toggle sync';
+      setError(msg);
     } finally {
       setIsApplying(false);
     }
@@ -176,13 +178,19 @@ export function ShareSettingsDialog({
             p_group_id: gid,
             p_account_id: account.id,
           });
-          if (rpcError) { console.error('Share error for', account.username, rpcError); continue; }
+          if (rpcError) {
+            console.error('Share error for', account.username, rpcError);
+            const msg = rpcError.message || 'Unknown error';
+            setError(`Failed to share to ${account.username || 'account'}: ${msg}`);
+            continue;
+          }
           setSubscriptions(prev => { const m = new Map(prev); m.set(account.id, true); return m; });
         }
       }
       showToast('Shared to all accounts');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to share to all');
+      const msg = err instanceof Error ? err.message : (err as any)?.message || 'Failed to share to all';
+      setError(msg);
     } finally {
       setIsApplying(false);
     }
@@ -304,7 +312,11 @@ export function ShareSettingsDialog({
           </div>
         )}
 
-        {error && <p className="text-sm text-red-500 mt-4">{error}</p>}
+        {error && (
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 mt-6">
           <button onClick={() => { onShared(); onClose(); }} className="px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg">
@@ -322,3 +334,6 @@ export function ShareSettingsDialog({
     </div>
   );
 }
+
+
+export { ShareSettingsDialog }
