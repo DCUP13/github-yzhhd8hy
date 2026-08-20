@@ -106,8 +106,13 @@ Deno.serve(async (req: Request) => {
             raw_event: msg, user_id: userId,
           }, accessToken, otherPartyId, true);
 
-          // Process conversation flow replies for incoming DMs
-          if (!isEcho && !isSelfMessage && userId && account && senderId && messageText && storedEventId) {
+          // Process conversation flow replies for incoming DMs.
+          // Self-messages (DMing yourself) are also processed so you can test
+          // flows from your own account. Echo-only messages (outgoing to others)
+          // are still skipped.
+          const shouldProcessFlow = userId && account && senderId && messageText && storedEventId
+            && (!isEcho || isSelfMessage);
+          if (shouldProcessFlow) {
             await processFlowReply(supabaseClient, {
               userId,
               accountId: account.id,
@@ -118,6 +123,7 @@ Deno.serve(async (req: Request) => {
               igUserId: account.ig_user_id,
               pageScopedId: account.page_scoped_id,
               username: account.username,
+              isSelfMessage,
             });
           }
         }
@@ -725,6 +731,7 @@ interface FlowReplyContext {
   igUserId: string | null;
   pageScopedId: string | null;
   username: string | null;
+  isSelfMessage: boolean;
 }
 
 /**
@@ -732,7 +739,26 @@ interface FlowReplyContext {
  * If so, process the reply according to the current step's branch type.
  */
 async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
-  console.log("processFlowReply called:", { userId: ctx.userId, senderId: ctx.senderId, messageText: ctx.messageText, accountId: ctx.accountId, hasToken: !!ctx.accessToken, igUserId: ctx.igUserId, pageScopedId: ctx.pageScopedId });
+  console.log("processFlowReply called:", { userId: ctx.userId, senderId: ctx.senderId, messageText: ctx.messageText, accountId: ctx.accountId, hasToken: !!ctx.accessToken, igUserId: ctx.igUserId, pageScopedId: ctx.pageScopedId, isSelfMessage: ctx.isSelfMessage });
+
+  // Prevent infinite loops: if this is a self-message, check if we recently sent
+  // a flow step message with the same text. If so, skip — this is our own outgoing
+  // message coming back as an echo.
+  if (ctx.isSelfMessage) {
+    const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
+    const { data: recentOutgoing } = await supabaseClient
+      .from("instagram_webhook_events")
+      .select("id")
+      .eq("user_id", ctx.userId)
+      .eq("direction", "outgoing")
+      .eq("message_text", ctx.messageText)
+      .gte("created_at", fiveSecondsAgo)
+      .limit(1);
+    if (recentOutgoing && recentOutgoing.length > 0) {
+      console.log("processFlowReply: skipping self-message — matches recent outgoing flow message");
+      return;
+    }
+  }
 
   // Find active or waiting sessions for this sender across all flows owned by this user
   const { data: sessions } = await supabaseClient
