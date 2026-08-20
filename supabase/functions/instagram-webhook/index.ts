@@ -565,6 +565,7 @@ interface FlowStartContext {
   pageScopedId: string | null;
   username: string | null;
   recipientId: string | null;
+  isSelfMessage: boolean;
 }
 
 /**
@@ -630,6 +631,7 @@ async function startFlowSession(supabaseClient: any, ctx: FlowStartContext) {
       senderId: ctx.senderId,
       userId: ctx.userId,
       recipientId: ctx.recipientId,
+      isSelfMessage: ctx.isSelfMessage,
     });
   }
 }
@@ -643,6 +645,7 @@ interface FlowStepContext {
   senderId: string;
   userId: string;
   recipientId: string | null;
+  isSelfMessage: boolean;
 }
 
 /**
@@ -667,10 +670,11 @@ async function executeFlowStep(supabaseClient: any, ctx: FlowStepContext) {
   // Use ig_user_id as the sender for the API call (matching the autoresponder).
   // For self-messages, use recipientId (the inbox ID) as the DM recipient,
   // matching how the autoresponder sends — Instagram rejects sending to the
-  // page_scoped_id but accepts the inbox recipient_id.
+  // page_scoped_id but accepts the inbox recipient_id. For normal DMs, send to
+  // the sender (the other person).
   const senderIdForDm = ctx.igUserId || ctx.pageScopedId;
   if (!senderIdForDm) return;
-  const dmRecipientId = ctx.recipientId || ctx.senderId;
+  const dmRecipientId = ctx.isSelfMessage ? (ctx.recipientId || ctx.senderId) : ctx.senderId;
 
   // Send the step's message
   if (step.message_text || step.link_url || step.media_url) {
@@ -835,6 +839,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
             pageScopedId: ctx.pageScopedId,
             username: ctx.username,
             recipientId: ctx.recipientId,
+            isSelfMessage: ctx.isSelfMessage,
           });
         }
       }
@@ -870,6 +875,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
           senderId: ctx.senderId,
           userId: ctx.userId,
           recipientId: ctx.recipientId,
+          isSelfMessage: ctx.isSelfMessage,
         });
       }
       continue;
@@ -888,6 +894,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
         senderId: ctx.senderId,
         userId: ctx.userId,
         recipientId: ctx.recipientId,
+        isSelfMessage: ctx.isSelfMessage,
       });
       continue;
     }
@@ -968,6 +975,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
         senderId: ctx.senderId,
         userId: ctx.userId,
         recipientId: ctx.recipientId,
+        isSelfMessage: ctx.isSelfMessage,
       });
     } else {
       // No next step — flow complete
