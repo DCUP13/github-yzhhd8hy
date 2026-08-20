@@ -335,5 +335,4 @@ export function ShareSettingsDialog({
   );
 }
 
-
 export { ShareSettingsDialog }
