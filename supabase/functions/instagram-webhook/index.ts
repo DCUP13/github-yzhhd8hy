@@ -66,6 +66,23 @@ Deno.serve(async (req: Request) => {
               comment_id: value?.id ?? null, message_text: value?.text ?? null,
               direction: "incoming", recipient_id: null, raw_event: change, user_id: userId,
             }, accessToken);
+
+            // Process auto rules for this comment
+            if (userId && account && value?.text && value?.from?.id) {
+              await processAutoRules(supabaseClient, {
+                userId,
+                accountId: account.id,
+                senderId: value.from.id,
+                senderUsername: value.from.username ?? null,
+                commentText: value.text,
+                mediaId: mediaId,
+                commentId: value.id ?? null,
+                accessToken: account.access_token,
+                igUserId: account.ig_user_id,
+                pageScopedId: account.page_scoped_id,
+                username: account.username,
+              });
+            }
           }
         }
 
@@ -79,14 +96,48 @@ Deno.serve(async (req: Request) => {
           const senderId = msg?.sender?.id ?? null;
           const recipientId = msg?.recipient?.id ?? null;
           const otherPartyId = isEcho ? recipientId : senderId;
-          await storeEvent(supabaseClient, {
+
+          const storedEventId = await storeEvent(supabaseClient, {
             event_id: msg?.message?.mid ?? null, event_type: "message", ig_user_id: igUserId,
             sender_id: senderId, sender_username: null, sender_name: null, sender_profile_url: null,
             media_id: null, media_type: null, media_permalink: null, media_caption: null,
             comment_id: null, message_text: messageText,
             direction: isSelfMessage ? "incoming" : (isEcho ? "outgoing" : "incoming"), recipient_id: recipientId,
             raw_event: msg, user_id: userId,
-          }, accessToken, otherPartyId);
+          }, accessToken, otherPartyId, true);
+
+          // For self-messages, the webhook entry.id is the recipient ID (e.g.
+          // the page inbox ID), which may not match any stored account field.
+          // Fall back to resolving the account by sender_id so flow processing
+          // still works.
+          let flowAccount = account;
+          let flowUserId = userId;
+          if (!flowAccount && senderId) {
+            flowAccount = await resolveAccount(supabaseClient, senderId);
+            flowUserId = flowAccount?.user_id ?? null;
+          }
+
+          // Process conversation flow replies for incoming DMs.
+          // Self-messages (DMing yourself) are also processed so you can test
+          // flows from your own account. Echo-only messages (outgoing to others)
+          // are still skipped.
+          const shouldProcessFlow = flowUserId && flowAccount && senderId && messageText && storedEventId
+            && (!isEcho || isSelfMessage);
+          if (shouldProcessFlow) {
+            await processFlowReply(supabaseClient, {
+              userId: flowUserId,
+              accountId: flowAccount.id,
+              senderId,
+              messageText,
+              eventId: storedEventId,
+              accessToken: flowAccount.access_token,
+              igUserId: flowAccount.ig_user_id,
+              pageScopedId: flowAccount.page_scoped_id,
+              username: flowAccount.username,
+              isSelfMessage,
+              recipientId,
+            });
+          }
         }
 
         for (const change of changes) {
@@ -156,26 +207,26 @@ function getApiBase(accessToken: string): string {
 async function resolveAccount(
   supabaseClient: any,
   igUserId: string | null,
-): Promise<{ id: string; user_id: string; access_token: string | null; page_scoped_id: string | null } | null> {
+): Promise<{ id: string; user_id: string; access_token: string | null; page_scoped_id: string | null; ig_user_id: string | null; username: string | null } | null> {
   if (!igUserId) return null;
 
   const { data: exact } = await supabaseClient
     .from("instagram_accounts")
-    .select("id, user_id, access_token, page_scoped_id, ig_user_id")
+    .select("id, user_id, access_token, page_scoped_id, ig_user_id, username")
     .eq("ig_user_id", igUserId)
     .maybeSingle();
   if (exact) return exact;
 
   const { data: byPageId } = await supabaseClient
     .from("instagram_accounts")
-    .select("id, user_id, access_token, page_scoped_id, ig_user_id")
+    .select("id, user_id, access_token, page_scoped_id, ig_user_id, username")
     .eq("page_scoped_id", igUserId)
     .maybeSingle();
   if (byPageId) return byPageId;
 
   const { data: allAccounts } = await supabaseClient
     .from("instagram_accounts")
-    .select("id, user_id, access_token, page_scoped_id, ig_user_id");
+    .select("id, user_id, access_token, page_scoped_id, ig_user_id, username");
   for (const acct of allAccounts ?? []) {
     if (acct.ig_user_id && (
       acct.ig_user_id === igUserId ||
@@ -225,6 +276,717 @@ async function resolveSenderProfile(
   }
 }
 
+/**
+ * Send a DM via the Instagram Graph API.
+ * Supports text, link, and media attachment.
+ */
+async function sendInstagramDM(
+  accessToken: string,
+  igUserId: string,
+  recipientId: string,
+  options: { text?: string; linkUrl?: string; mediaUrl?: string; mediaType?: string },
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const isIgToken = accessToken.startsWith("IGAA");
+  const apiBase = isIgToken ? "https://graph.instagram.com" : "https://graph.facebook.com";
+  const sendUrl = `${apiBase}/v21.0/${igUserId}/messages`;
+
+  const messageBody: any = {};
+  if (options.text) messageBody.text = options.text;
+
+  // If a link is provided, append it to the text or send as a separate message
+  if (options.linkUrl) {
+    if (messageBody.text) {
+      messageBody.text = `${messageBody.text}\n${options.linkUrl}`;
+    } else {
+      messageBody.text = options.linkUrl;
+    }
+  }
+
+  // Send text message first if we have text
+  let lastMessageId: string | null = null;
+  if (messageBody.text) {
+    const sendRes = await fetch(`${sendUrl}?access_token=${accessToken}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: { text: messageBody.text },
+      }),
+    });
+    if (!sendRes.ok) {
+      const errBody = await sendRes.text();
+      console.error("Instagram DM send failed:", errBody);
+      return { success: false, error: errBody };
+    }
+    const sendData = await sendRes.json();
+    lastMessageId = sendData?.message_id ?? null;
+  }
+
+  // Send media attachment if provided
+  if (options.mediaUrl) {
+    const attachmentType = options.mediaType === "image" ? "image" : "file";
+    const attachmentPayload: any = { url: options.mediaUrl };
+    if (options.mediaType === "image") {
+      attachmentPayload.is_reusable = true;
+    }
+
+    const mediaRes = await fetch(`${sendUrl}?access_token=${accessToken}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: { attachment: { type: attachmentType, payload: attachmentPayload } },
+      }),
+    });
+    if (!mediaRes.ok) {
+      const errBody = await mediaRes.text();
+      console.error("Instagram media send failed:", errBody);
+      // Don't fail entirely if text already went through
+      if (!lastMessageId) return { success: false, error: errBody };
+    } else {
+      const mediaData = await mediaRes.json();
+      lastMessageId = mediaData?.message_id ?? lastMessageId;
+    }
+  }
+
+  return { success: true, messageId: lastMessageId ?? undefined };
+}
+
+/**
+ * Send a public comment reply via the Instagram Graph API.
+ */
+async function sendCommentReply(
+  accessToken: string,
+  commentId: string,
+  replyText: string,
+): Promise<{ success: boolean; error?: string }> {
+  const isIgToken = accessToken.startsWith("IGAA");
+  const apiBase = isIgToken ? "https://graph.instagram.com" : "https://graph.facebook.com";
+  const url = `${apiBase}/v21.0/${commentId}/replies?access_token=${accessToken}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: replyText }),
+  });
+  if (!res.ok) {
+    const errBody = await res.text();
+    console.error("Comment reply failed:", errBody);
+    return { success: false, error: errBody };
+  }
+  return { success: true };
+}
+
+interface AutoRuleContext {
+  userId: string;
+  accountId: string;
+  senderId: string;
+  senderUsername: string | null;
+  commentText: string;
+  mediaId: string | null;
+  commentId: string | null;
+  accessToken: string | null;
+  igUserId: string | null;
+  pageScopedId: string | null;
+  username: string | null;
+}
+
+/**
+ * Check active auto rules when a comment comes in.
+ * If a rule's keyword matches the comment text, perform the configured action:
+ * - 'comment': post a public comment reply
+ * - 'dm': send a private DM
+ * - 'both': do both
+ * Also checks conversation flow triggers.
+ */
+async function processAutoRules(supabaseClient: any, ctx: AutoRuleContext) {
+  if (!ctx.accessToken) return;
+
+  // Fetch active rules for this user
+  const { data: rules } = await supabaseClient
+    .from("instagram_auto_rules")
+    .select("*")
+    .eq("user_id", ctx.userId)
+    .eq("active", true);
+
+  if (!rules || rules.length === 0) {
+    // Still check for conversation flow triggers
+    await checkFlowTriggers(supabaseClient, ctx);
+    return;
+  }
+
+  const commentTextLower = ctx.commentText.toLowerCase();
+
+  for (const rule of rules) {
+    const keyword = (rule.trigger_keyword || "").toLowerCase().trim();
+    if (!keyword) continue;
+
+    // Check if keyword matches (contains match, case-insensitive)
+    if (!commentTextLower.includes(keyword)) continue;
+
+    // If rule is scoped to a specific media_id, check it matches
+    if (rule.media_id && ctx.mediaId && rule.media_id !== ctx.mediaId) continue;
+
+    // --- DM action ---
+    if ((rule.action_type === "dm" || rule.action_type === "both") && ctx.igUserId) {
+      // Check send_once_per_user
+      if (rule.send_once_per_user) {
+        const { data: existingDm } = await supabaseClient
+          .from("instagram_rule_dm_log")
+          .select("id")
+          .eq("rule_id", rule.id)
+          .eq("sender_id", ctx.senderId)
+          .maybeSingle();
+        if (existingDm) continue; // Already DMed this person for this rule
+      }
+
+      const dmText = rule.dm_message || rule.reply_text;
+      if (dmText) {
+        const senderIdForDm = ctx.pageScopedId || ctx.igUserId;
+        const result = await sendInstagramDM(
+          ctx.accessToken,
+          senderIdForDm!,
+          ctx.senderId,
+          {
+            text: dmText,
+            linkUrl: rule.link_url || undefined,
+            mediaUrl: rule.media_url || undefined,
+            mediaType: rule.media_type || undefined,
+          },
+        );
+
+        if (result.success) {
+          // Log the DM
+          await supabaseClient.from("instagram_rule_dm_log").insert({
+            rule_id: rule.id,
+            user_id: ctx.userId,
+            sender_id: ctx.senderId,
+            sender_username: ctx.senderUsername,
+            media_id: ctx.mediaId,
+            comment_id: ctx.commentId,
+          });
+
+          // Store outgoing DM event
+          await supabaseClient.from("instagram_webhook_events").insert({
+            user_id: ctx.userId,
+            event_id: result.messageId ?? `dm_${Date.now()}`,
+            event_type: "message",
+            ig_user_id: ctx.pageScopedId ?? ctx.igUserId,
+            sender_id: ctx.pageScopedId ?? ctx.igUserId,
+            sender_username: ctx.username ?? null,
+            message_text: dmText,
+            direction: "outgoing",
+            recipient_id: ctx.senderId,
+            reply_text: dmText,
+            replied_at: new Date().toISOString(),
+            auto_replied: true,
+            raw_event: { sent_from_auto_rule: true, rule_id: rule.id, message_id: result.messageId },
+          });
+        }
+      }
+    }
+
+    // --- Comment reply action ---
+    if ((rule.action_type === "comment" || rule.action_type === "both") && ctx.commentId) {
+      let replyText = rule.reply_text;
+      if (rule.link_url) {
+        replyText = `${replyText}\n${rule.link_url}`;
+      }
+      await sendCommentReply(ctx.accessToken, ctx.commentId, replyText);
+    }
+  }
+
+  // Check conversation flow triggers
+  await checkFlowTriggers(supabaseClient, ctx);
+}
+
+/**
+ * Check if any conversation flow should be triggered by this comment.
+ */
+async function checkFlowTriggers(supabaseClient: any, ctx: AutoRuleContext) {
+  if (!ctx.accessToken || !ctx.igUserId) return;
+
+  const { data: flows } = await supabaseClient
+    .from("instagram_conversation_flows")
+    .select("*")
+    .eq("user_id", ctx.userId)
+    .eq("account_id", ctx.accountId)
+    .eq("active", true)
+    .eq("trigger_type", "comment_keyword");
+
+  if (!flows || flows.length === 0) return;
+
+  const commentTextLower = ctx.commentText.toLowerCase();
+
+  for (const flow of flows) {
+    const keyword = (flow.trigger_keyword || "").toLowerCase().trim();
+    if (!keyword) continue;
+    if (!commentTextLower.includes(keyword)) continue;
+
+    // If flow is scoped to a specific media post
+    if (flow.trigger_media_id && ctx.mediaId && flow.trigger_media_id !== ctx.mediaId) continue;
+
+    // Check if this person already has an active session for this flow
+    const { data: existingSession } = await supabaseClient
+      .from("instagram_flow_sessions")
+      .select("id, status")
+      .eq("flow_id", flow.id)
+      .eq("sender_id", ctx.senderId)
+      .in("status", ["active", "waiting_reply"])
+      .maybeSingle();
+
+    if (existingSession) continue; // Already in this flow
+
+    // Start the flow
+    await startFlowSession(supabaseClient, {
+      flowId: flow.id,
+      userId: ctx.userId,
+      accountId: ctx.accountId,
+      senderId: ctx.senderId,
+      senderUsername: ctx.senderUsername,
+      firstStepId: flow.first_step_id,
+      accessToken: ctx.accessToken,
+      igUserId: ctx.igUserId,
+      pageScopedId: ctx.pageScopedId,
+      username: ctx.username,
+    });
+  }
+}
+
+interface FlowStartContext {
+  flowId: string;
+  userId: string;
+  accountId: string;
+  senderId: string;
+  senderUsername: string | null;
+  firstStepId: string | null;
+  accessToken: string;
+  igUserId: string | null;
+  pageScopedId: string | null;
+  username: string | null;
+  recipientId: string | null;
+  isSelfMessage: boolean;
+}
+
+/**
+ * Create a flow session and execute the first step.
+ */
+async function startFlowSession(supabaseClient: any, ctx: FlowStartContext) {
+  // Create the session
+  const { data: session, error } = await supabaseClient
+    .from("instagram_flow_sessions")
+    .insert({
+      flow_id: ctx.flowId,
+      user_id: ctx.userId,
+      account_id: ctx.accountId,
+      sender_id: ctx.senderId,
+      sender_username: ctx.senderUsername,
+      current_step_id: ctx.firstStepId,
+      status: "active",
+      window_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      last_interacted_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (error || !session) {
+    console.error("Failed to create flow session:", error);
+    return;
+  }
+
+  console.log("startFlowSession: session created:", session.id, "firstStepId:", ctx.firstStepId);
+
+  // Resolve the first step — use firstStepId from the flow, or fall back to the
+  // lowest-order step if it was never set (safety net for older flows).
+  let stepIdToExecute = ctx.firstStepId;
+  if (!stepIdToExecute) {
+    const { data: firstStep } = await supabaseClient
+      .from("instagram_flow_steps")
+      .select("id")
+      .eq("flow_id", ctx.flowId)
+      .order("step_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    stepIdToExecute = firstStep?.id ?? null;
+    if (stepIdToExecute) {
+      await supabaseClient
+        .from("instagram_flow_sessions")
+        .update({ current_step_id: stepIdToExecute })
+        .eq("id", session.id);
+      // Also repair the flow's first_step_id so future sessions don't need this fallback
+      await supabaseClient
+        .from("instagram_conversation_flows")
+        .update({ first_step_id: stepIdToExecute })
+        .eq("id", ctx.flowId);
+    }
+  }
+
+  if (stepIdToExecute) {
+    await executeFlowStep(supabaseClient, {
+      sessionId: session.id,
+      stepId: stepIdToExecute,
+      accessToken: ctx.accessToken,
+      igUserId: ctx.igUserId,
+      pageScopedId: ctx.pageScopedId,
+      senderId: ctx.senderId,
+      userId: ctx.userId,
+      recipientId: ctx.recipientId,
+      isSelfMessage: ctx.isSelfMessage,
+    });
+  }
+}
+
+interface FlowStepContext {
+  sessionId: string;
+  stepId: string;
+  accessToken: string;
+  igUserId: string | null;
+  pageScopedId: string | null;
+  senderId: string;
+  userId: string;
+  recipientId: string | null;
+  isSelfMessage: boolean;
+}
+
+/**
+ * Execute a single flow step: send the message, then advance or wait for reply.
+ */
+async function executeFlowStep(supabaseClient: any, ctx: FlowStepContext) {
+  const { data: step } = await supabaseClient
+    .from("instagram_flow_steps")
+    .select("*")
+    .eq("id", ctx.stepId)
+    .maybeSingle();
+
+  if (!step) {
+    // Step doesn't exist — mark session completed
+    await supabaseClient
+      .from("instagram_flow_sessions")
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", ctx.sessionId);
+    return;
+  }
+
+  // Use ig_user_id as the sender for the API call (matching the autoresponder).
+  // For self-messages, use recipientId (the inbox ID) as the DM recipient,
+  // matching how the autoresponder sends — Instagram rejects sending to the
+  // page_scoped_id but accepts the inbox recipient_id. For normal DMs, send to
+  // the sender (the other person).
+  const senderIdForDm = ctx.igUserId || ctx.pageScopedId;
+  if (!senderIdForDm) return;
+  const dmRecipientId = ctx.isSelfMessage ? (ctx.recipientId || ctx.senderId) : ctx.senderId;
+
+  // Send the step's message
+  if (step.message_text || step.link_url || step.media_url) {
+    const result = await sendInstagramDM(
+      ctx.accessToken,
+      senderIdForDm,
+      dmRecipientId,
+      {
+        text: step.message_text || undefined,
+        linkUrl: step.link_url || undefined,
+        mediaUrl: step.media_url || undefined,
+        mediaType: step.media_type || undefined,
+      },
+    );
+
+    if (result.success) {
+      // Store outgoing message event
+      await supabaseClient.from("instagram_webhook_events").insert({
+        user_id: ctx.userId,
+        event_id: result.messageId ?? `flow_${ctx.sessionId}_${Date.now()}`,
+        event_type: "message",
+        ig_user_id: ctx.pageScopedId ?? ctx.igUserId,
+        sender_id: ctx.pageScopedId ?? ctx.igUserId,
+        message_text: step.message_text || "",
+        direction: "outgoing",
+        recipient_id: dmRecipientId,
+        reply_text: step.message_text || "",
+        replied_at: new Date().toISOString(),
+        auto_replied: true,
+        flow_session_id: ctx.sessionId,
+        raw_event: { sent_from_flow: true, step_id: ctx.stepId, message_id: result.messageId },
+      });
+    } else {
+      console.error("executeFlowStep: DM send failed:", result.error);
+    }
+  }
+
+  // Determine next state
+  if (step.wait_for_reply) {
+    // Update session to wait for reply
+    await supabaseClient
+      .from("instagram_flow_sessions")
+      .update({
+        current_step_id: ctx.stepId,
+        status: "waiting_reply",
+        last_interacted_at: new Date().toISOString(),
+        window_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      })
+      .eq("id", ctx.sessionId);
+  } else {
+    // No wait — advance to next step immediately
+    if (step.next_step_id) {
+      await supabaseClient
+        .from("instagram_flow_sessions")
+        .update({
+          current_step_id: step.next_step_id,
+          status: "active",
+          last_interacted_at: new Date().toISOString(),
+        })
+        .eq("id", ctx.sessionId);
+      // Execute the next step
+      await executeFlowStep(supabaseClient, { ...ctx, stepId: step.next_step_id });
+    } else {
+      // No next step — flow is complete
+      await supabaseClient
+        .from("instagram_flow_sessions")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", ctx.sessionId);
+    }
+  }
+}
+
+interface FlowReplyContext {
+  userId: string;
+  accountId: string;
+  senderId: string;
+  messageText: string;
+  eventId: string;
+  accessToken: string | null;
+  igUserId: string | null;
+  pageScopedId: string | null;
+  username: string | null;
+  isSelfMessage: boolean;
+  recipientId: string | null;
+}
+
+/**
+ * When a DM comes in, check if the sender is in a waiting_reply flow session.
+ * If so, process the reply according to the current step's branch type.
+ */
+async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
+  console.log("processFlowReply called:", { userId: ctx.userId, senderId: ctx.senderId, messageText: ctx.messageText, accountId: ctx.accountId, hasToken: !!ctx.accessToken, igUserId: ctx.igUserId, pageScopedId: ctx.pageScopedId, isSelfMessage: ctx.isSelfMessage });
+
+  // Prevent infinite loops: if this is a self-message, check if we recently sent
+  // a flow step message with the same text. If so, skip — this is our own outgoing
+  // message coming back as an echo.
+  if (ctx.isSelfMessage) {
+    const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
+    const { data: recentOutgoing } = await supabaseClient
+      .from("instagram_webhook_events")
+      .select("id")
+      .eq("user_id", ctx.userId)
+      .eq("direction", "outgoing")
+      .eq("message_text", ctx.messageText)
+      .gte("created_at", fiveSecondsAgo)
+      .limit(1);
+    if (recentOutgoing && recentOutgoing.length > 0) {
+      console.log("processFlowReply: skipping self-message — matches recent outgoing flow message");
+      return;
+    }
+  }
+
+  // Find active or waiting sessions for this sender across all flows owned by this user
+  const { data: sessions } = await supabaseClient
+    .from("instagram_flow_sessions")
+    .select("*")
+    .eq("user_id", ctx.userId)
+    .eq("sender_id", ctx.senderId)
+    .in("status", ["waiting_reply", "active"]);
+
+  console.log("processFlowReply: sessions found:", sessions?.length ?? 0);
+
+  if (!sessions || sessions.length === 0) {
+    // Check for DM-triggered flows
+    if (ctx.accessToken && ctx.igUserId) {
+      const { data: flows } = await supabaseClient
+        .from("instagram_conversation_flows")
+        .select("*")
+        .eq("user_id", ctx.userId)
+        .eq("account_id", ctx.accountId)
+        .eq("active", true)
+        .eq("trigger_type", "dm_keyword");
+
+      if (flows && flows.length > 0) {
+        const msgLower = ctx.messageText.toLowerCase();
+        for (const flow of flows) {
+          const keyword = (flow.trigger_keyword || "").toLowerCase().trim();
+          console.log("processFlowReply: checking flow:", flow.id, "keyword:", keyword, "match:", msgLower.includes(keyword));
+          if (!keyword) continue;
+          if (!msgLower.includes(keyword)) continue;
+
+          // Check no existing active session
+          const { data: existing } = await supabaseClient
+            .from("instagram_flow_sessions")
+            .select("id, status")
+            .eq("flow_id", flow.id)
+            .eq("sender_id", ctx.senderId)
+            .in("status", ["active", "waiting_reply"])
+            .maybeSingle();
+          if (existing) continue;
+
+          console.log("processFlowReply: starting flow session for flow:", flow.id, "firstStepId:", flow.first_step_id);
+          await startFlowSession(supabaseClient, {
+            flowId: flow.id,
+            userId: ctx.userId,
+            accountId: ctx.accountId,
+            senderId: ctx.senderId,
+            senderUsername: null,
+            firstStepId: flow.first_step_id,
+            accessToken: ctx.accessToken,
+            igUserId: ctx.igUserId,
+            pageScopedId: ctx.pageScopedId,
+            username: ctx.username,
+            recipientId: ctx.recipientId,
+            isSelfMessage: ctx.isSelfMessage,
+          });
+        }
+      }
+    }
+    return;
+  }
+
+  if (!ctx.accessToken) return;
+
+  for (const session of sessions) {
+    // Recover sessions that are "active" but have no current_step_id (can happen
+    // when first_step_id was null at creation time). Try to find and execute the
+    // first step for the flow.
+    if (session.status === "active" && !session.current_step_id) {
+      const { data: firstStep } = await supabaseClient
+        .from("instagram_flow_steps")
+        .select("id")
+        .eq("flow_id", session.flow_id)
+        .order("step_order", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (firstStep) {
+        await supabaseClient
+          .from("instagram_flow_sessions")
+          .update({ current_step_id: firstStep.id })
+          .eq("id", session.id);
+        await executeFlowStep(supabaseClient, {
+          sessionId: session.id,
+          stepId: firstStep.id,
+          accessToken: ctx.accessToken,
+          igUserId: ctx.igUserId,
+          pageScopedId: ctx.pageScopedId,
+          senderId: ctx.senderId,
+          userId: ctx.userId,
+          recipientId: ctx.recipientId,
+          isSelfMessage: ctx.isSelfMessage,
+        });
+      }
+      continue;
+    }
+
+    // If the session is active with a valid current_step_id, the step's message
+    // may not have been sent yet (e.g. first_step_id was null when the session
+    // was created). Execute it now.
+    if (session.status === "active" && session.current_step_id) {
+      await executeFlowStep(supabaseClient, {
+        sessionId: session.id,
+        stepId: session.current_step_id,
+        accessToken: ctx.accessToken,
+        igUserId: ctx.igUserId,
+        pageScopedId: ctx.pageScopedId,
+        senderId: ctx.senderId,
+        userId: ctx.userId,
+        recipientId: ctx.recipientId,
+        isSelfMessage: ctx.isSelfMessage,
+      });
+      continue;
+    }
+
+    if (session.status !== "waiting_reply") continue;
+
+    // Check 24h window
+    if (session.window_expires_at && new Date(session.window_expires_at) < new Date()) {
+      await supabaseClient
+        .from("instagram_flow_sessions")
+        .update({ status: "expired" })
+        .eq("id", session.id);
+      continue;
+    }
+
+    // Get the current step
+    const { data: step } = await supabaseClient
+      .from("instagram_flow_steps")
+      .select("*")
+      .eq("id", session.current_step_id)
+      .maybeSingle();
+
+    if (!step) {
+      await supabaseClient
+        .from("instagram_flow_sessions")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", session.id);
+      continue;
+    }
+
+    // Link the incoming event to this flow session
+    await supabaseClient
+      .from("instagram_webhook_events")
+      .update({ flow_session_id: session.id })
+      .eq("id", ctx.eventId);
+
+    // Determine next step based on branch type
+    let nextStepId: string | null = null;
+
+    if (step.branch_type === "keyword" && step.branch_conditions) {
+      const conditions = Array.isArray(step.branch_conditions) ? step.branch_conditions : [];
+      const replyLower = ctx.messageText.toLowerCase();
+      for (const cond of conditions) {
+        const condKeyword = (cond.keyword || "").toLowerCase().trim();
+        if (condKeyword && replyLower.includes(condKeyword)) {
+          nextStepId = cond.next_step_id ?? null;
+          break;
+        }
+      }
+      // If no branch matched, fall through to default next_step_id
+      if (!nextStepId) {
+        nextStepId = step.next_step_id ?? null;
+      }
+    } else if (step.branch_type === "any_reply") {
+      nextStepId = step.next_step_id ?? null;
+    } else {
+      nextStepId = step.next_step_id ?? null;
+    }
+
+    // Advance the session
+    if (nextStepId) {
+      await supabaseClient
+        .from("instagram_flow_sessions")
+        .update({
+          current_step_id: nextStepId,
+          status: "active",
+          last_interacted_at: new Date().toISOString(),
+          window_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .eq("id", session.id);
+
+      await executeFlowStep(supabaseClient, {
+        sessionId: session.id,
+        stepId: nextStepId,
+        accessToken: ctx.accessToken,
+        igUserId: ctx.igUserId,
+        pageScopedId: ctx.pageScopedId,
+        senderId: ctx.senderId,
+        userId: ctx.userId,
+        recipientId: ctx.recipientId,
+        isSelfMessage: ctx.isSelfMessage,
+      });
+    } else {
+      // No next step — flow complete
+      await supabaseClient
+        .from("instagram_flow_sessions")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", session.id);
+    }
+  }
+}
+
 async function storeEvent(
   supabaseClient: any,
   event: {
@@ -237,7 +999,8 @@ async function storeEvent(
   },
   accessToken: string | null = null,
   otherPartyId: string | null = null,
-) {
+  returnId: boolean = false,
+): Promise<string | null> {
   let userId = event.user_id;
 
   if (!userId && event.sender_id) {
@@ -255,7 +1018,7 @@ async function storeEvent(
       .select("id")
       .eq("event_id", event.event_id)
       .maybeSingle();
-    if (existing) return;
+    if (existing) return returnId ? existing.id : null;
   }
 
   let senderUsername = event.sender_username;
@@ -271,7 +1034,7 @@ async function storeEvent(
     }
   }
 
-  await supabaseClient.from("instagram_webhook_events").insert({
+  const insertData: any = {
     user_id: userId, event_id: event.event_id, event_type: event.event_type,
     ig_user_id: event.ig_user_id, sender_id: event.sender_id,
     sender_username: senderUsername, sender_name: senderName, sender_profile_url: senderProfileUrl,
@@ -280,7 +1043,19 @@ async function storeEvent(
     comment_id: event.comment_id, message_text: event.message_text,
     direction: event.direction, recipient_id: event.recipient_id,
     raw_event: event.raw_event,
-  });
+  };
+
+  let storedId: string | null = null;
+  if (returnId) {
+    const { data: inserted } = await supabaseClient
+      .from("instagram_webhook_events")
+      .insert(insertData)
+      .select("id")
+      .maybeSingle();
+    storedId = inserted?.id ?? null;
+  } else {
+    await supabaseClient.from("instagram_webhook_events").insert(insertData);
+  }
 
   // Trigger the Instagram autoresponder for incoming DMs
   if (
@@ -289,7 +1064,6 @@ async function storeEvent(
     event.message_text &&
     userId
   ) {
-    // Find the account for this user
     const { data: acct } = await supabaseClient
       .from("instagram_accounts")
       .select("id")
@@ -299,7 +1073,6 @@ async function storeEvent(
       .maybeSingle();
 
     if (acct?.id) {
-      // Check if autoresponder is enabled
       const { data: arSettings } = await supabaseClient
         .from("instagram_autoresponder_settings")
         .select("enabled")
@@ -307,27 +1080,33 @@ async function storeEvent(
         .maybeSingle();
 
       if (arSettings?.enabled) {
-        // Fetch the event we just stored
-        const { data: storedEvent } = await supabaseClient
-          .from("instagram_webhook_events")
-          .select("id")
-          .eq("event_id", event.event_id)
-          .maybeSingle();
+        const eventIdToUse = storedId;
+        if (eventIdToUse) {
+          // Check if this sender is in an active flow session — if so, don't trigger AI autoresponder
+          const { data: flowSession } = await supabaseClient
+            .from("instagram_flow_sessions")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("sender_id", event.sender_id ?? "")
+            .in("status", ["active", "waiting_reply"])
+            .maybeSingle();
 
-        if (storedEvent?.id) {
-          const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-          // Queue the message for the autoresponder (creates/resets a timer)
-          fetch(`${supabaseUrl}/functions/v1/instagram-autoresponder`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${serviceKey}`,
-            },
-            body: JSON.stringify({ account_id: acct.id, event_id: storedEvent.id }),
-          }).catch((err) => console.error("Autoresponder queue error:", err));
+          if (!flowSession) {
+            const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+            const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+            fetch(`${supabaseUrl}/functions/v1/instagram-autoresponder`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${serviceKey}`,
+              },
+              body: JSON.stringify({ account_id: acct.id, event_id: eventIdToUse }),
+            }).catch((err) => console.error("Autoresponder queue error:", err));
+          }
         }
       }
     }
   }
+
+  return storedId;
 }

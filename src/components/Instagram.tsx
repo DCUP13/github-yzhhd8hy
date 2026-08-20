@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Instagram as InstagramIcon, MessageSquare, Send, Plus, Trash2, RefreshCw, Zap, Clock, User, Image as ImageIcon, Share2, Users, X, BarChart3, TrendingUp, Heart, Eye, Bookmark, Play, ChevronDown, Film, ArrowLeft, CheckCheck, HelpCircle, Info, Bot } from 'lucide-react';
+import { Instagram as InstagramIcon, MessageSquare, Send, Plus, Trash2, RefreshCw, Zap, Clock, User, Image as ImageIcon, Share2, Users, X, BarChart3, TrendingUp, Heart, Eye, Bookmark, Play, ChevronDown, Film, ArrowLeft, CheckCheck, HelpCircle, Info, Bot, GitBranch, Link as LinkIcon, FileText, CreditCard as Edit2, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
+import { FlowBuilder } from './FlowBuilder';
 
 interface InstagramProps {
   onSignOut: () => void;
@@ -38,6 +39,12 @@ interface AutoRule {
   reply_text: string;
   active: boolean;
   created_at: string;
+  action_type: string;
+  dm_message: string | null;
+  link_url: string | null;
+  media_url: string | null;
+  media_type: string | null;
+  send_once_per_user: boolean;
 }
 
 interface IgPost {
@@ -78,7 +85,7 @@ interface Snapshot {
   created_at: string;
 }
 
-type TabType = 'inbox' | 'posts' | 'rules' | 'autoresponder' | 'stats' | 'sharing';
+type TabType = 'inbox' | 'posts' | 'rules' | 'flows' | 'autoresponder' | 'stats' | 'sharing';
 
 export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }: InstagramProps) {
   const initialTab = (queryParams.tab as TabType) || 'inbox';
@@ -96,9 +103,20 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [showRuleModal, setShowRuleModal] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [showPostModal, setShowPostModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [newRule, setNewRule] = useState({ trigger_keyword: '', reply_text: '', media_id: '' });
+  const [newRule, setNewRule] = useState({
+    trigger_keyword: '',
+    reply_text: '',
+    media_id: '',
+    action_type: 'comment' as 'comment' | 'dm' | 'both',
+    dm_message: '',
+    link_url: '',
+    media_url: '',
+    media_type: '' as '',
+    send_once_per_user: true,
+  });
   const [newPost, setNewPost] = useState({ caption: '', scheduled_for: '' });
   const [shares, setShares] = useState<Array<{ id: string; shared_with_user_id: string; permissions: Record<string, boolean>; created_at: string; profile?: { email: string } | null }>>([]);
   const [orgMembers, setOrgMembers] = useState<Array<{ user_id: string; email: string; role: string }>>([]);
@@ -403,8 +421,16 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   };
 
   const handleSaveRule = async () => {
-    if (!newRule.trigger_keyword || !newRule.reply_text) {
-      alert('Please fill in the trigger keyword and reply text');
+    if (!newRule.trigger_keyword) {
+      alert('Please fill in the trigger keyword');
+      return;
+    }
+    if (newRule.action_type === 'comment' && !newRule.reply_text) {
+      alert('Please fill in the reply text for the public comment');
+      return;
+    }
+    if ((newRule.action_type === 'dm' || newRule.action_type === 'both') && !newRule.dm_message && !newRule.reply_text) {
+      alert('Please fill in the DM message text');
       return;
     }
 
@@ -412,22 +438,68 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase.from('instagram_auto_rules').insert({
+      const ruleData = {
         user_id: user.id,
         trigger_keyword: newRule.trigger_keyword,
         reply_text: newRule.reply_text,
         media_id: newRule.media_id || null,
-        active: true,
-      });
+        action_type: newRule.action_type,
+        dm_message: newRule.dm_message || null,
+        link_url: newRule.link_url || null,
+        media_url: newRule.media_url || null,
+        media_type: newRule.media_type || null,
+        send_once_per_user: newRule.send_once_per_user,
+      };
 
-      if (error) throw error;
-      setNewRule({ trigger_keyword: '', reply_text: '', media_id: '' });
+      if (editingRuleId) {
+        const { error } = await supabase
+          .from('instagram_auto_rules')
+          .update({ ...ruleData, updated_at: new Date().toISOString() })
+          .eq('id', editingRuleId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('instagram_auto_rules')
+          .insert({ ...ruleData, active: true });
+        if (error) throw error;
+      }
+
+      setNewRule({
+        trigger_keyword: '', reply_text: '', media_id: '',
+        action_type: 'comment', dm_message: '', link_url: '', media_url: '', media_type: '', send_once_per_user: true,
+      });
+      setEditingRuleId(null);
       setShowRuleModal(false);
       await fetchData();
     } catch (error) {
       console.error('Error saving rule:', error);
       alert('Failed to save rule');
     }
+  };
+
+  const handleEditRule = (rule: AutoRule) => {
+    setEditingRuleId(rule.id);
+    setNewRule({
+      trigger_keyword: rule.trigger_keyword,
+      reply_text: rule.reply_text,
+      media_id: rule.media_id || '',
+      action_type: (rule.action_type || 'comment') as 'comment' | 'dm' | 'both',
+      dm_message: rule.dm_message || '',
+      link_url: rule.link_url || '',
+      media_url: rule.media_url || '',
+      media_type: (rule.media_type || '') as '',
+      send_once_per_user: rule.send_once_per_user ?? true,
+    });
+    setShowRuleModal(true);
+  };
+
+  const handleNewRule = () => {
+    setEditingRuleId(null);
+    setNewRule({
+      trigger_keyword: '', reply_text: '', media_id: '',
+      action_type: 'comment', dm_message: '', link_url: '', media_url: '', media_type: '', send_once_per_user: true,
+    });
+    setShowRuleModal(true);
   };
 
   const handleToggleRule = async (rule: AutoRule) => {
@@ -920,6 +992,17 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
               </button>
               {accounts.some(a => a.id === selectedAccountId) && (
                 <button
+                  onClick={() => handleTabChange('flows')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'flows' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="w-4 h-4" />
+                    Flows
+                  </div>
+                </button>
+              )}
+              {accounts.some(a => a.id === selectedAccountId) && (
+                <button
                   onClick={() => handleTabChange('autoresponder')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'autoresponder' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                 >
@@ -1295,7 +1378,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">How Auto Rules Work</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Auto rules watch incoming comments on your posts. When someone comments with a keyword you specify, Instagram automatically replies with your pre-written message. This is great for answering common questions like pricing, hours, or link requests.
+                      Auto rules watch incoming comments on your posts. When someone comments with a keyword you specify, you can automatically reply with a public comment, send a private DM, or both. You can include links and file attachments in DMs. Toggle rules on or off anytime.
                     </p>
                   </div>
                   <div className="grid sm:grid-cols-3 gap-3">
@@ -1322,7 +1405,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
             <div className="flex justify-end mb-4">
               <button
-                onClick={() => setShowRuleModal(true)}
+                onClick={handleNewRule}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-pink-600 hover:bg-pink-700"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -1334,9 +1417,9 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 <div className="text-center py-12">
                   <Zap className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No auto-comment rules yet</h3>
-                  <p className="text-gray-500 dark:text-gray-400 mb-4">Set up rules to automatically reply to comments that match a keyword.</p>
+                  <p className="text-gray-500 dark:text-gray-400 mb-4">Set up rules to automatically reply to comments or send DMs when someone comments a keyword.</p>
                   <button
-                    onClick={() => setShowRuleModal(true)}
+                    onClick={handleNewRule}
                     className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
                   >
                     <Plus className="w-4 h-4 mr-2" />
@@ -1345,39 +1428,87 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {rules.map((rule) => (
-                    <div key={rule.id} className="p-4 flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">"{rule.trigger_keyword}"</span>
-                          <span className="text-gray-400">→</span>
-                          <span className="text-sm text-gray-600 dark:text-gray-300 line-clamp-1">{rule.reply_text}</span>
+                  {rules.map((rule) => {
+                    const actionLabel = rule.action_type === 'dm' ? 'Sends DM' : rule.action_type === 'both' ? 'Comment + DM' : 'Public comment';
+                    const actionColor = rule.action_type === 'dm' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : rule.action_type === 'both' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+                    return (
+                      <div key={rule.id} className="p-4 flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">"{rule.trigger_keyword}"</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${actionColor}`}>{actionLabel}</span>
+                            {rule.active ? (
+                              <span className="text-[10px] text-green-600 dark:text-green-400">Active</span>
+                            ) : (
+                              <span className="text-[10px] text-gray-400">Paused</span>
+                            )}
+                          </div>
+                          {(rule.action_type === 'comment' || rule.action_type === 'both') && rule.reply_text && (
+                            <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-1 mb-0.5">
+                              <span className="text-xs text-gray-400">Comment:</span> {rule.reply_text}
+                            </p>
+                          )}
+                          {(rule.action_type === 'dm' || rule.action_type === 'both') && (rule.dm_message || rule.reply_text) && (
+                            <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-1 mb-0.5">
+                              <span className="text-xs text-gray-400">DM:</span> {rule.dm_message || rule.reply_text}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            {rule.link_url && (
+                              <span className="flex items-center gap-1 text-xs text-gray-400">
+                                <LinkIcon className="w-3 h-3" /> Link
+                              </span>
+                            )}
+                            {rule.media_url && (
+                              <span className="flex items-center gap-1 text-xs text-gray-400">
+                                {rule.media_type === 'image' ? <ImageIcon className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
+                                {rule.media_type || 'File'}
+                              </span>
+                            )}
+                            {rule.media_id && (
+                              <span className="text-xs text-gray-400">Post: {rule.media_id.slice(0, 12)}...</span>
+                            )}
+                            {rule.send_once_per_user && (
+                              <span className="text-xs text-gray-400">Once per user</span>
+                            )}
+                          </div>
                         </div>
-                        {rule.media_id && (
-                          <p className="text-xs text-gray-400">Applies to post: {rule.media_id}</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-1">{rule.active ? 'Active' : 'Paused'}</p>
+                        <div className="flex items-center gap-2 ml-4">
+                          <button
+                            onClick={() => handleEditRule(rule)}
+                            className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            title="Edit rule"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleRule(rule)}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${rule.active ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                          >
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${rule.active ? 'translate-x-5' : 'translate-x-1'}`} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRule(rule.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <button
-                          onClick={() => handleToggleRule(rule)}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${rule.active ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                        >
-                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${rule.active ? 'translate-x-5' : 'translate-x-1'}`} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRule(rule.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
+        )}
+
+        {/* Flows tab */}
+        {activeTab === 'flows' && selectedAccount && (
+          <FlowBuilder
+            accountId={selectedAccount.id}
+            userId={selectedAccount.user_id}
+          />
         )}
 
         {/* AI Autoresponder tab */}
@@ -1486,13 +1617,17 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           />
         )}
 
-        {/* New Rule Modal */}
+        {/* New/Edit Rule Modal */}
         {showRuleModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-md p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">New Auto-Comment Rule</h3>
-                <button onClick={() => setShowRuleModal(false)} className="text-gray-400 hover:text-gray-500">×</button>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  {editingRuleId ? 'Edit Auto Rule' : 'New Auto Rule'}
+                </h3>
+                <button onClick={() => { setShowRuleModal(false); setEditingRuleId(null); }} className="text-gray-400 hover:text-gray-500">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
               <div className="space-y-4">
                 <div>
@@ -1504,19 +1639,101 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     placeholder="e.g., price, info, details"
                   />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">When someone comments with this word, the rule fires.</p>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reply Text</label>
-                  <textarea
-                    value={newRule.reply_text}
-                    onChange={(e) => setNewRule(prev => ({ ...prev, reply_text: e.target.value }))}
-                    rows={3}
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Action Type</label>
+                  <select
+                    value={newRule.action_type}
+                    onChange={(e) => setNewRule(prev => ({ ...prev, action_type: e.target.value as 'comment' | 'dm' | 'both' }))}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="The automatic reply message"
-                  />
+                  >
+                    <option value="comment">Reply as public comment</option>
+                    <option value="dm">Send a private DM</option>
+                    <option value="both">Reply as comment AND send DM</option>
+                  </select>
                 </div>
+
+                {(newRule.action_type === 'comment' || newRule.action_type === 'both') && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Comment Reply Text</label>
+                    <textarea
+                      value={newRule.reply_text}
+                      onChange={(e) => setNewRule(prev => ({ ...prev, reply_text: e.target.value }))}
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="The public comment reply message"
+                    />
+                  </div>
+                )}
+
+                {(newRule.action_type === 'dm' || newRule.action_type === 'both') && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">DM Message Text</label>
+                    <textarea
+                      value={newRule.dm_message}
+                      onChange={(e) => setNewRule(prev => ({ ...prev, dm_message: e.target.value }))}
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="The private DM message to send"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      If left empty, the comment reply text will be used for the DM.
+                    </p>
+                    <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                      <input
+                        type="checkbox"
+                        id="send_once"
+                        checked={newRule.send_once_per_user}
+                        onChange={(e) => setNewRule(prev => ({ ...prev, send_once_per_user: e.target.checked }))}
+                        className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                      />
+                      <label htmlFor="send_once" className="text-xs text-gray-600 dark:text-gray-400">
+                        Only DM each person once per rule (recommended — Instagram limits DMs)
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Media ID (optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Link URL (optional)</label>
+                  <input
+                    type="url"
+                    value={newRule.link_url}
+                    onChange={(e) => setNewRule(prev => ({ ...prev, link_url: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="https://example.com/offer"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">The link will be appended to the reply or DM message.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Media Attachment (optional)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={newRule.media_url}
+                      onChange={(e) => setNewRule(prev => ({ ...prev, media_url: e.target.value }))}
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="https://example.com/file.pdf"
+                    />
+                    <select
+                      value={newRule.media_type}
+                      onChange={(e) => setNewRule(prev => ({ ...prev, media_type: e.target.value as '' }))}
+                      className="w-28 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    >
+                      <option value="">Type</option>
+                      <option value="image">Image</option>
+                      <option value="file">File</option>
+                      <option value="video">Video</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">A publicly accessible URL to a file or image to attach to the DM.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Post ID (optional)</label>
                   <input
                     type="text"
                     value={newRule.media_id}
@@ -1527,8 +1744,13 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 </div>
               </div>
               <div className="flex justify-end gap-2 mt-6">
-                <button onClick={() => setShowRuleModal(false)} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
-                <button onClick={handleSaveRule} className="px-4 py-2 text-sm font-medium rounded-lg text-white bg-pink-600 hover:bg-pink-700">Save Rule</button>
+                <button onClick={() => { setShowRuleModal(false); setEditingRuleId(null); }} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
+                <button
+                  onClick={handleSaveRule}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-pink-600 hover:bg-pink-700"
+                >
+                  {editingRuleId ? <><Save className="w-4 h-4 mr-2" />Update Rule</> : 'Save Rule'}
+                </button>
               </div>
             </div>
           </div>
