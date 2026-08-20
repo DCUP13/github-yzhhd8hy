@@ -171,6 +171,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         .order('created_at', { ascending: true });
 
       setAccounts(ownAccounts || []);
+      console.log('[Instagram] Own accounts:', (ownAccounts || []).map(a => a.username));
 
       // Fetch shared accounts
       const { data: sharedWithMe } = await supabase
@@ -200,7 +201,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       }
 
       if (currentAccount) {
+        console.log('[Instagram] Fetching data for account:', currentAccount.username, 'user_id:', currentAccount.user_id);
         await fetchAccountData(currentAccount, user.id);
+      } else {
+        console.log('[Instagram] No current account found. allAccts:', allAccts.length);
       }
 
       // Fetch refresh settings for last sync
@@ -241,12 +245,11 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   }, [selectedAccountId]);
 
   const fetchAccountData = async (account: IgAccount, userId: string) => {
-    // Fetch events for this account — try both user_id and ig_user_id matching
-    // since webhook events may have user_id null if the account lookup failed
+    // Fetch events for this account — filter by user_id which is what RLS enforces
     const [eventsRes, rulesRes, postsRes, snapshotsRes] = await Promise.all([
       supabase.from('instagram_webhook_events')
         .select('*')
-        .or(`user_id.eq.${account.user_id},ig_user_id.eq.${account.ig_user_id}`)
+        .eq('user_id', account.user_id)
         .order('created_at', { ascending: false })
         .limit(100),
       supabase.from('instagram_auto_rules')
@@ -264,9 +267,18 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         .limit(30),
     ]);
 
-    if (!eventsRes.error) setEvents(eventsRes.data || []);
+    if (eventsRes.error) {
+      console.error('[Instagram] Error fetching webhook events:', eventsRes.error);
+      setEvents([]);
+    } else {
+      console.log('[Instagram] Fetched events:', (eventsRes.data || []).length, 'for account', account.username);
+      setEvents(eventsRes.data || []);
+    }
+    if (rulesRes.error) console.error('[Instagram] Error fetching rules:', rulesRes.error);
     if (!rulesRes.error) setRules(rulesRes.data || []);
+    if (postsRes.error) console.error('[Instagram] Error fetching posts:', postsRes.error);
     if (!postsRes.error) setPosts(postsRes.data || []);
+    if (snapshotsRes.error) console.error('[Instagram] Error fetching snapshots:', snapshotsRes.error);
     if (!snapshotsRes.error) setSnapshots(snapshotsRes.data || []);
 
     // Fetch autoresponder settings for this account
