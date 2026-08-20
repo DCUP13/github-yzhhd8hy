@@ -1064,19 +1064,36 @@ async function storeEvent(
     event.message_text &&
     userId
   ) {
-    const { data: acct } = await supabaseClient
-      .from("instagram_accounts")
-      .select("id")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+    // Resolve the specific account that received this message by matching the
+    // Instagram user ID (stored as ig_user_id or page_scoped_id), so every
+    // linked account can fire its own autoresponder.
+    let acctId: string | null = null;
 
-    if (acct?.id) {
+    if (event.ig_user_id) {
+      const { data: acctByIg } = await supabaseClient
+        .from("instagram_accounts")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("ig_user_id", event.ig_user_id)
+        .maybeSingle();
+      acctId = acctByIg?.id ?? null;
+    }
+
+    if (!acctId && event.ig_user_id) {
+      const { data: acctByPage } = await supabaseClient
+        .from("instagram_accounts")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("page_scoped_id", event.ig_user_id)
+        .maybeSingle();
+      acctId = acctByPage?.id ?? null;
+    }
+
+    if (acctId) {
       const { data: arSettings } = await supabaseClient
         .from("instagram_autoresponder_settings")
         .select("enabled")
-        .eq("account_id", acct.id)
+        .eq("account_id", acctId)
         .maybeSingle();
 
       if (arSettings?.enabled) {
@@ -1100,7 +1117,7 @@ async function storeEvent(
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${serviceKey}`,
               },
-              body: JSON.stringify({ account_id: acct.id, event_id: eventIdToUse }),
+              body: JSON.stringify({ account_id: acctId, event_id: eventIdToUse }),
             }).catch((err) => console.error("Autoresponder queue error:", err));
           }
         }
