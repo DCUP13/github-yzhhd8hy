@@ -334,6 +334,3 @@ export function ShareSettingsDialog({
     </div>
   );
 }
-
-
-export { ShareSettingsDialog }
