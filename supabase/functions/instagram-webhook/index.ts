@@ -75,6 +75,7 @@ Deno.serve(async (req: Request) => {
           const messageText = msg?.message?.text ?? null;
           if (!messageText && !msg?.message?.attachment) continue;
           const isEcho = msg?.message?.is_echo === true;
+          const isSelfMessage = msg?.message?.is_self === true;
           const senderId = msg?.sender?.id ?? null;
           const recipientId = msg?.recipient?.id ?? null;
           const otherPartyId = isEcho ? recipientId : senderId;
@@ -83,7 +84,7 @@ Deno.serve(async (req: Request) => {
             sender_id: senderId, sender_username: null, sender_name: null, sender_profile_url: null,
             media_id: null, media_type: null, media_permalink: null, media_caption: null,
             comment_id: null, message_text: messageText,
-            direction: isEcho ? "outgoing" : "incoming", recipient_id: recipientId,
+            direction: isSelfMessage ? "incoming" : (isEcho ? "outgoing" : "incoming"), recipient_id: recipientId,
             raw_event: msg, user_id: userId,
           }, accessToken, otherPartyId);
         }
@@ -280,4 +281,53 @@ async function storeEvent(
     direction: event.direction, recipient_id: event.recipient_id,
     raw_event: event.raw_event,
   });
+
+  // Trigger the Instagram autoresponder for incoming DMs
+  if (
+    event.direction === "incoming" &&
+    event.event_type === "message" &&
+    event.message_text &&
+    userId
+  ) {
+    // Find the account for this user
+    const { data: acct } = await supabaseClient
+      .from("instagram_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (acct?.id) {
+      // Check if autoresponder is enabled
+      const { data: arSettings } = await supabaseClient
+        .from("instagram_autoresponder_settings")
+        .select("enabled")
+        .eq("account_id", acct.id)
+        .maybeSingle();
+
+      if (arSettings?.enabled) {
+        // Fetch the event we just stored
+        const { data: storedEvent } = await supabaseClient
+          .from("instagram_webhook_events")
+          .select("id")
+          .eq("event_id", event.event_id)
+          .maybeSingle();
+
+        if (storedEvent?.id) {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+          // Queue the message for the autoresponder (creates/resets a timer)
+          fetch(`${supabaseUrl}/functions/v1/instagram-autoresponder`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceKey}`,
+            },
+            body: JSON.stringify({ account_id: acct.id, event_id: storedEvent.id }),
+          }).catch((err) => console.error("Autoresponder queue error:", err));
+        }
+      }
+    }
+  }
 }

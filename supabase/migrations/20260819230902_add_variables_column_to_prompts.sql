@@ -1,0 +1,1 @@
+ALTER TABLE prompts ADD COLUMN IF NOT EXISTS variables text[] DEFAULT '{}';

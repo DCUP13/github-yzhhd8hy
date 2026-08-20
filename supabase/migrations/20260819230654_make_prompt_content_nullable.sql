@@ -1,0 +1,1 @@
+ALTER TABLE prompts ALTER COLUMN content DROP NOT NULL;

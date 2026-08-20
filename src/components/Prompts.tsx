@@ -32,6 +32,7 @@ interface DomainRow {
 const categories = [
   'General',
   'Email Marketing',
+  'Instagram',
   'Real Estate',
   'Customer Service',
   'Sales',
@@ -759,7 +760,8 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   )}
                 </div>
 
-                {/* Routing Section */}
+                {/* Routing Section — only relevant for email prompts */}
+                {formData.category !== 'Instagram' && (
                 <div className="border border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
                   <label className="block text-sm font-medium text-green-800 dark:text-green-300 mb-2">
                     Email Routing (optional)
@@ -816,11 +818,18 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     </div>
                   </div>
                 </div>
+                )}
 
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-                  <p className="text-xs text-blue-700 dark:text-blue-300">
-                    <strong>Available placeholders:</strong> {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, {`{{email}}`} (incoming email), {`{{conversation}}`} (full thread), plus your custom variables.
-                  </p>
+                  {formData.category === 'Instagram' ? (
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      <strong>Instagram placeholders:</strong> {`{{message}}`} (incoming DM text), {`{{conversation}}`} (full DM history), {`{{sender_username}}`} (sender's IG username), {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, plus your custom variables.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      <strong>Available placeholders:</strong> {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, {`{{email}}`} (incoming email), {`{{conversation}}`} (full thread), plus your custom variables.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -885,7 +894,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     A <strong>Single Step</strong> prompt is one AI call — the AI reads your prompt and returns the reply directly. This is the simple, default mode.
                   </p>
                   <p className="mt-2">
-                    A <strong>Two Step</strong> prompt chains two AI calls together. Step 1 runs first (for example, to analyze the incoming email or draft an outline in a specific format). The <em>full</em> output of Step 1 is then inserted into Step 2 at the <code className="px-1 bg-gray-100 dark:bg-gray-700 rounded">{`{{step1_result}}`}</code> placeholder. Step 2 uses that result to produce the final reply. This lets you control the intermediate reasoning separately from the final writing.
+                    A <strong>Two Step</strong> prompt chains two AI calls together. Step 1 runs first (for example, to analyze the incoming message or draft an outline in a specific format). The <em>full</em> output of Step 1 is then inserted into Step 2 at the <code className="px-1 bg-gray-100 dark:bg-gray-700 rounded">{`{{step1_result}}`}</code> placeholder. Step 2 uses that result to produce the final reply. This lets you control the intermediate reasoning separately from the final writing.
                   </p>
                 </div>
 
@@ -902,11 +911,19 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     </li>
                     <li>
                       <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-blue-600 dark:text-blue-400">{`{{email}}`}</code>
-                      <span className="ml-2">— The incoming email's content. Automatically filled by the autoresponder when a reply is being generated.</span>
+                      <span className="ml-2">— The incoming email's content. Automatically filled by the email autoresponder when a reply is being generated. (Email prompts only)</span>
+                    </li>
+                    <li>
+                      <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-blue-600 dark:text-blue-400">{`{{message}}`}</code>
+                      <span className="ml-2">— The incoming Instagram DM text. Automatically filled by the IG autoresponder. (Instagram prompts only)</span>
+                    </li>
+                    <li>
+                      <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-blue-600 dark:text-blue-400">{`{{sender_username}}`}</code>
+                      <span className="ml-2">— The Instagram username of the person who sent the DM. (Instagram prompts only)</span>
                     </li>
                     <li>
                       <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-blue-600 dark:text-blue-400">{`{{conversation}}`}</code>
-                      <span className="ml-2">— The full conversation thread history. Useful when the email is part of an ongoing back-and-forth.</span>
+                      <span className="ml-2">— The full conversation history. For email, this is the thread. For Instagram, this is the DM history with the sender.</span>
                     </li>
                     <li>
                       <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-blue-600 dark:text-blue-400">{`{{your_variable}}`}</code>
