@@ -816,6 +816,22 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
       continue;
     }
 
+    // If the session is active with a valid current_step_id, the step's message
+    // may not have been sent yet (e.g. first_step_id was null when the session
+    // was created). Execute it now.
+    if (session.status === "active" && session.current_step_id) {
+      await executeFlowStep(supabaseClient, {
+        sessionId: session.id,
+        stepId: session.current_step_id,
+        accessToken: ctx.accessToken,
+        igUserId: ctx.igUserId,
+        pageScopedId: ctx.pageScopedId,
+        senderId: ctx.senderId,
+        userId: ctx.userId,
+      });
+      continue;
+    }
+
     if (session.status !== "waiting_reply") continue;
 
     // Check 24h window
