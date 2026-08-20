@@ -683,6 +683,27 @@ async function executeFlowStep(supabaseClient: any, ctx: FlowStepContext) {
         flow_session_id: ctx.sessionId,
         raw_event: { sent_from_flow: true, step_id: ctx.stepId, message_id: result.messageId },
       });
+    } else if (ctx.senderId === senderIdForDm) {
+      // Self-message test: Instagram API rejects sending a DM to yourself.
+      // Store the message as a simulated outgoing event so the flow is visible.
+      console.log("executeFlowStep: self-message send failed, storing simulated outgoing message");
+      await supabaseClient.from("instagram_webhook_events").insert({
+        user_id: ctx.userId,
+        event_id: `flow_${ctx.sessionId}_${Date.now()}`,
+        event_type: "message",
+        ig_user_id: ctx.pageScopedId ?? ctx.igUserId,
+        sender_id: ctx.pageScopedId ?? ctx.igUserId,
+        message_text: step.message_text || "",
+        direction: "outgoing",
+        recipient_id: ctx.senderId,
+        reply_text: step.message_text || "",
+        replied_at: new Date().toISOString(),
+        auto_replied: true,
+        flow_session_id: ctx.sessionId,
+        raw_event: { sent_from_flow: true, step_id: ctx.stepId, simulated_self_message: true, send_error: result.error },
+      });
+    } else {
+      console.error("executeFlowStep: DM send failed:", result.error);
     }
   }
 
