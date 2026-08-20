@@ -180,7 +180,7 @@ async function ensureQueued(supabase: any, account_id: string, event_id: string)
     // Reset the timer — push fire_at forward so we wait for more messages
     await supabase
       .from("instagram_response_queue")
-      .update({ fire_at, trigger_event_id: event_id, updated_at: new Date().toISOString() })
+      .update({ fire_at: fireAt, trigger_event_id: event_id, updated_at: new Date().toISOString() })
       .eq("id", existing.id);
     return { success: true, queued: true, queue_id: existing.id, reset_timer: true };
   }
