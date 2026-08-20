@@ -236,6 +236,20 @@ async function resolveAccount(
       return acct;
     }
   }
+
+  // Last resort: if there's exactly one account with no page_scoped_id yet,
+  // assume this webhook is for that account and persist the mapping so future
+  // events match immediately.
+  const unmatched = (allAccounts ?? []).filter((a: any) => !a.page_scoped_id);
+  if (unmatched.length === 1) {
+    const acct = unmatched[0];
+    await supabaseClient
+      .from("instagram_accounts")
+      .update({ page_scoped_id: igUserId })
+      .eq("id", acct.id);
+    return acct;
+  }
+
   return null;
 }
 
