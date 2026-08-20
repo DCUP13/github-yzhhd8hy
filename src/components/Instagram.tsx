@@ -2342,7 +2342,7 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
   setShowShareModal: (v: boolean) => void;
   onRefresh: () => void;
 }) {
-  const [groups, setGroups] = useState<Array<{ id: string; setting_type: string; name: string }>>([]);
+  const [groups, setGroups] = useState<Array<{ id: string; setting_type: string; name: string; group_id: string | null; setting_id: string }>>([]);
   const [subscriptions, setSubscriptions] = useState<Map<string, Array<{ account_id: string; synced: boolean }>>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isApplyingAll, setIsApplyingAll] = useState<string | null>(null);
@@ -2355,21 +2355,82 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Fetch existing shared groups
       const { data: groupsData } = await supabase
         .from('instagram_settings_groups')
         .select('id, setting_type, name')
         .eq('owner_user_id', user.id)
         .order('created_at', { ascending: false });
-      setGroups(groupsData || []);
-      if (groupsData && groupsData.length > 0) {
-        const groupIds = groupsData.map(g => g.id);
+
+      // Fetch all settings from the currently selected account to show unshared ones too
+      const [flowsRes, rulesRes, arRes] = await Promise.all([
+        supabase.from('instagram_conversation_flows')
+          .select('id, name, settings_group_id')
+          .eq('user_id', user.id)
+          .eq('account_id', selectedAccount.id),
+        supabase.from('instagram_auto_rules')
+          .select('id, trigger_keyword, settings_group_id')
+          .eq('user_id', user.id)
+          .eq('account_id', selectedAccount.id),
+        supabase.from('instagram_autoresponder_settings')
+          .select('id, settings_group_id')
+          .eq('account_id', selectedAccount.id),
+      ]);
+
+      const allSettings: Array<{ id: string; setting_type: string; name: string; group_id: string | null; setting_id: string }> = [];
+
+      // Add shared groups first
+      for (const g of (groupsData || [])) {
+        // Find the matching setting for this group on the current account
+        let settingId = '';
+        let name = g.name;
+        if (g.setting_type === 'flow') {
+          const flow = (flowsRes.data || []).find(f => f.settings_group_id === g.id);
+          if (flow) { settingId = flow.id; name = flow.name; }
+        } else if (g.setting_type === 'rule') {
+          const rule = (rulesRes.data || []).find(r => r.settings_group_id === g.id);
+          if (rule) { settingId = rule.id; name = rule.trigger_keyword; }
+        } else if (g.setting_type === 'autoresponder') {
+          const ar = (arRes.data || []).find(a => a.settings_group_id === g.id);
+          if (ar) { settingId = ar.id; }
+        }
+        allSettings.push({ id: g.id, setting_type: g.setting_type, name, group_id: g.id, setting_id: settingId });
+      }
+
+      // Add unshared flows
+      for (const f of (flowsRes.data || [])) {
+        if (!f.settings_group_id) {
+          allSettings.push({ id: `unshared_flow_${f.id}`, setting_type: 'flow', name: f.name, group_id: null, setting_id: f.id });
+        }
+      }
+      // Add unshared rules
+      for (const r of (rulesRes.data || [])) {
+        if (!r.settings_group_id) {
+          allSettings.push({ id: `unshared_rule_${r.id}`, setting_type: 'rule', name: r.trigger_keyword, group_id: null, setting_id: r.id });
+        }
+      }
+      // Add unshared autoresponder
+      for (const a of (arRes.data || [])) {
+        if (!a.settings_group_id) {
+          allSettings.push({ id: `unshared_ar_${a.id}`, setting_type: 'autoresponder', name: 'Autoresponder Settings', group_id: null, setting_id: a.id });
+        }
+      }
+
+      setGroups(allSettings);
+
+      // Fetch subscriptions for shared groups
+      const sharedGroupIds = allSettings.filter(s => s.group_id).map(s => s.group_id!);
+      if (sharedGroupIds.length > 0) {
         const { data: subs } = await supabase
           .from('instagram_settings_subscriptions')
           .select('group_id, account_id, synced')
-          .in('group_id', groupIds);
+          .in('group_id', sharedGroupIds);
         const map = new Map<string, Array<{ account_id: string; synced: boolean }>>();
-        for (const g of groupsData) {
-          map.set(g.id, (subs || []).filter(s => s.group_id === g.id).map(s => ({ account_id: s.account_id, synced: s.synced })));
+        for (const s of allSettings) {
+          if (s.group_id) {
+            map.set(s.group_id, (subs || []).filter(sub => sub.group_id === s.group_id).map(sub => ({ account_id: sub.account_id, synced: sub.synced })));
+          }
         }
         setSubscriptions(map);
       }
@@ -2378,7 +2439,7 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedAccount.id]);
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
 
@@ -2387,13 +2448,16 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { error } = await supabase.rpc('share_all_settings_to_account', {
-        p_account_id: accountId,
-        p_owner_user_id: user.id,
+      // Auto-create groups for unshared settings on the current account, then share all to target
+      const { error } = await supabase.rpc('share_all_settings_from_to', {
+        p_source_account_id: selectedAccount.id,
+        p_target_account_id: accountId,
+        p_user_id: user.id,
       });
       if (error) throw error;
       showToast('All settings shared to account');
       await fetchGroups();
+      onRefresh();
     } catch (err) {
       console.error('Error sharing all settings:', err);
       showToast('Failed to share all settings');
@@ -2497,61 +2561,71 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
           </div>
         ) : groups.length === 0 ? (
           <p className="text-sm text-gray-400 py-4 text-center">
-            No shared settings yet. Share a flow, rule, or autoresponder to other accounts using the share button on each one.
+            No settings found on this account yet. Create flows, rules, or configure the autoresponder first.
           </p>
         ) : (
           <div className="space-y-3">
             {groups.map(group => {
-              const subs = subscriptions.get(group.id) || [];
+              const subs = group.group_id ? (subscriptions.get(group.group_id) || []) : [];
+              const isUnshared = !group.group_id;
               return (
-                <div key={group.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className={typeColor(group.setting_type)}>{typeIcon(group.setting_type)}</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{group.name}</span>
-                    <span className="text-[10px] text-gray-400 uppercase tracking-wide">{typeLabel(group.setting_type)}</span>
+                <div key={group.id} className={`border rounded-lg p-4 ${isUnshared ? 'border-dashed border-gray-300 dark:border-gray-600' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className={typeColor(group.setting_type)}>{typeIcon(group.setting_type)}</span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{group.name}</span>
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">{typeLabel(group.setting_type)}</span>
+                      {isUnshared && (
+                        <span className="text-[10px] text-gray-400 italic">Not shared yet</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    {subs.length === 0 ? (
-                      <p className="text-xs text-gray-400">Not shared to any account yet</p>
-                    ) : (
-                      subs.map(sub => {
-                        const acct = accounts.find(a => a.id === sub.account_id);
-                        return (
-                          <div key={sub.account_id} className="flex items-center justify-between py-1.5">
-                            <div className="flex items-center gap-2">
-                              {acct?.profile_picture_url ? (
-                                <img src={acct.profile_picture_url} alt="" className="w-5 h-5 rounded-full" />
-                              ) : (
-                                <div className="w-5 h-5 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-white text-[10px]">
-                                  {(acct?.username || '?').charAt(0).toUpperCase()}
-                                </div>
-                              )}
-                              <span className="text-xs text-gray-700 dark:text-gray-300">{acct?.username || 'Unknown'}</span>
+                  {isUnshared ? (
+                    <p className="text-xs text-gray-400">Click "Share All Settings" on an account above to share this setting, or use the share button on the {group.setting_type === 'flow' ? 'flow' : group.setting_type === 'rule' ? 'rule' : 'autoresponder'} itself.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {subs.length === 0 ? (
+                        <p className="text-xs text-gray-400">Not shared to any account yet</p>
+                      ) : (
+                        subs.map(sub => {
+                          const acct = accounts.find(a => a.id === sub.account_id);
+                          return (
+                            <div key={sub.account_id} className="flex items-center justify-between py-1.5">
+                              <div className="flex items-center gap-2">
+                                {acct?.profile_picture_url ? (
+                                  <img src={acct.profile_picture_url} alt="" className="w-5 h-5 rounded-full" />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-white text-[10px]">
+                                    {(acct?.username || '?').charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <span className="text-xs text-gray-700 dark:text-gray-300">{acct?.username || 'Unknown'}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleToggleSync(group.group_id!, sub.account_id, sub.synced)}
+                                  className={`inline-flex items-center px-2 py-1 text-[10px] font-medium rounded ${
+                                    sub.synced
+                                      ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                                      : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                  }`}
+                                >
+                                  {sub.synced ? <><Link2Off className="w-2.5 h-2.5 mr-0.5" /> Unsync</> : <><Link2 className="w-2.5 h-2.5 mr-0.5" /> Re-sync</>}
+                                </button>
+                                <button
+                                  onClick={() => handleRemoveFromAccount(group.group_id!, sub.account_id)}
+                                  className="p-1 text-gray-400 hover:text-red-500 rounded"
+                                  title="Remove from this account"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleToggleSync(group.id, sub.account_id, sub.synced)}
-                                className={`inline-flex items-center px-2 py-1 text-[10px] font-medium rounded ${
-                                  sub.synced
-                                    ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                                    : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-                                }`}
-                              >
-                                {sub.synced ? <><Link2Off className="w-2.5 h-2.5 mr-0.5" /> Unsync</> : <><Link2 className="w-2.5 h-2.5 mr-0.5" /> Re-sync</>}
-                              </button>
-                              <button
-                                onClick={() => handleRemoveFromAccount(group.id, sub.account_id)}
-                                className="p-1 text-gray-400 hover:text-red-500 rounded"
-                                title="Remove from this account"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
