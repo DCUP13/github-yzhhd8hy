@@ -171,7 +171,6 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         .order('created_at', { ascending: true });
 
       setAccounts(ownAccounts || []);
-      console.log('[Instagram] Own accounts:', (ownAccounts || []).map(a => a.username));
 
       // Fetch shared accounts
       const { data: sharedWithMe } = await supabase
@@ -201,10 +200,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       }
 
       if (currentAccount) {
-        console.log('[Instagram] Fetching data for account:', currentAccount.username, 'user_id:', currentAccount.user_id);
         await fetchAccountData(currentAccount, user.id);
-      } else {
-        console.log('[Instagram] No current account found. allAccts:', allAccts.length);
       }
 
       // Fetch refresh settings for last sync
@@ -267,13 +263,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         .limit(30),
     ]);
 
-    if (eventsRes.error) {
-      console.error('[Instagram] Error fetching webhook events:', eventsRes.error);
-      setEvents([]);
-    } else {
-      console.log('[Instagram] Fetched events:', (eventsRes.data || []).length, 'for account', account.username);
-      setEvents(eventsRes.data || []);
-    }
+    if (eventsRes.error) console.error('[Instagram] Error fetching webhook events:', eventsRes.error);
+    if (!eventsRes.error) setEvents(eventsRes.data || []);
     if (rulesRes.error) console.error('[Instagram] Error fetching rules:', rulesRes.error);
     if (!rulesRes.error) setRules(rulesRes.data || []);
     if (postsRes.error) console.error('[Instagram] Error fetching posts:', postsRes.error);
