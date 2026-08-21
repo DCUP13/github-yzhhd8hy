@@ -844,20 +844,22 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
   console.log("processFlowReply called:", { userId: ctx.userId, senderId: ctx.senderId, messageText: ctx.messageText, accountId: ctx.accountId, hasToken: !!ctx.accessToken, igUserId: ctx.igUserId, pageScopedId: ctx.pageScopedId, isSelfMessage: ctx.isSelfMessage });
 
   // Prevent infinite loops: if this is a self-message, check if we recently sent
-  // a flow step message with the same text. If so, skip — this is our own outgoing
-  // message coming back as an echo.
+  // an AUTOMATED message (flow/auto-rule/autoresponder) with the same text. If so,
+  // skip — this is our own automated outgoing message coming back as an echo.
+  // Manual self-messages are NOT blocked — you can always trigger flows by DMing yourself.
   if (ctx.isSelfMessage) {
-    const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
-    const { data: recentOutgoing } = await supabaseClient
+    const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
+    const { data: recentAutoOutgoing } = await supabaseClient
       .from("instagram_webhook_events")
       .select("id")
       .eq("user_id", ctx.userId)
       .eq("direction", "outgoing")
       .eq("message_text", ctx.messageText)
-      .gte("created_at", fiveSecondsAgo)
+      .eq("auto_replied", true)
+      .gte("created_at", tenSecondsAgo)
       .limit(1);
-    if (recentOutgoing && recentOutgoing.length > 0) {
-      console.log("processFlowReply: skipping self-message — matches recent outgoing flow message");
+    if (recentAutoOutgoing && recentAutoOutgoing.length > 0) {
+      console.log("processFlowReply: skipping self-message — matches recent automated outgoing message");
       return;
     }
   }
