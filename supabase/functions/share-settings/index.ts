@@ -78,6 +78,51 @@ Deno.serve(async (req: Request) => {
         p_user_id,
       });
       result = { data: null, error: error?.message ?? null };
+    } else if (action === "delete_flow") {
+      // Delete a flow AND all synced copies across other accounts.
+      // Uses service role to bypass RLS — synced copies may have different user_id.
+      const flowId = p_flow_id as string;
+
+      // Get the settings_group_id so we can find all copies
+      const { data: flowRow } = await supabase
+        .from("instagram_conversation_flows")
+        .select("settings_group_id")
+        .eq("id", flowId)
+        .maybeSingle();
+
+      const groupId = (flowRow as { settings_group_id: string | null } | null)?.settings_group_id;
+
+      if (groupId) {
+        // Find all flows in the group and delete them all (steps/sessions cascade)
+        const { data: groupFlows } = await supabase
+          .from("instagram_conversation_flows")
+          .select("id")
+          .eq("settings_group_id", groupId);
+        const allIds = (groupFlows as { id: string }[] | null)?.map((f) => f.id) ?? [];
+        if (allIds.length > 0) {
+          const { error: delErr } = await supabase
+            .from("instagram_conversation_flows")
+            .delete()
+            .in("id", allIds);
+          if (delErr) {
+            result = { data: null, error: delErr.message };
+          } else {
+            // Clean up the group and subscriptions
+            await supabase.from("instagram_settings_subscriptions").delete().eq("group_id", groupId);
+            await supabase.from("instagram_settings_groups").delete().eq("id", groupId);
+            result = { data: { deleted: allIds.length }, error: null };
+          }
+        } else {
+          result = { data: { deleted: 0 }, error: null };
+        }
+      } else {
+        // No group — just delete this one flow
+        const { error: delErr } = await supabase
+          .from("instagram_conversation_flows")
+          .delete()
+          .eq("id", flowId);
+        result = { data: null, error: delErr?.message ?? null };
+      }
     } else {
       return new Response(JSON.stringify({ error: "Unknown action" }), {
         status: 400,

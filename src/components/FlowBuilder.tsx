@@ -301,22 +301,20 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
 
     setIsSaving(true);
     try {
-      // If this flow is part of a synced group, delete all copies across accounts
-      if (isShared) {
-        const { data: groupFlows } = await supabase
-          .from('instagram_conversation_flows')
-          .select('id')
-          .eq('settings_group_id', flow!.settings_group_id);
-        const allFlowIds = (groupFlows || []).map(f => f.id);
-        if (allFlowIds.length > 0) {
-          // Steps and sessions cascade-delete via FK ON DELETE CASCADE
-          await supabase.from('instagram_conversation_flows').delete().in('id', allFlowIds);
-        }
-        // Remove the settings group and its subscriptions so stale groups don't linger
-        await supabase.from('instagram_settings_subscriptions').delete().eq('group_id', flow!.settings_group_id);
-        await supabase.from('instagram_settings_groups').delete().eq('id', flow!.settings_group_id);
-      } else {
-        await supabase.from('instagram_conversation_flows').delete().eq('id', flowId);
+      const { data: session } = await supabase.auth.getSession();
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/share-settings`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ action: 'delete_flow', p_flow_id: flowId }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `HTTP ${res.status}`);
       }
 
       setSelectedFlowId(null);
