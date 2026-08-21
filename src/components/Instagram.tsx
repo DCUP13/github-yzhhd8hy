@@ -1615,19 +1615,32 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                   .eq('account_id', selectedAccount.id)
                   .maybeSingle();
 
-                const { error } = await supabase
-                  .from('instagram_autoresponder_settings')
-                  .upsert({
-                    id: existing?.id,
-                    account_id: selectedAccount.id,
-                    user_id: user.id,
-                    enabled: newSettings.enabled,
-                    prompt_id: newSettings.prompt_id || null,
-                    response_delay_seconds: newSettings.response_delay_seconds,
-                    updated_at: new Date().toISOString(),
-                  }, { onConflict: 'account_id' });
+                let saveError;
+                if (existing?.id) {
+                  const { error } = await supabase
+                    .from('instagram_autoresponder_settings')
+                    .update({
+                      enabled: newSettings.enabled,
+                      prompt_id: newSettings.prompt_id || null,
+                      response_delay_seconds: newSettings.response_delay_seconds,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', existing.id);
+                  saveError = error;
+                } else {
+                  const { error } = await supabase
+                    .from('instagram_autoresponder_settings')
+                    .insert({
+                      account_id: selectedAccount.id,
+                      user_id: user.id,
+                      enabled: newSettings.enabled,
+                      prompt_id: newSettings.prompt_id || null,
+                      response_delay_seconds: newSettings.response_delay_seconds,
+                    });
+                  saveError = error;
+                }
 
-                if (error) throw error;
+                if (saveError) throw saveError;
                 setAutoresponderSettings(newSettings);
 
                 // Sync to other accounts if this is a synced copy
