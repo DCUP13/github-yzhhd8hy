@@ -2349,7 +2349,7 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
   setShowShareModal: (v: boolean) => void;
   onRefresh: () => void;
 }) {
-  const [syncedAccounts, setSyncedAccounts] = useState<Set<string>>(new Set([selectedAccount.id]));
+  const [syncedAccounts, setSyncedAccounts] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -2364,7 +2364,7 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
         .select('account_id, synced')
         .eq('synced', true);
 
-      const syncedSet = new Set<string>([selectedAccount.id]);
+      const syncedSet = new Set<string>();
       for (const s of (subs || [])) {
         syncedSet.add(s.account_id);
       }
@@ -2374,7 +2374,7 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
     } finally {
       setIsLoading(false);
     }
-  }, [selectedAccount.id]);
+  }, []);
 
   useEffect(() => { fetchSyncState(); }, [fetchSyncState]);
 
@@ -2405,9 +2405,16 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
       if (!user) return;
 
       if (isChecked) {
+        // Use any already-synced account as the source; fall back to first account
+        const sourceId = [...syncedAccounts].find(id => id !== accountId) || accounts.find(a => a.id !== accountId)?.id;
+        if (!sourceId) {
+          showToast('Need at least one other account to sync from');
+          setBusyAccountId(null);
+          return;
+        }
         const { error: apiError } = await callShareApi({
           action: 'sync_account',
-          p_source_account_id: selectedAccount.id,
+          p_source_account_id: sourceId,
           p_account_id: accountId,
           p_user_id: user.id,
         });
@@ -2450,21 +2457,20 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
           <div className="space-y-2">
             {accounts.map(account => {
               const isSynced = syncedAccounts.has(account.id);
-              const isCurrent = account.id === selectedAccount.id;
               const isBusy = busyAccountId === account.id;
               return (
                 <label
                   key={account.id}
-                  className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                     isSynced
                       ? 'border-pink-300 dark:border-pink-700 bg-pink-50 dark:bg-pink-900/10'
                       : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                  } ${isBusy ? 'opacity-60 pointer-events-none' : isCurrent ? 'cursor-default' : 'cursor-pointer'}`}
+                  } ${isBusy ? 'opacity-60 pointer-events-none' : ''}`}
                 >
                   <input
                     type="checkbox"
                     checked={isSynced}
-                    disabled={isCurrent || isBusy}
+                    disabled={isBusy}
                     onChange={(e) => handleToggleAccount(account.id, e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
                   />
@@ -2478,7 +2484,6 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {account.username || 'Unknown'}
-                      {isCurrent && <span className="ml-2 text-xs text-gray-400">(current)</span>}
                     </p>
                     <p className={`text-xs ${isSynced ? 'text-green-500' : 'text-gray-400'}`}>
                       {isSynced ? 'Linked — settings sync' : 'Not linked'}
