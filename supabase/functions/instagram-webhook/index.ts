@@ -123,6 +123,29 @@ Deno.serve(async (req: Request) => {
           // are still skipped.
           const shouldProcessFlow = flowUserId && flowAccount && senderId && messageText && storedEventId
             && (!isEcho || isSelfMessage);
+
+          // Check if this is an automated reply from one of the user's own
+          // connected accounts. If so, we still process existing flow sessions
+          // (so you can walk through a flow), but skip starting NEW flows to
+          // prevent infinite loops between connected accounts.
+          // Self-messages are never blocked — you can always trigger your own
+          // flows by DMing yourself.
+          let skipNewTriggers = false;
+          if (shouldProcessFlow && flowUserId && !isSelfMessage && !isEcho) {
+            // Only apply if loop prevention is enabled for this user
+            const { data: refreshSettings } = await supabaseClient
+              .from("instagram_refresh_settings")
+              .select("loop_prevention_enabled")
+              .eq("user_id", flowUserId)
+              .maybeSingle();
+            const loopPreventionEnabled = refreshSettings?.loop_prevention_enabled ?? true;
+            if (loopPreventionEnabled) {
+              skipNewTriggers = await isAutomatedReplyFromOwnedAccount(
+                supabaseClient, flowUserId, messageText,
+              );
+            }
+          }
+
           if (shouldProcessFlow) {
             await processFlowReply(supabaseClient, {
               userId: flowUserId,
@@ -136,6 +159,7 @@ Deno.serve(async (req: Request) => {
               username: flowAccount.username,
               isSelfMessage,
               recipientId,
+              skipNewTriggers,
             });
           }
         }
@@ -236,6 +260,20 @@ async function resolveAccount(
       return acct;
     }
   }
+
+  // Last resort: if there's exactly one account with no page_scoped_id yet,
+  // assume this webhook is for that account and persist the mapping so future
+  // events match immediately.
+  const unmatched = (allAccounts ?? []).filter((a: any) => !a.page_scoped_id);
+  if (unmatched.length === 1) {
+    const acct = unmatched[0];
+    await supabaseClient
+      .from("instagram_accounts")
+      .update({ page_scoped_id: igUserId })
+      .eq("id", acct.id);
+    return acct;
+  }
+
   return null;
 }
 
@@ -402,11 +440,12 @@ interface AutoRuleContext {
 async function processAutoRules(supabaseClient: any, ctx: AutoRuleContext) {
   if (!ctx.accessToken) return;
 
-  // Fetch active rules for this user
+  // Fetch active rules for this user, scoped to this account
   const { data: rules } = await supabaseClient
     .from("instagram_auto_rules")
     .select("*")
     .eq("user_id", ctx.userId)
+    .eq("account_id", ctx.accountId)
     .eq("active", true);
 
   if (!rules || rules.length === 0) {
@@ -759,6 +798,42 @@ interface FlowReplyContext {
   username: string | null;
   isSelfMessage: boolean;
   recipientId: string | null;
+  skipNewTriggers: boolean;
+}
+
+/**
+ * Check if an incoming DM is an automated reply from one of the user's own
+ * connected Instagram accounts. Instagram uses different page-scoped IDs
+ * depending on which account views the conversation, so we can't match by
+ * sender_id. Instead we check: was there a recent outgoing auto_replied
+ * message from ANY of the user's accounts with the same text? If so, this
+ * incoming message is almost certainly the echo/delivery of that automated
+ * reply arriving at the other account, and we should skip triggering new
+ * automations to prevent loops.
+ *
+ * - Manual messages between your accounts still trigger flows (Option A)
+ * - Automated flow/auto-rule/autoresponder replies do NOT trigger the other
+ *   account's automations
+ */
+async function isAutomatedReplyFromOwnedAccount(
+  supabaseClient: any,
+  userId: string,
+  messageText: string,
+): Promise<boolean> {
+  if (!messageText) return false;
+
+  const sixtySecondsAgo = new Date(Date.now() - 60000).toISOString();
+  const { data: recentOutgoing } = await supabaseClient
+    .from("instagram_webhook_events")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("direction", "outgoing")
+    .eq("message_text", messageText)
+    .eq("auto_replied", true)
+    .gte("created_at", sixtySecondsAgo)
+    .limit(1);
+
+  return !!(recentOutgoing && recentOutgoing.length > 0);
 }
 
 /**
@@ -769,20 +844,22 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
   console.log("processFlowReply called:", { userId: ctx.userId, senderId: ctx.senderId, messageText: ctx.messageText, accountId: ctx.accountId, hasToken: !!ctx.accessToken, igUserId: ctx.igUserId, pageScopedId: ctx.pageScopedId, isSelfMessage: ctx.isSelfMessage });
 
   // Prevent infinite loops: if this is a self-message, check if we recently sent
-  // a flow step message with the same text. If so, skip — this is our own outgoing
-  // message coming back as an echo.
+  // an AUTOMATED message (flow/auto-rule/autoresponder) with the same text. If so,
+  // skip — this is our own automated outgoing message coming back as an echo.
+  // Manual self-messages are NOT blocked — you can always trigger flows by DMing yourself.
   if (ctx.isSelfMessage) {
-    const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
-    const { data: recentOutgoing } = await supabaseClient
+    const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
+    const { data: recentAutoOutgoing } = await supabaseClient
       .from("instagram_webhook_events")
       .select("id")
       .eq("user_id", ctx.userId)
       .eq("direction", "outgoing")
       .eq("message_text", ctx.messageText)
-      .gte("created_at", fiveSecondsAgo)
+      .eq("auto_replied", true)
+      .gte("created_at", tenSecondsAgo)
       .limit(1);
-    if (recentOutgoing && recentOutgoing.length > 0) {
-      console.log("processFlowReply: skipping self-message — matches recent outgoing flow message");
+    if (recentAutoOutgoing && recentAutoOutgoing.length > 0) {
+      console.log("processFlowReply: skipping self-message — matches recent automated outgoing message");
       return;
     }
   }
@@ -798,6 +875,12 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
   console.log("processFlowReply: sessions found:", sessions?.length ?? 0);
 
   if (!sessions || sessions.length === 0) {
+    // Skip starting new flows if this is an automated reply from one of the
+    // user's own connected accounts (prevents loops between accounts).
+    if (ctx.skipNewTriggers) {
+      console.log("processFlowReply: skipping new flow trigger — automated reply from owned account");
+      return;
+    }
     // Check for DM-triggered flows
     if (ctx.accessToken && ctx.igUserId) {
       const { data: flows } = await supabaseClient
@@ -825,6 +908,18 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
             .in("status", ["active", "waiting_reply"])
             .maybeSingle();
           if (existing) continue;
+
+          // Don't start sessions for flows with no steps — they'll get stuck
+          const { data: stepCount } = await supabaseClient
+            .from("instagram_flow_steps")
+            .select("id")
+            .eq("flow_id", flow.id)
+            .limit(1)
+            .maybeSingle();
+          if (!stepCount) {
+            console.log("processFlowReply: skipping flow", flow.id, "— no steps defined");
+            continue;
+          }
 
           console.log("processFlowReply: starting flow session for flow:", flow.id, "firstStepId:", flow.first_step_id);
           await startFlowSession(supabaseClient, {
@@ -854,6 +949,7 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
     // when first_step_id was null at creation time). Try to find and execute the
     // first step for the flow.
     if (session.status === "active" && !session.current_step_id) {
+      // Check if the flow has any steps at all — if not, complete the session
       const { data: firstStep } = await supabaseClient
         .from("instagram_flow_steps")
         .select("id")
@@ -861,23 +957,30 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
         .order("step_order", { ascending: true })
         .limit(1)
         .maybeSingle();
-      if (firstStep) {
+      if (!firstStep) {
+        // Flow has no steps — mark session completed so it stops blocking
         await supabaseClient
           .from("instagram_flow_sessions")
-          .update({ current_step_id: firstStep.id })
+          .update({ status: "completed", completed_at: new Date().toISOString() })
           .eq("id", session.id);
-        await executeFlowStep(supabaseClient, {
-          sessionId: session.id,
-          stepId: firstStep.id,
-          accessToken: ctx.accessToken,
-          igUserId: ctx.igUserId,
-          pageScopedId: ctx.pageScopedId,
-          senderId: ctx.senderId,
-          userId: ctx.userId,
-          recipientId: ctx.recipientId,
-          isSelfMessage: ctx.isSelfMessage,
-        });
+        continue;
       }
+      // Found a step — recover the session
+      await supabaseClient
+        .from("instagram_flow_sessions")
+        .update({ current_step_id: firstStep.id })
+        .eq("id", session.id);
+      await executeFlowStep(supabaseClient, {
+        sessionId: session.id,
+        stepId: firstStep.id,
+        accessToken: ctx.accessToken,
+        igUserId: ctx.igUserId,
+        pageScopedId: ctx.pageScopedId,
+        senderId: ctx.senderId,
+        userId: ctx.userId,
+        recipientId: ctx.recipientId,
+        isSelfMessage: ctx.isSelfMessage,
+      });
       continue;
     }
 
@@ -1064,19 +1167,36 @@ async function storeEvent(
     event.message_text &&
     userId
   ) {
-    const { data: acct } = await supabaseClient
-      .from("instagram_accounts")
-      .select("id")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+    // Resolve the specific account that received this message by matching the
+    // Instagram user ID (stored as ig_user_id or page_scoped_id), so every
+    // linked account can fire its own autoresponder.
+    let acctId: string | null = null;
 
-    if (acct?.id) {
+    if (event.ig_user_id) {
+      const { data: acctByIg } = await supabaseClient
+        .from("instagram_accounts")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("ig_user_id", event.ig_user_id)
+        .maybeSingle();
+      acctId = acctByIg?.id ?? null;
+    }
+
+    if (!acctId && event.ig_user_id) {
+      const { data: acctByPage } = await supabaseClient
+        .from("instagram_accounts")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("page_scoped_id", event.ig_user_id)
+        .maybeSingle();
+      acctId = acctByPage?.id ?? null;
+    }
+
+    if (acctId) {
       const { data: arSettings } = await supabaseClient
         .from("instagram_autoresponder_settings")
         .select("enabled")
-        .eq("account_id", acct.id)
+        .eq("account_id", acctId)
         .maybeSingle();
 
       if (arSettings?.enabled) {
@@ -1092,16 +1212,31 @@ async function storeEvent(
             .maybeSingle();
 
           if (!flowSession) {
-            const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-            const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-            fetch(`${supabaseUrl}/functions/v1/instagram-autoresponder`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${serviceKey}`,
-              },
-              body: JSON.stringify({ account_id: acct.id, event_id: eventIdToUse }),
-            }).catch((err) => console.error("Autoresponder queue error:", err));
+            // Skip autoresponder if loop prevention is enabled and this is
+            // an automated reply from one of the user's own accounts
+            const { data: refreshSettings } = await supabaseClient
+              .from("instagram_refresh_settings")
+              .select("loop_prevention_enabled")
+              .eq("user_id", userId)
+              .maybeSingle();
+            const loopPreventionEnabled = refreshSettings?.loop_prevention_enabled ?? true;
+            const isAutoFromOwned = loopPreventionEnabled && await isAutomatedReplyFromOwnedAccount(
+              supabaseClient, userId, event.message_text ?? "",
+            );
+            if (isAutoFromOwned) {
+              console.log("storeEvent: skipping autoresponder — automated reply from owned account");
+            } else {
+              const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+              const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+              fetch(`${supabaseUrl}/functions/v1/instagram-autoresponder`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({ account_id: acctId, event_id: eventIdToUse }),
+              }).catch((err) => console.error("Autoresponder queue error:", err));
+            }
           }
         }
       }

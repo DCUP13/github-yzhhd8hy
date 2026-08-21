@@ -3,6 +3,7 @@ import {
   Plus, Trash2, ArrowRight, ArrowDown, MessageSquare, Link as LinkIcon,
   FileText, Image as ImageIcon, GitBranch, Clock, Save, X, Copy,
   Play, ChevronUp, ChevronDown, Zap, AlertCircle, CheckCircle2,
+  Link2, Link2Off,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -18,6 +19,8 @@ export interface Flow {
   first_step_id: string | null;
   created_at: string;
   updated_at: string;
+  settings_group_id?: string | null;
+  is_synced_copy?: boolean;
 }
 
 interface LocalStep {
@@ -45,9 +48,17 @@ export interface FlowSession {
   started_at: string;
 }
 
+interface IgAccount {
+  id: string;
+  username: string | null;
+  profile_picture_url: string | null;
+  user_id: string;
+}
+
 interface FlowBuilderProps {
   accountId: string;
   userId: string;
+  allAccounts?: IgAccount[];
 }
 
 let tempIdCounter = 0;
@@ -73,7 +84,7 @@ function dbStepToLocal(s: any): LocalStep {
   };
 }
 
-export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
+export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilderProps) {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
@@ -87,6 +98,7 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
   const [newFlowTrigger, setNewFlowTrigger] = useState<'comment_keyword' | 'dm_keyword'>('comment_keyword');
   const [newFlowKeyword, setNewFlowKeyword] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [syncStatuses, setSyncStatuses] = useState<Map<string, { shared: boolean; synced: boolean; count: number }>>(new Map());
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -97,19 +109,29 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
     const { data } = await supabase
       .from('instagram_conversation_flows')
       .select('*')
-      .eq('user_id', userId)
       .eq('account_id', accountId)
       .order('created_at', { ascending: false });
     setFlows((data || []) as Flow[]);
     setIsLoading(false);
-  }, [userId, accountId]);
+  }, [accountId]);
 
   useEffect(() => { fetchFlows(); }, [fetchFlows]);
 
   const loadFlow = useCallback(async (flowId: string) => {
-    const flow = flows.find(f => f.id === flowId);
-    if (!flow) return;
-    setSelectedFlow(flow);
+    // Fetch the flow directly from DB — don't rely on the in-memory `flows` array,
+    // which may be stale (e.g. right after creating a flow the array hasn't updated yet).
+    const { data: flowRow, error: flowErr } = await supabase
+      .from('instagram_conversation_flows')
+      .select('*')
+      .eq('id', flowId)
+      .maybeSingle();
+    if (flowErr || !flowRow) {
+      console.error('Failed to load flow:', flowErr);
+      showToast('Could not load this flow');
+      setSelectedFlowId(null);
+      return;
+    }
+    setSelectedFlow(flowRow as Flow);
     const { data: dbSteps } = await supabase
       .from('instagram_flow_steps')
       .select('*')
@@ -124,7 +146,7 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
       .limit(50);
     setSessions((sess || []) as FlowSession[]);
     setHasUnsavedChanges(false);
-  }, [flows]);
+  }, []);
 
   useEffect(() => {
     if (selectedFlowId) {
@@ -186,6 +208,43 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
 
   // === Flow CRUD ===
 
+  // Auto-sync new settings to any accounts that are synced to this account
+  const autoSyncToCheckedAccounts = async () => {
+    try {
+      const { data: subs } = await supabase
+        .from('instagram_settings_subscriptions')
+        .select('account_id')
+        .eq('synced', true)
+        .neq('account_id', accountId);
+
+      if (!subs || subs.length === 0) return;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/share-settings`;
+      const { data: session } = await supabase.auth.getSession();
+      for (const sub of subs) {
+        await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            action: 'sync_account',
+            p_source_account_id: accountId,
+            p_account_id: sub.account_id,
+            p_user_id: user.id,
+          }),
+        });
+      }
+    } catch (err) {
+      console.error('Auto-sync failed:', err);
+    }
+  };
+
   const handleCreateFlow = async () => {
     if (!newFlowName || !newFlowKeyword) {
       alert('Please enter a flow name and trigger keyword');
@@ -209,6 +268,13 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
       await fetchFlows();
       setSelectedFlowId(data.id);
       showToast('Flow created');
+
+      // Auto-sync to any accounts that are synced to this account
+      await autoSyncToCheckedAccounts();
+      // Reload the flow so selectedFlow reflects the settings_group_id and
+      // is_synced_copy that autoSyncToCheckedAccounts just set in the DB.
+      await loadFlow(data.id);
+      await fetchFlows();
     } catch (err) {
       console.error('Error creating flow:', err);
       alert('Failed to create flow');
@@ -229,11 +295,40 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
   };
 
   const handleDeleteFlow = async (flowId: string) => {
-    if (!confirm('Delete this entire flow? All steps and session data will be removed.')) return;
-    await supabase.from('instagram_conversation_flows').delete().eq('id', flowId);
-    setSelectedFlowId(null);
-    await fetchFlows();
-    showToast('Flow deleted');
+    const flow = flows.find(f => f.id === flowId);
+    const isShared = flow?.settings_group_id;
+    const confirmMsg = isShared
+      ? 'Delete this flow? It will be removed from ALL synced accounts as well.'
+      : 'Delete this entire flow? All steps and session data will be removed.';
+    if (!confirm(confirmMsg)) return;
+
+    setIsSaving(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/share-settings`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ action: 'delete_flow', p_flow_id: flowId }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `HTTP ${res.status}`);
+      }
+
+      setSelectedFlowId(null);
+      await fetchFlows();
+      showToast(isShared ? 'Flow deleted from all synced accounts' : 'Flow deleted');
+    } catch (err) {
+      console.error('Error deleting flow:', err);
+      alert('Failed to delete flow');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDuplicateFlow = async (flow: Flow) => {
@@ -293,6 +388,7 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
 
   const handleSaveAll = async () => {
     if (!selectedFlow) return;
+    const flowUserId = selectedFlow.user_id;
     setIsSaving(true);
     try {
       // Map temp IDs to real DB IDs as they're created
@@ -306,7 +402,7 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
           const { data: inserted, error } = await supabase
             .from('instagram_flow_steps')
             .insert({
-              flow_id: selectedFlow.id, user_id: userId,
+              flow_id: selectedFlow.id, user_id: flowUserId,
               step_order: step.step_order,
               message_text: step.message_text || null,
               link_url: step.link_url || null,
@@ -405,6 +501,21 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
         }
       }
 
+      // Sync to other accounts if this flow is part of a synced group
+      if (selectedFlow.settings_group_id) {
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/share-settings`;
+        const { data: session } = await supabase.auth.getSession();
+        await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ action: 'sync_flow', p_flow_id: selectedFlow.id }),
+        });
+      }
+
       // Reload from DB
       await loadFlow(selectedFlow.id);
       await fetchFlows();
@@ -425,6 +536,27 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
   };
 
   const formatDate = (ds: string) => new Date(ds).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const fetchSyncStatuses = useCallback(async () => {
+    if (flows.length === 0) return;
+    const groupIds = flows.filter(f => f.settings_group_id).map(f => f.settings_group_id);
+    if (groupIds.length === 0) return;
+    const { data: subs } = await supabase
+      .from('instagram_settings_subscriptions')
+      .select('group_id, account_id, synced')
+      .in('group_id', groupIds);
+    const map = new Map<string, { shared: boolean; synced: boolean; count: number }>();
+    for (const f of flows) {
+      if (!f.settings_group_id) { map.set(f.id, { shared: false, synced: false, count: 0 }); continue; }
+      const flowSubs = (subs || []).filter(s => s.group_id === f.settings_group_id);
+      const syncedCount = flowSubs.filter(s => s.synced).length;
+      const isSynced = f.is_synced_copy ?? false;
+      map.set(f.id, { shared: flowSubs.length > 1, synced: isSynced, count: flowSubs.length });
+    }
+    setSyncStatuses(map);
+  }, [flows]);
+
+  useEffect(() => { fetchSyncStatuses(); }, [fetchSyncStatuses]);
 
   if (isLoading) {
     return (
@@ -512,6 +644,15 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
                     >
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${flow.active ? 'translate-x-5' : 'translate-x-1'}`} />
                     </button>
+                    {(() => {
+                      const status = syncStatuses.get(flow.id);
+                      return status && status.shared ? (
+                        <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${status.synced ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
+                          {status.synced ? <Link2 className="w-2.5 h-2.5" /> : <Link2Off className="w-2.5 h-2.5" />}
+                          {status.synced ? `Synced (${status.count})` : `Independent (${status.count})`}
+                        </span>
+                      ) : null;
+                    })()}
                     <button
                       onClick={() => handleDuplicateFlow(flow)}
                       className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
@@ -607,7 +748,13 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
   }
 
   // ===== Single-screen flow editor =====
-  if (!selectedFlow) return null;
+  if (!selectedFlow) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -632,6 +779,16 @@ export function FlowBuilder({ accountId, userId }: FlowBuilderProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {selectedFlow.is_synced_copy && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+              <Link2 className="w-2.5 h-2.5" /> Synced — edits propagate
+            </span>
+          )}
+          {selectedFlow.settings_group_id && !selectedFlow.is_synced_copy && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+              <Link2Off className="w-2.5 h-2.5" /> Independent — edits are local
+            </span>
+          )}
           <button
             onClick={() => handleToggleFlow(selectedFlow)}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${selectedFlow.active ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}

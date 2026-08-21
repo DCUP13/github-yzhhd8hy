@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Instagram as InstagramIcon, Check, AlertCircle, Link2, Eye, EyeOff, Plus, Trash2, RefreshCw, Key, Zap } from 'lucide-react';
+import { Instagram as InstagramIcon, Check, AlertCircle, Link2, Eye, EyeOff, Plus, Trash2, RefreshCw, Key, Zap, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface IgAccountRow {
@@ -20,6 +20,7 @@ interface RefreshSettings {
   auto_refresh_enabled: boolean;
   refresh_interval_hours: number;
   last_refresh_at: string | null;
+  loop_prevention_enabled: boolean;
 }
 
 export function InstagramTab() {
@@ -35,6 +36,7 @@ export function InstagramTab() {
     auto_refresh_enabled: false,
     refresh_interval_hours: 6,
     last_refresh_at: null,
+    loop_prevention_enabled: true,
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -69,6 +71,7 @@ export function InstagramTab() {
           auto_refresh_enabled: settings.auto_refresh_enabled ?? false,
           refresh_interval_hours: settings.refresh_interval_hours ?? 6,
           last_refresh_at: settings.last_refresh_at ?? null,
+          loop_prevention_enabled: settings.loop_prevention_enabled ?? true,
         });
       }
     } catch (error) {
@@ -235,6 +238,7 @@ export function InstagramTab() {
           user_id: user.id,
           auto_refresh_enabled: refreshSettings.auto_refresh_enabled,
           refresh_interval_hours: refreshSettings.refresh_interval_hours,
+          loop_prevention_enabled: refreshSettings.loop_prevention_enabled,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
 
@@ -533,6 +537,35 @@ export function InstagramTab() {
               Last sync: {new Date(refreshSettings.last_refresh_at).toLocaleString()}
             </p>
           )}
+          <button
+            onClick={handleSaveRefreshSettings}
+            disabled={savingSettings}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
+          >
+            {savingSettings ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
+      </div>
+
+      {/* Loop prevention setting */}
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Shield className="w-4 h-4 text-gray-400" />
+          <h4 className="text-sm font-medium text-gray-900 dark:text-white">Loop Prevention</h4>
+        </div>
+        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 space-y-2">
+          <label className="flex items-center justify-between">
+            <div className="flex-1 pr-4">
+              <span className="text-sm text-gray-700 dark:text-gray-300 block">Prevent automated replies from triggering your other accounts</span>
+              <span className="text-xs text-gray-400 mt-0.5 block">When enabled, automated messages sent by flows, auto-rules, or the autoresponder won't trigger automations on your other connected accounts. Manual messages still work normally for testing.</span>
+            </div>
+            <button
+              onClick={() => setRefreshSettings(prev => ({ ...prev, loop_prevention_enabled: !prev.loop_prevention_enabled }))}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${refreshSettings.loop_prevention_enabled ? 'bg-pink-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+            >
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${refreshSettings.loop_prevention_enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+          </label>
           <button
             onClick={handleSaveRefreshSettings}
             disabled={savingSettings}
