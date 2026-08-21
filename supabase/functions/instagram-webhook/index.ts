@@ -117,6 +117,22 @@ Deno.serve(async (req: Request) => {
             flowUserId = flowAccount?.user_id ?? null;
           }
 
+          // Auto-populate owner_profile_id from self-messages so the frontend
+          // can group self-chat conversations and send replies to the right ID.
+          if (isSelfMessage && flowAccount && recipientId) {
+            const { data: acctForOwner } = await supabaseClient
+              .from("instagram_accounts")
+              .select("owner_profile_id")
+              .eq("id", flowAccount.id)
+              .maybeSingle();
+            if (acctForOwner && !acctForOwner.owner_profile_id) {
+              await supabaseClient
+                .from("instagram_accounts")
+                .update({ owner_profile_id: recipientId })
+                .eq("id", flowAccount.id);
+            }
+          }
+
           // Process conversation flow replies for incoming DMs.
           // Self-messages (DMing yourself) are also processed so you can test
           // flows from your own account. Echo-only messages (outgoing to others)
