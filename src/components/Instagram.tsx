@@ -2426,7 +2426,7 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
           return;
         }
         const { error: apiError } = await callShareApi({
-          action: 'sync_account',
+          action: 'resync_account',
           p_source_account_id: sourceId,
           p_account_id: accountId,
           p_user_id: user.id,
