@@ -271,6 +271,10 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
 
       // Auto-sync to any accounts that are synced to this account
       await autoSyncToCheckedAccounts();
+      // Reload the flow so selectedFlow reflects the settings_group_id and
+      // is_synced_copy that autoSyncToCheckedAccounts just set in the DB.
+      await loadFlow(data.id);
+      await fetchFlows();
     } catch (err) {
       console.error('Error creating flow:', err);
       alert('Failed to create flow');
@@ -498,7 +502,7 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
       }
 
       // Sync to other accounts if this flow is part of a synced group
-      if (selectedFlow.is_synced_copy && selectedFlow.settings_group_id) {
+      if (selectedFlow.settings_group_id) {
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/share-settings`;
         const { data: session } = await supabase.auth.getSession();
         await fetch(apiUrl, {
