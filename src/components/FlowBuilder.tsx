@@ -106,15 +106,34 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
   };
 
   const fetchFlows = useCallback(async () => {
-    const { data } = await supabase
+    // Fetch flows for the selected account (owned by the user)
+    const { data: ownFlows } = await supabase
       .from('instagram_conversation_flows')
       .select('*')
-      .eq('user_id', userId)
       .eq('account_id', accountId)
       .order('created_at', { ascending: false });
-    setFlows((data || []) as Flow[]);
+
+    // Fetch synced copies on other accounts that the user owns the group for.
+    // These have settings_group_id set and the user is the group owner.
+    const { data: syncedFlows } = await supabase
+      .from('instagram_conversation_flows')
+      .select('*')
+      .neq('account_id', accountId)
+      .not('settings_group_id', 'is', null)
+      .order('created_at', { ascending: false });
+
+    // Merge, deduplicate by id, and sort by created_at desc
+    const allFlows = [...(ownFlows || []), ...(syncedFlows || [])];
+    const seen = new Set<string>();
+    const deduped = allFlows.filter((f: any) => {
+      if (seen.has(f.id)) return false;
+      seen.add(f.id);
+      return true;
+    }) as Flow[];
+    deduped.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    setFlows(deduped);
     setIsLoading(false);
-  }, [userId, accountId]);
+  }, [accountId]);
 
   useEffect(() => { fetchFlows(); }, [fetchFlows]);
 
@@ -385,6 +404,7 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
 
   const handleSaveAll = async () => {
     if (!selectedFlow) return;
+    const flowUserId = selectedFlow.user_id;
     setIsSaving(true);
     try {
       // Map temp IDs to real DB IDs as they're created
@@ -398,7 +418,7 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
           const { data: inserted, error } = await supabase
             .from('instagram_flow_steps')
             .insert({
-              flow_id: selectedFlow.id, user_id: userId,
+              flow_id: selectedFlow.id, user_id: flowUserId,
               step_order: step.step_order,
               message_text: step.message_text || null,
               link_url: step.link_url || null,
@@ -623,6 +643,11 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${flow.active ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
                         {flow.active ? 'Active' : 'Paused'}
                       </span>
+                      {flow.account_id !== accountId && (
+                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+                          {allAccounts.find(a => a.id === flow.account_id)?.username || 'Other account'}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                       <span className="flex items-center gap-1">
