@@ -2349,39 +2349,28 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
   setShowShareModal: (v: boolean) => void;
   onRefresh: () => void;
 }) {
-  const [syncedAccounts, setSyncedAccounts] = useState<Set<string>>(new Set());
+  const [syncedAccounts, setSyncedAccounts] = useState<Set<string>>(new Set([selectedAccount.id]));
   const [isLoading, setIsLoading] = useState(true);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
-  const [isResyncing, setIsResyncing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
-  const otherAccounts = accounts.filter(a => a.id !== selectedAccount.id);
-
   const fetchSyncState = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const { data: subs } = await supabase
         .from('instagram_settings_subscriptions')
         .select('account_id, synced')
         .eq('synced', true);
 
-      const syncedSet = new Set<string>();
+      const syncedSet = new Set<string>([selectedAccount.id]);
       for (const s of (subs || [])) {
-        if (s.account_id !== selectedAccount.id) {
-          syncedSet.add(s.account_id);
-        }
+        syncedSet.add(s.account_id);
       }
       setSyncedAccounts(syncedSet);
     } catch (err) {
       console.error('Error fetching sync state:', err);
-      setError('Failed to load sharing status');
     } finally {
       setIsLoading(false);
     }
@@ -2411,7 +2400,6 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
 
   const handleToggleAccount = async (accountId: string, isChecked: boolean) => {
     setBusyAccountId(accountId);
-    setError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -2433,104 +2421,50 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
         });
         if (apiError) throw new Error(apiError);
         setSyncedAccounts(prev => { const s = new Set(prev); s.delete(accountId); return s; });
-        showToast(`${accounts.find(a => a.id === accountId)?.username || 'Account'} is now independent`);
+        showToast(`${accounts.find(a => a.id === accountId)?.username || 'Account'} unlinked`);
       }
       onRefresh();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to update sharing';
-      setError(msg);
+      const msg = err instanceof Error ? err.message : 'Failed to update';
       showToast(msg);
     } finally {
       setBusyAccountId(null);
     }
   };
 
-  const handleResyncAll = async () => {
-    if (syncedAccounts.size === 0) {
-      showToast('No accounts to re-sync');
-      return;
-    }
-    setIsResyncing(true);
-    setError(null);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      for (const accountId of syncedAccounts) {
-        const { error: apiError } = await callShareApi({
-          action: 'resync_account',
-          p_source_account_id: selectedAccount.id,
-          p_account_id: accountId,
-          p_user_id: user.id,
-        });
-        if (apiError) {
-          console.error('Re-sync failed for', accountId, apiError);
-          setError(`Re-sync failed for ${accounts.find(a => a.id === accountId)?.username || 'an account'}: ${apiError}`);
-        }
-      }
-      showToast('All accounts re-synced');
-      onRefresh();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to re-sync';
-      setError(msg);
-      showToast(msg);
-    } finally {
-      setIsResyncing(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
-      {/* Account Sync Checkboxes */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Share2 className="w-5 h-5 text-pink-500" />
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Sync Settings Across Accounts</h3>
-          </div>
-          {syncedAccounts.size > 0 && !isLoading && (
-            <button
-              onClick={handleResyncAll}
-              disabled={isResyncing}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-900/20 border border-pink-300 dark:border-pink-700 rounded-lg disabled:opacity-50"
-            >
-              {isResyncing ? (
-                <><div className="w-3 h-3 border-2 border-pink-500 border-t-transparent rounded-full animate-spin mr-1.5" /> Re-syncing...</>
-              ) : (
-                <><RefreshCw className="w-3 h-3 mr-1.5" /> Re-sync All</>
-              )}
-            </button>
-          )}
+        <div className="flex items-center gap-2 mb-4">
+          <Share2 className="w-5 h-5 text-pink-500" />
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Linked Accounts</h3>
         </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Check the box next to each account to share all flows, rules, and autoresponder settings from <span className="font-medium text-gray-700 dark:text-gray-300">{selectedAccount.username}</span>. Edits to any synced account automatically update all others.
-        </p>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : otherAccounts.length === 0 ? (
-          <p className="text-sm text-gray-400 py-4 text-center">
-            You only have one Instagram account. Link more accounts to share settings across them.
-          </p>
+        ) : accounts.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4 text-center">No linked accounts yet.</p>
         ) : (
           <div className="space-y-2">
-            {otherAccounts.map(account => {
+            {accounts.map(account => {
               const isSynced = syncedAccounts.has(account.id);
+              const isCurrent = account.id === selectedAccount.id;
               const isBusy = busyAccountId === account.id;
               return (
                 <label
                   key={account.id}
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                     isSynced
                       ? 'border-pink-300 dark:border-pink-700 bg-pink-50 dark:bg-pink-900/10'
                       : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                  } ${isBusy ? 'opacity-60 pointer-events-none' : ''}`}
+                  } ${isBusy ? 'opacity-60 pointer-events-none' : isCurrent ? 'cursor-default' : 'cursor-pointer'}`}
                 >
                   <input
                     type="checkbox"
                     checked={isSynced}
+                    disabled={isCurrent || isBusy}
                     onChange={(e) => handleToggleAccount(account.id, e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
                   />
@@ -2542,14 +2476,13 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
                     </div>
                   )}
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{account.username || 'Unknown'}</p>
-                    {isSynced ? (
-                      <p className="text-xs text-green-500 flex items-center gap-1">
-                        <Link2 className="w-3 h-3" /> Synced — edits propagate
-                      </p>
-                    ) : (
-                      <p className="text-xs text-gray-400">Not synced</p>
-                    )}
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {account.username || 'Unknown'}
+                      {isCurrent && <span className="ml-2 text-xs text-gray-400">(current)</span>}
+                    </p>
+                    <p className={`text-xs ${isSynced ? 'text-green-500' : 'text-gray-400'}`}>
+                      {isSynced ? 'Linked — settings sync' : 'Not linked'}
+                    </p>
                   </div>
                   {isBusy && (
                     <div className="w-4 h-4 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
@@ -2557,68 +2490,6 @@ function SharingControlPanel({ accounts, selectedAccount, userId, orgMembers, sh
                 </label>
               );
             })}
-          </div>
-        )}
-
-        {error && (
-          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Teammate sharing section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <User className="w-5 h-5 text-pink-500" />
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Share with Teammates</h3>
-          </div>
-          {orgMembers.length > 0 && (
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
-            >
-              <Plus className="w-4 h-4 mr-1" /> Add Share
-            </button>
-          )}
-        </div>
-        {orgMembers.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            You need to be part of an organization with other members to share your Instagram account.
-          </p>
-        ) : shares.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            You haven't shared this Instagram account with anyone yet. Click "Add Share" to let teammates view your inbox, collaborate on replies, and help manage posts.
-          </p>
-        ) : (
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {shares.map((share) => (
-              <div key={share.id} className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-                    <User className="w-4 h-4 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{share.profile?.email || 'Unknown'}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {share.permissions?.reply ? 'Can reply' : 'View only'}
-                      {share.permissions?.post ? ' · Can post' : ''}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={async () => {
-                    await supabase.from('instagram_account_shares').delete().eq('id', share.id);
-                    onRefresh();
-                  }}
-                  className="p-1.5 text-red-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
-                  title="Revoke access"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
           </div>
         )}
       </div>
