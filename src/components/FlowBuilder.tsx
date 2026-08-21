@@ -119,9 +119,20 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
   useEffect(() => { fetchFlows(); }, [fetchFlows]);
 
   const loadFlow = useCallback(async (flowId: string) => {
-    const flow = flows.find(f => f.id === flowId);
-    if (!flow) return;
-    setSelectedFlow(flow);
+    // Fetch the flow directly from DB — don't rely on the in-memory `flows` array,
+    // which may be stale (e.g. right after creating a flow the array hasn't updated yet).
+    const { data: flowRow, error: flowErr } = await supabase
+      .from('instagram_conversation_flows')
+      .select('*')
+      .eq('id', flowId)
+      .maybeSingle();
+    if (flowErr || !flowRow) {
+      console.error('Failed to load flow:', flowErr);
+      showToast('Could not load this flow');
+      setSelectedFlowId(null);
+      return;
+    }
+    setSelectedFlow(flowRow as Flow);
     const { data: dbSteps } = await supabase
       .from('instagram_flow_steps')
       .select('*')
@@ -136,7 +147,7 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
       .limit(50);
     setSessions((sess || []) as FlowSession[]);
     setHasUnsavedChanges(false);
-  }, [flows]);
+  }, []);
 
   useEffect(() => {
     if (selectedFlowId) {
@@ -704,7 +715,13 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
   }
 
   // ===== Single-screen flow editor =====
-  if (!selectedFlow) return null;
+  if (!selectedFlow) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
