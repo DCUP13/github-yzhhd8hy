@@ -292,11 +292,42 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
   };
 
   const handleDeleteFlow = async (flowId: string) => {
-    if (!confirm('Delete this entire flow? All steps and session data will be removed.')) return;
-    await supabase.from('instagram_conversation_flows').delete().eq('id', flowId);
-    setSelectedFlowId(null);
-    await fetchFlows();
-    showToast('Flow deleted');
+    const flow = flows.find(f => f.id === flowId);
+    const isShared = flow?.settings_group_id;
+    const confirmMsg = isShared
+      ? 'Delete this flow? It will be removed from ALL synced accounts as well.'
+      : 'Delete this entire flow? All steps and session data will be removed.';
+    if (!confirm(confirmMsg)) return;
+
+    setIsSaving(true);
+    try {
+      // If this flow is part of a synced group, delete all copies across accounts
+      if (isShared) {
+        const { data: groupFlows } = await supabase
+          .from('instagram_conversation_flows')
+          .select('id')
+          .eq('settings_group_id', flow!.settings_group_id);
+        const allFlowIds = (groupFlows || []).map(f => f.id);
+        if (allFlowIds.length > 0) {
+          // Steps and sessions cascade-delete via FK ON DELETE CASCADE
+          await supabase.from('instagram_conversation_flows').delete().in('id', allFlowIds);
+        }
+        // Remove the settings group and its subscriptions so stale groups don't linger
+        await supabase.from('instagram_settings_subscriptions').delete().eq('group_id', flow!.settings_group_id);
+        await supabase.from('instagram_settings_groups').delete().eq('id', flow!.settings_group_id);
+      } else {
+        await supabase.from('instagram_conversation_flows').delete().eq('id', flowId);
+      }
+
+      setSelectedFlowId(null);
+      await fetchFlows();
+      showToast(isShared ? 'Flow deleted from all synced accounts' : 'Flow deleted');
+    } catch (err) {
+      console.error('Error deleting flow:', err);
+      alert('Failed to delete flow');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDuplicateFlow = async (flow: Flow) => {
