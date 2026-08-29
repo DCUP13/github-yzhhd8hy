@@ -295,7 +295,8 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         });
 
         if (!uploadResponse.ok) {
-          throw new Error(`Upload failed: ${uploadResponse.status}`);
+          const s3ErrorText = await uploadResponse.text().catch(() => '');
+          throw new Error(`S3 upload failed (${uploadResponse.status}): ${s3ErrorText.slice(0, 200)}`);
         }
 
         // Save metadata to database
@@ -317,7 +318,7 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
       } catch (error) {
         console.error(`Upload failed for ${file.name}:`, error);
         setUploadingFiles(prev => prev.map((f, idx) => idx === i ? { ...f, error: error.message } : f));
-        toast.error(`Failed to upload ${file.name}`);
+        toast.error(`Failed to upload ${file.name}: ${error.message}`);
       }
     }
 

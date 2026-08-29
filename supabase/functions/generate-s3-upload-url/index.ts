@@ -61,14 +61,14 @@ async function generatePresignedPutUrl(
   queryParams.set('X-Amz-Credential', `${accessKeyId}/${credentialScope}`);
   queryParams.set('X-Amz-Date', amzDate);
   queryParams.set('X-Amz-Expires', '3600');
-  queryParams.set('X-Amz-SignedHeaders', 'host');
+  queryParams.set('X-Amz-SignedHeaders', 'content-type;host');
 
   const sortedParams = Array.from(queryParams.entries()).sort();
   const canonicalQueryString = sortedParams.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 
   const canonicalUri = '/' + key.split('/').map(part => encodeURIComponent(part)).join('/');
-  const canonicalHeaders = `host:${host}\n`;
-  const signedHeaders = 'host';
+  const canonicalHeaders = `content-type:${contentType}\nhost:${host}\n`;
+  const signedHeaders = 'content-type;host';
   const payloadHash = 'UNSIGNED-PAYLOAD';
 
   const canonicalRequest = [method, canonicalUri, canonicalQueryString, canonicalHeaders, signedHeaders, payloadHash].join('\n');
@@ -85,7 +85,7 @@ async function generatePresignedPutUrl(
   finalParams.set('X-Amz-Credential', `${accessKeyId}/${credentialScope}`);
   finalParams.set('X-Amz-Date', amzDate);
   finalParams.set('X-Amz-Expires', '3600');
-  finalParams.set('X-Amz-SignedHeaders', 'host');
+  finalParams.set('X-Amz-SignedHeaders', 'content-type;host');
   finalParams.set('X-Amz-Signature', signature);
 
   return `https://${host}${canonicalUri}?${finalParams.toString()}`;
