@@ -1,0 +1,17 @@
+[functions.generate-s3-upload-url]
+verify_jwt = true
+
+[functions.transcribe-video]
+verify_jwt = true
+
+[functions.overlay-text-on-image]
+verify_jwt = true
+
+[functions.generate-post-variations]
+verify_jwt = true
+
+[functions.publish-instagram-post]
+verify_jwt = true
+
+[functions.process-instagram-queue]
+verify_jwt = false

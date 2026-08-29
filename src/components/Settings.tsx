@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Server, BarChart3, Instagram as InstagramIcon, Key, ArrowLeft } from 'lucide-react';
+import { Server, BarChart3, Instagram as InstagramIcon, Key, ArrowLeft, Cloud } from 'lucide-react';
 import { GeneralTab } from './settings/GeneralTab';
 import { AmazonTab } from './settings/AmazonTab';
 import { RapidAPITab } from './settings/RapidAPITab';
 import { DataQualityTab } from './settings/DataQualityTab';
 import { InstagramTab } from './settings/InstagramTab';
 import { UserTab } from './settings/UserTab';
+import { ContentStorageTab } from './settings/ContentStorageTab';
 import type { GeneralSettings } from './settings/types';
 import { supabase } from '../lib/supabase';
 
@@ -16,7 +17,7 @@ interface SettingsProps {
   onBackToTeam?: () => void;
 }
 
-type SettingsTab = 'user' | 'general' | 'amazon' | 'rapid-api' | 'data-quality' | 'instagram';
+type SettingsTab = 'user' | 'general' | 'amazon' | 'rapid-api' | 'data-quality' | 'instagram' | 'content-storage';
 
 export function Settings({ onSignOut: _onSignOut, currentView: _currentView, memberUserId, onBackToTeam }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -247,7 +248,8 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView, mem
     { id: 'data-quality' as const, label: 'Data Quality', icon: BarChart3 },
     { id: 'amazon' as const, label: 'Amazon SES', icon: Server },
     { id: 'rapid-api' as const, label: 'Rapid API', icon: Server },
-    { id: 'instagram' as const, label: 'Instagram', icon: InstagramIcon }
+    { id: 'instagram' as const, label: 'Instagram', icon: InstagramIcon },
+    { id: 'content-storage' as const, label: 'Content Storage', icon: Cloud }
   ];
 
   if (isLoading) {
@@ -323,6 +325,8 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView, mem
             {activeTab === 'rapid-api' && <RapidAPITab userId={memberUserId} />}
 
             {activeTab === 'instagram' && <InstagramTab userId={memberUserId} />}
+
+            {activeTab === 'content-storage' && <ContentStorageTab userId={memberUserId} />}
           </div>
         </div>
 
