@@ -4,13 +4,11 @@ import {
   Video as VideoIcon,
   Upload,
   Trash2,
-  Plus,
   Check,
   X,
   RefreshCw,
   Clock,
   Calendar,
-  Shuffle,
   Eye,
   Play,
   FileText,
@@ -19,8 +17,10 @@ import {
   CheckCircle2,
   XCircle,
   Clock3,
-  Send,
   Wand2,
+  Send,
+  Zap,
+  Layers,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -33,7 +33,6 @@ interface MediaAsset {
   file_type: 'image' | 'video';
   file_size: number;
   mime_type: string | null;
-  duration_seconds: number | null;
   transcript: string | null;
   width: number | null;
   height: number | null;
@@ -54,15 +53,19 @@ interface PostVariation {
   account_id: string;
   cloudfront_url: string;
   s3_key: string;
+  carousel_urls: string[];
   caption: string;
   hashtags: string[];
   font_used: string | null;
+  carousel_texts: string[];
   status: string;
   scheduled_for: string | null;
   ig_media_id: string | null;
   permalink: string | null;
   error_message: string | null;
   retry_count: number;
+  source_filename: string | null;
+  is_test_post: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -77,7 +80,11 @@ interface PostBatch {
   randomize_content: boolean;
   preview_count: number;
   prompt_id: string | null;
+  custom_prompt: string | null;
   carousel_size: number;
+  carousel_text_lines: string[];
+  post_now: boolean;
+  use_whole_library: boolean;
   status: string;
   created_at: string;
 }
@@ -104,7 +111,6 @@ type SubView = 'library' | 'create' | 'staging' | 'schedules';
 export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
   const [subView, setSubView] = useState<SubView>('library');
   const [assets, setAssets] = useState<MediaAsset[]>([]);
-  const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set());
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
   const [uploadingFiles, setUploadingFiles] = useState<Array<{ name: string; progress: number; error?: string }>>([]);
   const [filterType, setFilterType] = useState<'all' | 'image' | 'video'>('all');
@@ -119,9 +125,19 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
   const [varyCaption, setVaryCaption] = useState(true);
   const [varyHashtags, setVaryHashtags] = useState(true);
   const [varyFont, setVaryFont] = useState(true);
+  const [useWholeLibrary, setUseWholeLibrary] = useState(true);
+  const [promptMode, setPromptMode] = useState<'none' | 'select' | 'custom'>('none');
   const [selectedPromptId, setSelectedPromptId] = useState<string>('');
+  const [customPrompt, setCustomPrompt] = useState('');
   const [availablePrompts, setAvailablePrompts] = useState<Array<{ id: string; title: string }>>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Carousel state
+  const [carouselSize, setCarouselSize] = useState(1);
+  const [carouselTextLines, setCarouselTextLines] = useState<string[]>(['']);
+
+  // Post now
+  const [postNow, setPostNow] = useState(false);
 
   // Staging state
   const [batches, setBatches] = useState<PostBatch[]>([]);
@@ -133,6 +149,11 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
   const [schedules, setSchedules] = useState<PostingSchedule[]>([]);
   const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
 
+  // Test post state
+  const [testPostAssetId, setTestPostAssetId] = useState<string | null>(null);
+  const [testPostAccountId, setTestPostAccountId] = useState<string>('');
+  const [isPostingTest, setIsPostingTest] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAssets = useCallback(async () => {
@@ -142,7 +163,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       setAssets(data || []);
     } catch (error) {
@@ -159,7 +179,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       setBatches(data || []);
     } catch (error) {
@@ -173,27 +192,18 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         .from('instagram_posting_schedules')
         .select('*')
         .eq('user_id', userId);
-
       if (error) throw error;
 
       if (data && data.length > 0) {
         setSchedules(data);
       } else if (accounts.length > 0) {
-        // Create default schedules for accounts that don't have one
         for (const account of accounts) {
-          await supabase
-            .from('instagram_posting_schedules')
-            .upsert({
-              user_id: userId,
-              account_id: account.id,
-              auto_posting_enabled: false,
-              posts_per_day: 1,
-              start_time: '09:00',
-              end_time: '21:00',
-              active_days: [0, 1, 2, 3, 4, 5, 6],
-              min_gap_minutes: 60,
-              carousel_size: 1,
-            }, { onConflict: 'user_id,account_id' });
+          await supabase.from('instagram_posting_schedules').upsert({
+            user_id: userId, account_id: account.id,
+            auto_posting_enabled: false, posts_per_day: 1,
+            start_time: '09:00', end_time: '21:00',
+            active_days: [0, 1, 2, 3, 4, 5, 6], min_gap_minutes: 60, carousel_size: 1,
+          }, { onConflict: 'user_id,account_id' });
         }
         const { data: newSchedules } = await supabase
           .from('instagram_posting_schedules')
@@ -216,7 +226,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         .select('*')
         .eq('batch_id', batchId)
         .order('created_at', { ascending: true });
-
       if (error) throw error;
       setVariations(data || []);
     } catch (error) {
@@ -233,7 +242,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
   }, [fetchAssets, fetchBatches, fetchSchedules]);
 
   useEffect(() => {
-    // Fetch available prompts for caption variation
     const fetchPrompts = async () => {
       const { data } = await supabase
         .from('prompts')
@@ -245,13 +253,11 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
     fetchPrompts();
   }, [userId]);
 
-  // Realtime subscription for assets
   useEffect(() => {
     const channel = supabase
       .channel(`media_assets_rt_${userId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'media_assets', filter: `user_id=eq.${userId}` }, () => fetchAssets())
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [userId, fetchAssets]);
 
@@ -265,8 +271,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
       const contentType = file.type || (isVideo ? 'video/mp4' : 'image/jpeg');
 
       try {
-        // Send the file to the edge function, which uploads to S3 server-side.
-        // This avoids browser CORS issues with direct S3 uploads.
         const formData = new FormData();
         formData.append('file', file);
         formData.append('file_name', file.name);
@@ -289,17 +293,11 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
 
         const { s3_key, cloudfront_url } = await response.json();
 
-        // Save metadata to database
         const { error: insertError } = await supabase
           .from('media_assets')
           .insert({
-            user_id: userId,
-            file_name: file.name,
-            s3_key: s3_key,
-            cloudfront_url: cloudfront_url,
-            file_type: isVideo ? 'video' : 'image',
-            file_size: file.size,
-            mime_type: contentType,
+            user_id: userId, file_name: file.name, s3_key, cloudfront_url,
+            file_type: isVideo ? 'video' : 'image', file_size: file.size, mime_type: contentType,
           });
 
         if (insertError) throw insertError;
@@ -312,22 +310,15 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
       }
     }
 
-    // Clear upload list after a delay
     setTimeout(() => setUploadingFiles([]), 3000);
     fetchAssets();
   };
 
   const handleDeleteAsset = async (assetId: string) => {
     try {
-      const { error } = await supabase
-        .from('media_assets')
-        .delete()
-        .eq('id', assetId)
-        .eq('user_id', userId);
-
+      const { error } = await supabase.from('media_assets').delete().eq('id', assetId).eq('user_id', userId);
       if (error) throw error;
       setAssets(prev => prev.filter(a => a.id !== assetId));
-      setSelectedAssets(prev => { const n = new Set(prev); n.delete(assetId); return n; });
       toast.success('Asset deleted');
     } catch (error) {
       console.error('Error deleting asset:', error);
@@ -347,12 +338,10 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         },
         body: JSON.stringify({ asset_id: assetId }),
       });
-
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error(err.error || 'Transcription failed');
       }
-
       const { transcript } = await response.json();
       setAssets(prev => prev.map(a => a.id === assetId ? { ...a, transcript } : a));
       toast.success('Transcription complete');
@@ -363,8 +352,8 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
   };
 
   const handleCreateBatch = async () => {
-    if (selectedAssets.size === 0) {
-      toast.error('Select at least one library asset');
+    if (assets.length === 0) {
+      toast.error('Upload content to your library first');
       return;
     }
     if (accounts.length === 0) {
@@ -384,31 +373,44 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         .filter(h => h.length > 0)
         .map(h => `#${h}`);
 
+      // Filter out empty carousel text lines
+      const textLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
+
+      const batchInsert: Record<string, unknown> = {
+        user_id: userId,
+        base_caption: baseCaption,
+        hashtags,
+        content_type: contentType,
+        selected_asset_ids: [],
+        variation_settings: { caption: varyCaption, hashtags: varyHashtags, font: varyFont },
+        randomize_content: randomizeContent,
+        preview_count: previewCount,
+        carousel_size: carouselSize,
+        carousel_text_lines: textLines,
+        post_now: postNow,
+        use_whole_library: useWholeLibrary,
+        status: 'draft',
+      };
+
+      if (promptMode === 'custom' && customPrompt.trim()) {
+        batchInsert.custom_prompt = customPrompt.trim();
+        batchInsert.prompt_id = null;
+      } else if (promptMode === 'select' && selectedPromptId) {
+        batchInsert.prompt_id = selectedPromptId;
+        batchInsert.custom_prompt = null;
+      } else {
+        batchInsert.prompt_id = null;
+        batchInsert.custom_prompt = null;
+      }
+
       const { data: batch, error } = await supabase
         .from('instagram_post_batches')
-        .insert({
-          user_id: userId,
-          base_caption: baseCaption,
-          hashtags: hashtags,
-          content_type: contentType,
-          selected_asset_ids: Array.from(selectedAssets),
-          variation_settings: {
-            caption: varyCaption,
-            hashtags: varyHashtags,
-            font: varyFont,
-          },
-          randomize_content: randomizeContent,
-          preview_count: previewCount,
-          prompt_id: selectedPromptId || null,
-          carousel_size: 1,
-          status: 'draft',
-        })
+        .insert(batchInsert)
         .select()
         .single();
 
       if (error) throw error;
 
-      // Call the generate-post-variations edge function
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-post-variations`, {
         method: 'POST',
         headers: {
@@ -424,10 +426,17 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         throw new Error(err.error || 'Variation generation failed');
       }
 
-      toast.success('Variations generated! Review them in Staging.');
+      const result = await response.json();
+
+      if (postNow) {
+        toast.success(`${result.variations_created} posts published immediately!`);
+      } else {
+        toast.success('Variations generated! Review them in Staging.');
+      }
+
       setBaseCaption('');
       setHashtagsText('');
-      setSelectedAssets(new Set());
+      setCarouselTextLines(['']);
       fetchBatches();
       setActiveBatchId(batch.id);
       setSubView('staging');
@@ -446,7 +455,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         .from('instagram_post_variations')
         .update({ status: 'approved', updated_at: new Date().toISOString() })
         .eq('id', variationId);
-
       if (error) throw error;
       setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'approved' } : v));
       toast.success('Variation approved');
@@ -462,7 +470,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         .from('instagram_post_variations')
         .update({ status: 'rejected', updated_at: new Date().toISOString() })
         .eq('id', variationId);
-
       if (error) throw error;
       setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'rejected' } : v));
       toast.success('Variation rejected');
@@ -480,13 +487,11 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
     }
 
     try {
-      // Calculate scheduled times spread across the next few days
       const now = new Date();
       for (let i = 0; i < approved.length; i++) {
         const variation = approved[i];
-        const scheduleTime = new Date(now.getTime() + (i + 1) * 3 * 60 * 60 * 1000); // 3 hours apart
+        const scheduleTime = new Date(now.getTime() + (i + 1) * 3 * 60 * 60 * 1000);
 
-        // Move content to scheduled folder and set status
         await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
           method: 'POST',
           headers: {
@@ -494,23 +499,17 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
             Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
             apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({
-            variation_id: variation.id,
-            action: 'schedule',
-          }),
+          body: JSON.stringify({ variation_id: variation.id, action: 'schedule' }),
         });
 
         await supabase
           .from('instagram_post_variations')
-          .update({
-            scheduled_for: scheduleTime.toISOString(),
-            updated_at: new Date().toISOString(),
-          })
+          .update({ scheduled_for: scheduleTime.toISOString(), updated_at: new Date().toISOString() })
           .eq('id', variation.id);
       }
 
       toast.success(`${approved.length} posts scheduled! They will be published automatically.`);
-      fetchVariations(activeBatchId!);
+      if (activeBatchId) fetchVariations(activeBatchId);
     } catch (error) {
       console.error('Error scheduling:', error);
       toast.error('Failed to schedule posts');
@@ -528,17 +527,54 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         },
         body: JSON.stringify({ variation_id: variationId, action: 'publish' }),
       });
-
       if (response.ok) {
         toast.success('Post published successfully!');
       } else {
         const err = await response.json().catch(() => ({}));
         toast.error(`Publish failed: ${err.error || 'Unknown error'}`);
       }
-      fetchVariations(activeBatchId!);
+      if (activeBatchId) fetchVariations(activeBatchId);
     } catch (error) {
       console.error('Retry error:', error);
       toast.error('Retry failed');
+    }
+  };
+
+  const handleTestPost = async () => {
+    if (!testPostAssetId || !testPostAccountId) {
+      toast.error('Select an asset and an account for the test post');
+      return;
+    }
+
+    setIsPostingTest(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          action: 'test_post',
+          asset_id: testPostAssetId,
+          account_id: testPostAccountId,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(`Test post published! Media ID: ${result.media_id}`);
+        setTestPostAssetId(null);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        toast.error(`Test post failed: ${err.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Test post error:', error);
+      toast.error(`Test post failed: ${error.message}`);
+    } finally {
+      setIsPostingTest(false);
     }
   };
 
@@ -548,22 +584,12 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         .from('instagram_posting_schedules')
         .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', scheduleId);
-
       if (error) throw error;
       setSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, ...updates } : s));
     } catch (error) {
       console.error('Error updating schedule:', error);
       toast.error('Failed to update schedule');
     }
-  };
-
-  const toggleAssetSelection = (assetId: string) => {
-    setSelectedAssets(prev => {
-      const n = new Set(prev);
-      if (n.has(assetId)) n.delete(assetId);
-      else n.add(assetId);
-      return n;
-    });
   };
 
   const formatFileSize = (bytes: number) => {
@@ -600,10 +626,32 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
 
   const subTabs: Array<{ id: SubView; label: string; icon: React.ComponentType<{ className?: string }> }> = [
     { id: 'library', label: 'Content Library', icon: ImageIcon },
-    { id: 'create', label: 'Create Batch', icon: Wand2 },
+    { id: 'create', label: 'Create Posts', icon: Wand2 },
     { id: 'staging', label: 'Staging', icon: Eye },
     { id: 'schedules', label: 'Schedules', icon: Clock },
   ];
+
+  const updateCarouselTextLine = (index: number, value: string) => {
+    setCarouselTextLines(prev => prev.map((t, i) => i === index ? value : t));
+  };
+
+  const addCarouselTextLine = () => {
+    setCarouselTextLines(prev => [...prev, '']);
+  };
+
+  const removeCarouselTextLine = (index: number) => {
+    setCarouselTextLines(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // When carousel size changes, adjust text lines array
+  useEffect(() => {
+    setCarouselTextLines(prev => {
+      const newArr = [...prev];
+      while (newArr.length < carouselSize) newArr.push('');
+      while (newArr.length > carouselSize) newArr.pop();
+      return newArr;
+    });
+  }, [carouselSize]);
 
   return (
     <div className="space-y-6">
@@ -654,7 +702,9 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Drag and drop images and videos here, or click to browse
             </p>
-            <p className="text-xs text-gray-400 mt-1">Files upload to your S3 bucket at instagram/library/</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Files get a new unique filename and upload to instagram/library/
+            </p>
           </div>
 
           {/* Upload progress */}
@@ -704,6 +754,49 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
             </div>
           )}
 
+          {/* Test post section */}
+          {assets.length > 0 && accounts.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <h3 className="text-sm font-medium text-amber-800 dark:text-amber-300">Test Post (out of schedule)</h3>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
+                Select a photo from your library and an account to post it immediately as a test, bypassing the schedule.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={testPostAssetId || ''}
+                  onChange={(e) => setTestPostAssetId(e.target.value)}
+                  className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select a photo...</option>
+                  {assets.filter(a => a.file_type === 'image').map(a => (
+                    <option key={a.id} value={a.id}>{a.file_name}</option>
+                  ))}
+                </select>
+                <select
+                  value={testPostAccountId}
+                  onChange={(e) => setTestPostAccountId(e.target.value)}
+                  className="px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select account...</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>@{a.username || 'Unknown'}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleTestPost}
+                  disabled={!testPostAssetId || !testPostAccountId || isPostingTest}
+                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isPostingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Post Test
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Asset grid */}
           {isLoadingAssets ? (
             <div className="flex justify-center py-12">
@@ -713,21 +806,16 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
             <div className="text-center py-12">
               <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No content yet</h3>
-              <p className="text-gray-500 dark:text-gray-400">Upload images and videos to build your content library.</p>
+              <p className="text-gray-500 dark:text-gray-400">Upload images and videos to build your content library. The auto-poster will randomly select from here.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {filteredAssets.map(asset => (
                 <div
                   key={asset.id}
-                  className={`relative group bg-white dark:bg-gray-800 rounded-xl overflow-hidden border-2 transition-all ${
-                    selectedAssets.has(asset.id) ? 'border-pink-500' : 'border-transparent'
-                  }`}
+                  className="relative group bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-transparent"
                 >
-                  <div
-                    className="aspect-square cursor-pointer relative"
-                    onClick={() => toggleAssetSelection(asset.id)}
-                  >
+                  <div className="aspect-square relative">
                     {asset.file_type === 'video' ? (
                       <div className="w-full h-full bg-gray-900 flex items-center justify-center">
                         <video src={asset.cloudfront_url} className="w-full h-full object-cover" preload="metadata" />
@@ -737,11 +825,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
                       </div>
                     ) : (
                       <img src={asset.cloudfront_url} alt={asset.file_name} className="w-full h-full object-cover" loading="lazy" />
-                    )}
-                    {selectedAssets.has(asset.id) && (
-                      <div className="absolute top-2 right-2 bg-pink-500 rounded-full p-1">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
                     )}
                     <div className="absolute top-2 left-2">
                       {asset.file_type === 'video' ? (
@@ -783,50 +866,31 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         </div>
       )}
 
-      {/* Create Batch */}
+      {/* Create Posts */}
       {subView === 'create' && (
         <div className="max-w-2xl space-y-6">
           {assets.length === 0 ? (
             <div className="text-center py-12">
               <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-gray-400">Upload content to your library first, then create a batch.</p>
+              <p className="text-gray-500 dark:text-gray-400">Upload content to your library first.</p>
               <button onClick={() => setSubView('library')} className="mt-4 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg">
                 Go to Library
               </button>
             </div>
           ) : (
             <>
-              {/* Selected assets preview */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Selected Content ({selectedAssets.size})
-                </label>
-                {selectedAssets.size === 0 ? (
-                  <button
-                    onClick={() => setSubView('library')}
-                    className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center text-sm text-gray-500 hover:border-pink-400 transition-colors"
-                  >
-                    Select content from your library
-                  </button>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {assets.filter(a => selectedAssets.has(a.id)).map(asset => (
-                      <div key={asset.id} className="relative w-16 h-16 rounded-lg overflow-hidden">
-                        {asset.file_type === 'video' ? (
-                          <video src={asset.cloudfront_url} className="w-full h-full object-cover" preload="metadata" />
-                        ) : (
-                          <img src={asset.cloudfront_url} alt="" className="w-full h-full object-cover" />
-                        )}
-                        <button
-                          onClick={() => toggleAssetSelection(asset.id)}
-                          className="absolute top-0 right-0 bg-black/60 text-white p-0.5 rounded-bl"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
+              {/* Library mode info */}
+              <div className="bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-700 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Layers className="w-5 h-5 text-pink-600 dark:text-pink-400 mt-0.5" />
+                  <div>
+                    <h3 className="text-sm font-medium text-pink-800 dark:text-pink-300">Auto-Posting from Your Library</h3>
+                    <p className="mt-1 text-sm text-pink-700 dark:text-pink-400">
+                      The auto-poster will randomly select {carouselSize} {carouselSize === 1 ? 'photo' : 'photos'} from your library ({assets.length} items available)
+                      for each account. No need to manually select content — every preview gets a fresh random selection.
+                    </p>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Content type */}
@@ -847,6 +911,59 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
                   </button>
                 </div>
               </div>
+
+              {/* Carousel size */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Photos per Post (Carousel): {carouselSize}
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={carouselSize}
+                  onChange={(e) => setCarouselSize(parseInt(e.target.value))}
+                  className="w-full accent-pink-500"
+                />
+                <p className="text-xs text-gray-500">
+                  The auto-poster will select this many random photos. Users can swipe left to see all {carouselSize}.
+                </p>
+              </div>
+
+              {/* Carousel text lines */}
+              {carouselSize > 1 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Text on Each Photo (Carousel Swipe Text)
+                  </label>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Each line goes on a different photo. Line 1 on photo 1, line 2 on photo 2, etc.
+                    When the viewer swipes left, they see the next photo with the next text line.
+                  </p>
+                  <div className="space-y-2">
+                    {carouselTextLines.map((line, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 w-6 text-right">{index + 1}.</span>
+                        <input
+                          type="text"
+                          value={line}
+                          onChange={(e) => updateCarouselTextLine(index, e.target.value)}
+                          className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          placeholder={`Text for photo ${index + 1}...`}
+                        />
+                        {carouselTextLines.length > 1 && (
+                          <button
+                            onClick={() => removeCarouselTextLine(index)}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Base caption */}
               <div>
@@ -906,40 +1023,98 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
                 </label>
                 <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                   <input type="checkbox" checked={randomizeContent} onChange={(e) => setRandomizeContent(e.target.checked)} className="rounded border-gray-300 text-pink-600" />
-                  Randomize content to each account
+                  Randomize photos to each account
                 </label>
               </div>
 
-              {/* Prompt selector */}
+              {/* Prompt mode selector */}
               {varyCaption && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Caption Variation Prompt (optional)
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Caption Variation Prompt
                   </label>
-                  <select
-                    value={selectedPromptId}
-                    onChange={(e) => setSelectedPromptId(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">No AI prompt (use mechanical variation only)</option>
-                    {availablePrompts.map(p => (
-                      <option key={p.id} value={p.id}>{p.title}</option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500">Select a prompt from your Prompts page to control how captions are rephrased</p>
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      onClick={() => setPromptMode('none')}
+                      className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'none' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                    >
+                      No AI
+                    </button>
+                    <button
+                      onClick={() => setPromptMode('select')}
+                      className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'select' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                    >
+                      Select from saved
+                    </button>
+                    <button
+                      onClick={() => setPromptMode('custom')}
+                      className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'custom' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                    >
+                      Type custom prompt
+                    </button>
+                  </div>
+
+                  {promptMode === 'select' && (
+                    <select
+                      value={selectedPromptId}
+                      onChange={(e) => setSelectedPromptId(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Select a prompt...</option>
+                      {availablePrompts.map(p => (
+                        <option key={p.id} value={p.id}>{p.title}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {promptMode === 'custom' && (
+                    <textarea
+                      value={customPrompt}
+                      onChange={(e) => setCustomPrompt(e.target.value)}
+                      rows={4}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="Type your own prompt for AI caption variation. Use {{original_caption}}, {{account_name}}, {{hashtags}}, {{transcript}} as placeholders."
+                    />
+                  )}
+
+                  {promptMode === 'none' && (
+                    <p className="text-xs text-gray-500">Captions will only be varied by shuffling words mechanically, no AI.</p>
+                  )}
                 </div>
               )}
+
+              {/* Post now toggle */}
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={postNow}
+                    onChange={(e) => setPostNow(e.target.checked)}
+                    className="rounded border-amber-300 text-amber-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                      <Zap className="w-4 h-4" /> Post immediately
+                    </span>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                      When enabled, posts are published right after generation instead of going to staging.
+                    </p>
+                  </div>
+                </label>
+              </div>
 
               {/* Generate button */}
               <button
                 onClick={handleCreateBatch}
-                disabled={isGenerating || selectedAssets.size === 0 || !baseCaption.trim()}
+                disabled={isGenerating || !baseCaption.trim()}
                 className="w-full px-6 py-3 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-2"
               >
                 {isGenerating ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Generating Variations...</>
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Generating... This may take a moment.</>
+                ) : postNow ? (
+                  <><Zap className="w-4 h-4" /> Generate & Post Immediately</>
                 ) : (
-                  <><Wand2 className="w-4 h-4" /> Generate Variations</>
+                  <><Wand2 className="w-4 h-4" /> Generate Preview Variations</>
                 )}
               </button>
             </>
@@ -950,7 +1125,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
       {/* Staging */}
       {subView === 'staging' && (
         <div>
-          {/* Batch selector */}
           {batches.length > 1 && (
             <div className="mb-4">
               <select
@@ -971,9 +1145,9 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
             <div className="text-center py-12">
               <Eye className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No batches yet</h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">Create a batch to generate and preview post variations.</p>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">Create posts to generate and preview variations.</p>
               <button onClick={() => setSubView('create')} className="px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg">
-                Create a Batch
+                Create Posts
               </button>
             </div>
           ) : isLoadingVariations ? (
@@ -982,7 +1156,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
             </div>
           ) : (
             <>
-              {/* Bulk actions */}
               {variations.some(v => v.status === 'approved') && (
                 <div className="flex justify-end mb-4">
                   <button
@@ -995,13 +1168,14 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
                 </div>
               )}
 
-              {/* Variation cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {variations.map(variation => {
                   const account = accounts.find(a => a.id === variation.account_id);
+                  const carouselUrls = variation.carousel_urls && variation.carousel_urls.length > 0
+                    ? variation.carousel_urls
+                    : [variation.cloudfront_url];
                   return (
                     <div key={variation.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
-                      {/* Account header */}
                       <div className="flex items-center gap-2 p-3 border-b border-gray-100 dark:border-gray-700">
                         {account?.profile_picture_url ? (
                           <img src={account.profile_picture_url} alt="" className="w-8 h-8 rounded-full" />
@@ -1016,16 +1190,32 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
                         </span>
                       </div>
 
-                      {/* Media preview */}
+                      {/* Carousel preview */}
                       <div className="aspect-square bg-gray-100 dark:bg-gray-900 relative">
-                        {variation.s3_key.endsWith('.mp4') || variation.s3_key.endsWith('.mov') ? (
+                        {carouselUrls.length > 1 && (
+                          <div className="absolute top-2 right-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Layers className="w-3 h-3" /> {carouselUrls.length} photos
+                          </div>
+                        )}
+                        {(variation.s3_key.endsWith('.mp4') || variation.s3_key.endsWith('.mov')) ? (
                           <video src={variation.cloudfront_url} className="w-full h-full object-cover" controls preload="metadata" />
                         ) : (
                           <img src={variation.cloudfront_url} alt="" className="w-full h-full object-cover" />
                         )}
                       </div>
 
-                      {/* Caption */}
+                      {/* Carousel text preview */}
+                      {variation.carousel_texts && variation.carousel_texts.length > 0 && (
+                        <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                          <p className="text-[10px] text-gray-400 mb-1">Text on photos:</p>
+                          {variation.carousel_texts.map((text, i) => (
+                            <p key={i} className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                              <span className="text-gray-400">{i + 1}.</span> {text}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="p-3">
                         <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">{variation.caption}</p>
                         {variation.hashtags.length > 0 && (
@@ -1034,29 +1224,28 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
                         {variation.font_used && (
                           <p className="text-[10px] text-gray-400 mt-1">Font: {variation.font_used}</p>
                         )}
+                        {variation.source_filename && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">Source: {variation.source_filename}</p>
+                        )}
 
-                        {/* Scheduled time */}
                         {variation.scheduled_for && (
                           <p className="text-xs text-purple-500 mt-1 flex items-center gap-1">
                             <Clock3 className="w-3 h-3" /> {formatDate(variation.scheduled_for)}
                           </p>
                         )}
 
-                        {/* Error message */}
                         {variation.error_message && (
                           <p className="text-xs text-red-500 mt-1 flex items-start gap-1">
                             <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" /> {variation.error_message}
                           </p>
                         )}
 
-                        {/* Permalink */}
                         {variation.permalink && (
                           <a href={variation.permalink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline mt-1 inline-block">
                             View on Instagram
                           </a>
                         )}
 
-                        {/* Action buttons */}
                         <div className="flex items-center gap-2 mt-3">
                           {(variation.status === 'staged' || variation.status === 'rejected') && (
                             <>
@@ -1174,7 +1363,6 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
                       </div>
                     </div>
 
-                    {/* Active days */}
                     <div className="mt-3">
                       <label className="block text-xs text-gray-500 mb-2">Active days</label>
                       <div className="flex gap-1">

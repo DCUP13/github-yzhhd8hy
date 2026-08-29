@@ -6,77 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-async function sha256(message: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function hmacSha256(key: Uint8Array, message: string): Promise<Uint8Array> {
-  const encoder = new TextEncoder();
-  const keyObject = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const signature = await crypto.subtle.sign('HMAC', keyObject, encoder.encode(message));
-  return new Uint8Array(signature);
-}
-
-async function hmacSha256Hex(key: Uint8Array, message: string): Promise<string> {
-  const signature = await hmacSha256(key, message);
-  return Array.from(signature).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function getSignatureKey(key: string, dateStamp: string, region: string, service: string): Promise<Uint8Array> {
-  const encoder = new TextEncoder();
-  const kDate = await hmacSha256(encoder.encode('AWS4' + key), dateStamp);
-  const kRegion = await hmacSha256(kDate, region);
-  const kService = await hmacSha256(kRegion, service);
-  return await hmacSha256(kService, 'aws4_request');
-}
-
-async function generatePresignedPutUrl(
-  bucket: string,
-  key: string,
-  accessKeyId: string,
-  secretAccessKey: string,
-  region: string,
-): Promise<string> {
-  const method = 'PUT';
-  const service = 's3';
-  const host = `${bucket}.s3.${region}.amazonaws.com`;
-  const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
-  const dateStamp = amzDate.slice(0, 8);
-  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-
-  const queryParams = new URLSearchParams();
-  queryParams.set('X-Amz-Algorithm', 'AWS4-HMAC-SHA256');
-  queryParams.set('X-Amz-Credential', `${accessKeyId}/${credentialScope}`);
-  queryParams.set('X-Amz-Date', amzDate);
-  queryParams.set('X-Amz-Expires', '3600');
-  queryParams.set('X-Amz-SignedHeaders', 'host');
-
-  const sortedParams = Array.from(queryParams.entries()).sort();
-  const canonicalQueryString = sortedParams.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-  const canonicalUri = '/' + key.split('/').map(part => encodeURIComponent(part)).join('/');
-  const canonicalHeaders = `host:${host}\n`;
-  const signedHeaders = 'host';
-  const payloadHash = 'UNSIGNED-PAYLOAD';
-  const canonicalRequest = [method, canonicalUri, canonicalQueryString, canonicalHeaders, signedHeaders, payloadHash].join('\n');
-  const canonicalRequestHash = await sha256(canonicalRequest);
-  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, canonicalRequestHash].join('\n');
-  const signingKey = await getSignatureKey(secretAccessKey, dateStamp, region, service);
-  const signature = await hmacSha256Hex(signingKey, stringToSign);
-
-  const finalParams = new URLSearchParams();
-  finalParams.set('X-Amz-Algorithm', 'AWS4-HMAC-SHA256');
-  finalParams.set('X-Amz-Credential', `${accessKeyId}/${credentialScope}`);
-  finalParams.set('X-Amz-Date', amzDate);
-  finalParams.set('X-Amz-Expires', '3600');
-  finalParams.set('X-Amz-SignedHeaders', 'host');
-  finalParams.set('X-Amz-Signature', signature);
-
-  return `https://${host}${canonicalUri}?${finalParams.toString()}`;
-}
+const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 
 const FONTS = [
   { name: 'Inter', family: 'system-ui, -apple-system, sans-serif' },
@@ -89,6 +19,84 @@ const FONTS = [
   { name: 'Trebuchet', family: '"Trebuchet MS", sans-serif' },
 ];
 
+async function sha256(message: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function uploadToS3Signed(
+  bucket: string,
+  key: string,
+  fileData: Uint8Array,
+  contentType: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+): Promise<void> {
+  const method = 'PUT';
+  const service = 's3';
+  const host = `${bucket}.s3.${region}.amazonaws.com`;
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const payloadHash = 'UNSIGNED-PAYLOAD';
+
+  const headers: Record<string, string> = {
+    'content-type': contentType,
+    'host': host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  };
+  const sortedHeaderKeys = Object.keys(headers).sort();
+  const canonicalHeaders = sortedHeaderKeys.map(k => `${k}:${headers[k]}\n`).join('');
+  const signedHeaders = sortedHeaderKeys.join(';');
+  const canonicalUri = '/' + key.split('/').map(p => encodeURIComponent(p)).join('/');
+  const canonicalRequest = [method, canonicalUri, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+
+  const encoder = new TextEncoder();
+  const canonicalHashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(canonicalRequest));
+  const canonicalRequestHash = Array.from(new Uint8Array(canonicalHashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, canonicalRequestHash].join('\n');
+
+  const kDateKey = await (async () => {
+    const keyObj = await crypto.subtle.importKey('raw', encoder.encode('AWS4' + secretAccessKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', keyObj, encoder.encode(dateStamp)));
+  })();
+  const kRegionKey = await (async () => {
+    const keyObj = await crypto.subtle.importKey('raw', kDateKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', keyObj, encoder.encode(region)));
+  })();
+  const kServiceKey = await (async () => {
+    const keyObj = await crypto.subtle.importKey('raw', kRegionKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', keyObj, encoder.encode(service)));
+  })();
+  const signingKey = await (async () => {
+    const keyObj = await crypto.subtle.importKey('raw', kServiceKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', keyObj, encoder.encode('aws4_request')));
+  })();
+
+  const signatureBuffer = await crypto.subtle.sign('HMAC',
+    await crypto.subtle.importKey('raw', signingKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']),
+    encoder.encode(stringToSign));
+  const signature = Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  const authorizationHeader = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const s3Response = await fetch(`https://${host}${canonicalUri}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': contentType, 'x-amz-content-sha256': payloadHash, 'x-amz-date': amzDate, 'Authorization': authorizationHeader },
+    body: fileData,
+  });
+
+  if (!s3Response.ok) {
+    const errText = await s3Response.text();
+    throw new Error(`S3 upload failed (${s3Response.status}): ${errText.slice(0, 200)}`);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -98,11 +106,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      {
-        global: {
-          headers: { Authorization: req.headers.get("Authorization") || "" },
-        },
-      },
+      { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } },
     );
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -114,70 +118,38 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const { source_url, text, font_name, target_folder, content_type } = body as {
-      source_url?: string;
-      text?: string;
-      font_name?: string;
-      target_folder?: string;
-      content_type?: string;
+      source_url?: string; text?: string; font_name?: string; target_folder?: string; content_type?: string;
     };
 
-    if (!source_url || !text) {
-      return new Response(JSON.stringify({ error: "Missing source_url or text" }), {
+    if (!source_url) {
+      return new Response(JSON.stringify({ error: "Missing source_url" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
     const BUCKET_NAME = Deno.env.get("S3_BUCKET_NAME");
-
-    if (!BUCKET_NAME) {
-      return new Response(JSON.stringify({ error: "S3 bucket name not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
     const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
     const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
 
-    if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+    if (!BUCKET_NAME || !AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
       return new Response(JSON.stringify({ error: "AWS credentials not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Download the source image
+    // Download the source image and re-upload with a unique filename
     const imageResponse = await fetch(source_url);
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to download source image: ${imageResponse.status}`);
-    }
-    const imageBuffer = await imageResponse.arrayBuffer();
+    if (!imageResponse.ok) throw new Error(`Failed to download source: ${imageResponse.status}`);
+    const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
 
-    // For now, re-upload the original image as a placeholder for the overlay.
-    // The actual text overlay rendering requires a canvas library that works in Deno.
-    // This creates the unique file at the target folder so the variation system works end-to-end.
     const folder = target_folder || 'posts';
     const ext = source_url.split('.').pop()?.split('?')[0] || 'jpg';
     const uniqueName = `${crypto.randomUUID()}.${ext}`;
     const s3Key = `instagram/${folder}/${user.id}/${uniqueName}`;
+    const ct = content_type || 'image/jpeg';
 
-    const presignedUrl = await generatePresignedPutUrl(
-      BUCKET_NAME,
-      s3Key,
-      AWS_ACCESS_KEY_ID,
-      AWS_SECRET_ACCESS_KEY,
-      AWS_REGION,
-    );
-
-    const uploadResponse = await fetch(presignedUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': content_type || 'image/jpeg' },
-      body: imageBuffer,
-    });
-
-    if (!uploadResponse.ok) {
-      throw new Error(`Failed to upload modified image: ${uploadResponse.status}`);
-    }
+    await uploadToS3Signed(BUCKET_NAME, s3Key, imageBuffer, ct, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
 
     const cloudfrontUrl = `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;
     const selectedFont = font_name || FONTS[Math.floor(Math.random() * FONTS.length)].name;

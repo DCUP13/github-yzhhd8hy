@@ -13,6 +13,11 @@ async function sha256(message: string): Promise<string> {
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+async function sha256Binary(data: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function hmacSha256(key: Uint8Array, message: string): Promise<Uint8Array> {
   const encoder = new TextEncoder();
   const keyObject = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -35,7 +40,7 @@ async function getSignatureKey(key: string, dateStamp: string, region: string, s
 
 /**
  * Uploads a file to S3 using a signed PUT request from the server side.
- * This avoids browser CORS issues since the edge function makes the S3 request.
+ * Generates a unique filename so every upload gets a fresh name.
  */
 async function uploadToS3(
   bucket: string,
@@ -53,13 +58,10 @@ async function uploadToS3(
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
   const dateStamp = amzDate.slice(0, 8);
-
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
 
-  // Compute the SHA-256 hash of the payload for the x-amz-content-sha256 header
-  const payloadHash = await sha256(String.fromCharCode(...fileData));
+  const payloadHash = await sha256Binary(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength));
 
-  // Build canonical headers — must be sorted alphabetically by header name
   const headers: Record<string, string> = {
     'content-type': contentType,
     'host': host,
@@ -70,22 +72,14 @@ async function uploadToS3(
   const sortedHeaderKeys = Object.keys(headers).sort();
   const canonicalHeaders = sortedHeaderKeys.map(k => `${k}:${headers[k]}\n`).join('');
   const signedHeaders = sortedHeaderKeys.join(';');
-
-  // No query parameters for PUT
   const canonicalQueryString = '';
-
   const canonicalUri = '/' + key.split('/').map(part => encodeURIComponent(part)).join('/');
-
   const canonicalRequest = [method, canonicalUri, canonicalQueryString, canonicalHeaders, signedHeaders, payloadHash].join('\n');
-
-  const algorithm = 'AWS4-HMAC-SHA256';
   const canonicalRequestHash = await sha256(canonicalRequest);
-  const stringToSign = [algorithm, amzDate, credentialScope, canonicalRequestHash].join('\n');
-
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, canonicalRequestHash].join('\n');
   const signingKey = await getSignatureKey(secretAccessKey, dateStamp, region, service);
   const signature = await hmacSha256Hex(signingKey, stringToSign);
-
-  const authorizationHeader = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  const authorizationHeader = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
   const s3Url = `https://${host}${canonicalUri}`;
   const s3Response = await fetch(s3Url, {
@@ -105,6 +99,39 @@ async function uploadToS3(
   }
 }
 
+/**
+ * Downloads a file from a URL and re-uploads it to S3 with a new unique filename.
+ * Returns the new S3 key and CloudFront URL.
+ */
+async function copyAssetWithNewName(
+  sourceUrl: string,
+  bucket: string,
+  targetFolder: string,
+  userId: string,
+  contentType: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+  cloudfrontDomain: string,
+): Promise<{ s3Key: string; cloudfrontUrl: string }> {
+  const response = await fetch(sourceUrl);
+  if (!response.ok) throw new Error(`Failed to download source: ${response.status}`);
+  const buffer = new Uint8Array(await response.arrayBuffer());
+
+  const ext = sourceUrl.split('.').pop()?.split('?')[0] || 'jpg';
+  const uniqueName = `${crypto.randomUUID()}.${ext}`;
+  const s3Key = `instagram/${targetFolder}/${userId}/${uniqueName}`;
+
+  await uploadToS3(bucket, s3Key, buffer, contentType, accessKeyId, secretAccessKey, region);
+
+  return {
+    s3Key,
+    cloudfrontUrl: `https://${cloudfrontDomain}/${s3Key}`,
+  };
+}
+
+const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -114,11 +141,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      {
-        global: {
-          headers: { Authorization: req.headers.get("Authorization") || "" },
-        },
-      },
+      { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } },
     );
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -128,7 +151,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Accept multipart form data with the file and metadata
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const fileName = formData.get("file_name") as string | null;
@@ -141,9 +163,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
     const BUCKET_NAME = Deno.env.get("S3_BUCKET_NAME");
-
     if (!BUCKET_NAME) {
       return new Response(JSON.stringify({ error: "S3 bucket name not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -160,24 +180,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Determine the S3 key path
+    // Generate a new unique filename for every upload
     const ext = fileName.split('.').pop() || 'bin';
     const uniqueName = `${crypto.randomUUID()}.${ext}`;
     const s3Key = `instagram/${folder}/${user.id}/${uniqueName}`;
 
-    // Read file into a Uint8Array for upload
     const fileBuffer = new Uint8Array(await file.arrayBuffer());
 
-    // Upload to S3 from the server side — no CORS issues
-    await uploadToS3(
-      BUCKET_NAME,
-      s3Key,
-      fileBuffer,
-      contentType,
-      AWS_ACCESS_KEY_ID,
-      AWS_SECRET_ACCESS_KEY,
-      AWS_REGION,
-    );
+    await uploadToS3(BUCKET_NAME, s3Key, fileBuffer, contentType, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
 
     const cloudfrontUrl = `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;
 
@@ -196,3 +206,5 @@ Deno.serve(async (req: Request) => {
     });
   }
 });
+
+export { uploadToS3, copyAssetWithNewName, CLOUDFRONT_DOMAIN };

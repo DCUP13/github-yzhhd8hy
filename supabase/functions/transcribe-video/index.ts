@@ -16,11 +16,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      {
-        global: {
-          headers: { Authorization: req.headers.get("Authorization") || "" },
-        },
-      },
+      { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } },
     );
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -39,7 +35,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Load the media asset
     const { data: asset, error: assetError } = await supabase
       .from("media_assets")
       .select("*")
@@ -65,16 +60,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Download the video from CloudFront
     const videoResponse = await fetch(asset.cloudfront_url);
-    if (!videoResponse.ok) {
-      throw new Error(`Failed to download video: ${videoResponse.status}`);
-    }
+    if (!videoResponse.ok) throw new Error(`Failed to download video: ${videoResponse.status}`);
 
     const videoBlob = await videoResponse.blob();
     const videoFile = new File([videoBlob], asset.file_name, { type: asset.mime_type || 'video/mp4' });
 
-    // Call OpenAI Whisper API
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
     const transcription = await openai.audio.transcriptions.create({
       file: videoFile,
@@ -83,11 +74,7 @@ Deno.serve(async (req: Request) => {
 
     const transcriptText = transcription.text || '';
 
-    // Save transcript to the media asset
-    await supabase
-      .from("media_assets")
-      .update({ transcript: transcriptText })
-      .eq("id", asset_id);
+    await supabase.from("media_assets").update({ transcript: transcriptText }).eq("id", asset_id);
 
     return new Response(JSON.stringify({ transcript: transcriptText }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
