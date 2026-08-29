@@ -265,39 +265,29 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
       const contentType = file.type || (isVideo ? 'video/mp4' : 'image/jpeg');
 
       try {
-        // Get pre-signed upload URL
+        // Send the file to the edge function, which uploads to S3 server-side.
+        // This avoids browser CORS issues with direct S3 uploads.
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('file_name', file.name);
+        formData.append('content_type', contentType);
+        formData.append('folder', 'library');
+
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
             apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({
-            file_name: file.name,
-            content_type: contentType,
-            folder: 'library',
-          }),
+          body: formData,
         });
 
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
-          throw new Error(err.error || 'Failed to get upload URL');
+          throw new Error(err.error || `Upload failed (${response.status})`);
         }
 
-        const { upload_url, s3_key, cloudfront_url } = await response.json();
-
-        // Upload to S3
-        const uploadResponse = await fetch(upload_url, {
-          method: 'PUT',
-          headers: { 'Content-Type': contentType },
-          body: file,
-        });
-
-        if (!uploadResponse.ok) {
-          const s3ErrorText = await uploadResponse.text().catch(() => '');
-          throw new Error(`S3 upload failed (${uploadResponse.status}): ${s3ErrorText.slice(0, 200)}`);
-        }
+        const { s3_key, cloudfront_url } = await response.json();
 
         // Save metadata to database
         const { error: insertError } = await supabase

@@ -34,18 +34,18 @@ async function getSignatureKey(key: string, dateStamp: string, region: string, s
 }
 
 /**
- * Generates a pre-signed PUT URL for uploading a file directly to S3.
- * Uses AWS Signature Version 4 with the project's existing AWS_ACCESS_KEY_ID
- * and AWS_SECRET_ACCESS_KEY edge function secrets.
+ * Uploads a file to S3 using a signed PUT request from the server side.
+ * This avoids browser CORS issues since the edge function makes the S3 request.
  */
-async function generatePresignedPutUrl(
+async function uploadToS3(
   bucket: string,
   key: string,
+  fileData: Uint8Array,
   contentType: string,
   accessKeyId: string,
   secretAccessKey: string,
   region: string,
-): Promise<string> {
+): Promise<void> {
   const method = 'PUT';
   const service = 's3';
   const host = `${bucket}.s3.${region}.amazonaws.com`;
@@ -56,20 +56,25 @@ async function generatePresignedPutUrl(
 
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
 
-  const queryParams = new URLSearchParams();
-  queryParams.set('X-Amz-Algorithm', 'AWS4-HMAC-SHA256');
-  queryParams.set('X-Amz-Credential', `${accessKeyId}/${credentialScope}`);
-  queryParams.set('X-Amz-Date', amzDate);
-  queryParams.set('X-Amz-Expires', '3600');
-  queryParams.set('X-Amz-SignedHeaders', 'content-type;host');
+  // Compute the SHA-256 hash of the payload for the x-amz-content-sha256 header
+  const payloadHash = await sha256(String.fromCharCode(...fileData));
 
-  const sortedParams = Array.from(queryParams.entries()).sort();
-  const canonicalQueryString = sortedParams.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  // Build canonical headers — must be sorted alphabetically by header name
+  const headers: Record<string, string> = {
+    'content-type': contentType,
+    'host': host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  };
+
+  const sortedHeaderKeys = Object.keys(headers).sort();
+  const canonicalHeaders = sortedHeaderKeys.map(k => `${k}:${headers[k]}\n`).join('');
+  const signedHeaders = sortedHeaderKeys.join(';');
+
+  // No query parameters for PUT
+  const canonicalQueryString = '';
 
   const canonicalUri = '/' + key.split('/').map(part => encodeURIComponent(part)).join('/');
-  const canonicalHeaders = `content-type:${contentType}\nhost:${host}\n`;
-  const signedHeaders = 'content-type;host';
-  const payloadHash = 'UNSIGNED-PAYLOAD';
 
   const canonicalRequest = [method, canonicalUri, canonicalQueryString, canonicalHeaders, signedHeaders, payloadHash].join('\n');
 
@@ -80,15 +85,24 @@ async function generatePresignedPutUrl(
   const signingKey = await getSignatureKey(secretAccessKey, dateStamp, region, service);
   const signature = await hmacSha256Hex(signingKey, stringToSign);
 
-  const finalParams = new URLSearchParams();
-  finalParams.set('X-Amz-Algorithm', 'AWS4-HMAC-SHA256');
-  finalParams.set('X-Amz-Credential', `${accessKeyId}/${credentialScope}`);
-  finalParams.set('X-Amz-Date', amzDate);
-  finalParams.set('X-Amz-Expires', '3600');
-  finalParams.set('X-Amz-SignedHeaders', 'content-type;host');
-  finalParams.set('X-Amz-Signature', signature);
+  const authorizationHeader = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
-  return `https://${host}${canonicalUri}?${finalParams.toString()}`;
+  const s3Url = `https://${host}${canonicalUri}`;
+  const s3Response = await fetch(s3Url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': contentType,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+      'Authorization': authorizationHeader,
+    },
+    body: fileData,
+  });
+
+  if (!s3Response.ok) {
+    const errText = await s3Response.text();
+    throw new Error(`S3 upload failed (${s3Response.status}): ${errText.slice(0, 300)}`);
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -114,15 +128,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const { file_name, content_type, folder } = body as {
-      file_name?: string;
-      content_type?: string;
-      folder?: string;
-    };
+    // Accept multipart form data with the file and metadata
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const fileName = formData.get("file_name") as string | null;
+    const contentType = (formData.get("content_type") as string | null) || file?.type || 'application/octet-stream';
+    const folder = (formData.get("folder") as string | null) || 'library';
 
-    if (!file_name || !content_type) {
-      return new Response(JSON.stringify({ error: "Missing file_name or content_type" }), {
+    if (!file || !fileName) {
+      return new Response(JSON.stringify({ error: "Missing file or file_name in form data" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -131,7 +145,7 @@ Deno.serve(async (req: Request) => {
     const BUCKET_NAME = Deno.env.get("S3_BUCKET_NAME");
 
     if (!BUCKET_NAME) {
-      return new Response(JSON.stringify({ error: "S3 bucket name not configured. Set S3_BUCKET_NAME as an edge function secret." }), {
+      return new Response(JSON.stringify({ error: "S3 bucket name not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -147,15 +161,19 @@ Deno.serve(async (req: Request) => {
     }
 
     // Determine the S3 key path
-    const targetFolder = folder || 'library';
-    const ext = file_name.split('.').pop() || 'bin';
+    const ext = fileName.split('.').pop() || 'bin';
     const uniqueName = `${crypto.randomUUID()}.${ext}`;
-    const s3Key = `instagram/${targetFolder}/${user.id}/${uniqueName}`;
+    const s3Key = `instagram/${folder}/${user.id}/${uniqueName}`;
 
-    const presignedUrl = await generatePresignedPutUrl(
+    // Read file into a Uint8Array for upload
+    const fileBuffer = new Uint8Array(await file.arrayBuffer());
+
+    // Upload to S3 from the server side — no CORS issues
+    await uploadToS3(
       BUCKET_NAME,
       s3Key,
-      content_type,
+      fileBuffer,
+      contentType,
       AWS_ACCESS_KEY_ID,
       AWS_SECRET_ACCESS_KEY,
       AWS_REGION,
@@ -164,10 +182,10 @@ Deno.serve(async (req: Request) => {
     const cloudfrontUrl = `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;
 
     return new Response(JSON.stringify({
-      upload_url: presignedUrl,
       s3_key: s3Key,
       cloudfront_url: cloudfrontUrl,
-      file_name: file_name,
+      file_name: fileName,
+      file_size: file.size,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
