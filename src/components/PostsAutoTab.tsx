@@ -255,24 +255,7 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
     return () => { supabase.removeChannel(channel); };
   }, [userId, fetchAssets]);
 
-  const getStorageConfig = async (): Promise<{ cloudfront_domain: string; bucket_name: string } | null> => {
-    const { data, error } = await supabase
-      .from('media_storage_config')
-      .select('cloudfront_domain, bucket_name')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error || !data) {
-      toast.error('Please configure your S3 storage in Settings > Content Storage first.');
-      return null;
-    }
-    return data;
-  };
-
   const handleFileUpload = async (files: FileList) => {
-    const config = await getStorageConfig();
-    if (!config) return;
-
     const fileList = Array.from(files);
     setUploadingFiles(fileList.map(f => ({ name: f.name, progress: 0 })));
 

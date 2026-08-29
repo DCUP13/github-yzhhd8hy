@@ -127,22 +127,18 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Load storage config
-    const { data: config, error: configError } = await supabase
-      .from("media_storage_config")
-      .select("bucket_name, bucket_region, cloudfront_domain")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
+    const BUCKET_NAME = Deno.env.get("S3_BUCKET_NAME");
 
-    if (configError || !config) {
-      return new Response(JSON.stringify({ error: "Content storage not configured" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (!BUCKET_NAME) {
+      return new Response(JSON.stringify({ error: "S3 bucket name not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
     const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-    const AWS_REGION = config.bucket_region || Deno.env.get("AWS_REGION") || "us-east-1";
+    const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
 
     if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
       return new Response(JSON.stringify({ error: "AWS credentials not configured" }), {
@@ -166,7 +162,7 @@ Deno.serve(async (req: Request) => {
     const s3Key = `instagram/${folder}/${user.id}/${uniqueName}`;
 
     const presignedUrl = await generatePresignedPutUrl(
-      config.bucket_name,
+      BUCKET_NAME,
       s3Key,
       AWS_ACCESS_KEY_ID,
       AWS_SECRET_ACCESS_KEY,
@@ -183,7 +179,7 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Failed to upload modified image: ${uploadResponse.status}`);
     }
 
-    const cloudfrontUrl = `https://${config.cloudfront_domain}/${s3Key}`;
+    const cloudfrontUrl = `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;
     const selectedFont = font_name || FONTS[Math.floor(Math.random() * FONTS.length)].name;
 
     return new Response(JSON.stringify({

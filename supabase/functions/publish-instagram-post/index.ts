@@ -142,45 +142,38 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
+    const BUCKET_NAME = Deno.env.get("S3_BUCKET_NAME");
+    const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
+    const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+    const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
+
     if (actionType === 'schedule') {
-      // Move content to scheduled folder in S3
-      const { data: config } = await supabase
-        .from("media_storage_config")
-        .select("bucket_name, bucket_region, cloudfront_domain")
-        .eq("user_id", variation.user_id)
-        .maybeSingle();
-
-      if (config) {
-        const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
-        const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-        const AWS_REGION = config.bucket_region || Deno.env.get("AWS_REGION") || "us-east-1";
-
-        if (AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
-          const ext = variation.s3_key.split('.').pop() || 'jpg';
-          const scheduledKey = `instagram/scheduled/${variation.user_id}/${variation_id}.${ext}`;
-          try {
-            await copyS3Object(
-              variation.cloudfront_url,
-              config.bucket_name,
-              scheduledKey,
-              AWS_ACCESS_KEY_ID,
-              AWS_SECRET_ACCESS_KEY,
-              AWS_REGION,
-              variation.s3_key.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg',
-            );
-            const newUrl = `https://${config.cloudfront_domain}/${scheduledKey}`;
-            await supabase
-              .from("instagram_post_variations")
-              .update({
-                s3_key: scheduledKey,
-                cloudfront_url: newUrl,
-                status: 'scheduled',
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", variation_id);
-          } catch (e) {
-            console.error("Failed to copy to scheduled folder:", e);
-          }
+      if (BUCKET_NAME && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
+        const ext = variation.s3_key.split('.').pop() || 'jpg';
+        const scheduledKey = `instagram/scheduled/${variation.user_id}/${variation_id}.${ext}`;
+        try {
+          await copyS3Object(
+            variation.cloudfront_url,
+            BUCKET_NAME,
+            scheduledKey,
+            AWS_ACCESS_KEY_ID,
+            AWS_SECRET_ACCESS_KEY,
+            AWS_REGION,
+            variation.s3_key.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg',
+          );
+          const newUrl = `https://${CLOUDFRONT_DOMAIN}/${scheduledKey}`;
+          await supabase
+            .from("instagram_post_variations")
+            .update({
+              s3_key: scheduledKey,
+              cloudfront_url: newUrl,
+              status: 'scheduled',
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", variation_id);
+        } catch (e) {
+          console.error("Failed to copy to scheduled folder:", e);
         }
       }
 
@@ -299,33 +292,21 @@ Deno.serve(async (req: Request) => {
     }
 
     // Move content to posted folder in S3
-    const { data: config } = await supabase
-      .from("media_storage_config")
-      .select("bucket_name, bucket_region, cloudfront_domain")
-      .eq("user_id", variation.user_id)
-      .maybeSingle();
-
-    if (config) {
-      const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
-      const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-      const AWS_REGION = config.bucket_region || Deno.env.get("AWS_REGION") || "us-east-1";
-
-      if (AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
-        const ext = variation.s3_key.split('.').pop() || 'jpg';
-        const postedKey = `instagram/posted/${variation.user_id}/${mediaId}.${ext}`;
-        try {
-          await copyS3Object(
-            variation.cloudfront_url,
-            config.bucket_name,
-            postedKey,
-            AWS_ACCESS_KEY_ID,
-            AWS_SECRET_ACCESS_KEY,
-            AWS_REGION,
-            isVideo ? 'video/mp4' : 'image/jpeg',
-          );
-        } catch (e) {
-          console.error("Failed to copy to posted folder:", e);
-        }
+    if (BUCKET_NAME && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
+      const ext = variation.s3_key.split('.').pop() || 'jpg';
+      const postedKey = `instagram/posted/${variation.user_id}/${mediaId}.${ext}`;
+      try {
+        await copyS3Object(
+          variation.cloudfront_url,
+          BUCKET_NAME,
+          postedKey,
+          AWS_ACCESS_KEY_ID,
+          AWS_SECRET_ACCESS_KEY,
+          AWS_REGION,
+          isVideo ? 'video/mp4' : 'image/jpeg',
+        );
+      } catch (e) {
+        console.error("Failed to copy to posted folder:", e);
       }
     }
 
