@@ -13,11 +13,6 @@ async function sha256(message: string): Promise<string> {
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function sha256Binary(data: ArrayBuffer): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 async function hmacSha256(key: Uint8Array, message: string): Promise<Uint8Array> {
   const encoder = new TextEncoder();
   const keyObject = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -61,8 +56,8 @@ async function uploadToS3(
 
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
 
-  // Compute the SHA-256 hash of the binary payload directly
-  const payloadHash = await sha256Binary(fileData.buffer);
+  // Compute the SHA-256 hash of the payload for the x-amz-content-sha256 header
+  const payloadHash = await sha256(String.fromCharCode(...fileData));
 
   // Build canonical headers — must be sorted alphabetically by header name
   const headers: Record<string, string> = {
