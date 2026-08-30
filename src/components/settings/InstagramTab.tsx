@@ -130,7 +130,7 @@ export function InstagramTab() {
     }
   }, []);
 
-  const handleOAuthConnect = async () => {
+  const handleOAuthConnect = async (reconnectAccountId?: string) => {
     setOauthStarting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -143,7 +143,7 @@ export function InstagramTab() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ app_origin: window.location.origin }),
+        body: JSON.stringify({ app_origin: window.location.origin, reconnect_account_id: reconnectAccountId }),
       });
 
       if (!response.ok) {
@@ -379,7 +379,7 @@ export function InstagramTab() {
                       Manual tokens may not support posting. Reconnect via Instagram Login to enable posting.
                     </p>
                     <button
-                      onClick={handleOAuthConnect}
+                      onClick={() => handleOAuthConnect(acct.id)}
                       className="ml-auto px-3 py-1 text-xs font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg whitespace-nowrap flex items-center gap-1"
                     >
                       <Link2 className="w-3 h-3" /> Reconnect

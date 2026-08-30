@@ -21,7 +21,7 @@ Deno.serve(async (req: Request) => {
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
     // Parse state to get user_id and app origin
-    let stateData: { user_id: string; ts: number; origin?: string };
+    let stateData: { user_id: string; ts: number; origin?: string; reconnect_account_id?: string };
     try {
       stateData = JSON.parse(atob(stateParam ?? ""));
     } catch {
@@ -32,6 +32,8 @@ Deno.serve(async (req: Request) => {
     if (!userId) {
       return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth=done&oauth_error=no_user`, 302);
     }
+
+    const reconnectAccountId = stateData.reconnect_account_id || "";
 
     // Determine the app's frontend URL for redirect — prefer origin from state, fall back to referer
     let appOrigin = stateData.origin || "";
@@ -140,21 +142,40 @@ Deno.serve(async (req: Request) => {
 
     if (!igUserId) {
       // Fallback: no IG Business Account found through Pages.
-      // The user may be reconnecting an existing manually-connected account.
-      // Update their existing account(s) with the fresh long-lived token.
+      // The user may be reconnecting a specific existing account.
+      // If we know which account (from the state), update that one; otherwise upgrade the oldest.
       const supabaseClientFallback = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       );
-      const { data: existingAccounts } = await supabaseClientFallback
-        .from("instagram_accounts")
-        .select("id, ig_user_id, username")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: true });
 
-      if (existingAccounts && existingAccounts.length > 0) {
-        // Upgrade the first (oldest) account with the new token
-        const acct = existingAccounts[0];
+      let targetAccountId: string | null = null;
+
+      if (reconnectAccountId) {
+        const { data: target } = await supabaseClientFallback
+          .from("instagram_accounts")
+          .select("id")
+          .eq("id", reconnectAccountId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (target) {
+          targetAccountId = target.id;
+        }
+      }
+
+      if (!targetAccountId) {
+        const { data: existingAccounts } = await supabaseClientFallback
+          .from("instagram_accounts")
+          .select("id, ig_user_id, username")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: true });
+
+        if (existingAccounts && existingAccounts.length > 0) {
+          targetAccountId = existingAccounts[0].id;
+        }
+      }
+
+      if (targetAccountId) {
         await supabaseClientFallback
           .from("instagram_accounts")
           .update({
@@ -164,7 +185,7 @@ Deno.serve(async (req: Request) => {
             token_expired: false,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", acct.id);
+          .eq("id", targetAccountId);
         return Response.redirect(`${settingsUrl}&oauth=success`, 302);
       }
 
