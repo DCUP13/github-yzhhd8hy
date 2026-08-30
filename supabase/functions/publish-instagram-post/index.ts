@@ -161,8 +161,14 @@ Deno.serve(async (req: Request) => {
       }
 
       const accessToken = (account as Record<string, unknown>)?.access_token as string | undefined;
+      const authMethod = (account as Record<string, unknown>)?.auth_method as string | undefined;
       if (!accessToken) {
         return new Response(JSON.stringify({ error: "No access token for this account" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (authMethod === 'manual') {
+        return new Response(JSON.stringify({ error: "This account was connected manually and its token cannot be used for posting. Go to Settings > Instagram and click Reconnect to authorize via Instagram Login." }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -182,7 +188,14 @@ Deno.serve(async (req: Request) => {
       const mediaResponse = await fetch(createMediaUrl, { method: 'POST', body: mediaParams });
       if (!mediaResponse.ok) {
         const errText = await mediaResponse.text();
-        throw new Error(`Failed to create media container: ${errText}`);
+        let friendlyError = `Failed to create media container: ${errText}`;
+        try {
+          const errJson = JSON.parse(errText);
+          if (errJson?.error?.code === 190) {
+            friendlyError = 'Your Instagram access token is invalid or expired. Go to Settings > Instagram and click Reconnect to get a fresh token via Instagram Login.';
+          }
+        } catch { /* keep default */ }
+        throw new Error(friendlyError);
       }
       const mediaResult = await mediaResponse.json();
       const creationId = mediaResult.id;

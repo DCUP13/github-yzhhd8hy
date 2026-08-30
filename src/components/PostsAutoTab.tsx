@@ -767,40 +767,40 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
               <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
                 Select a photo from your library and an account to post it immediately as a test, bypassing the schedule.
               </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <select
-                  value={testPostAssetId || ''}
-                  onChange={(e) => setTestPostAssetId(e.target.value)}
-                  className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">Select a photo...</option>
-                  {assets.filter(a => a.file_type === 'image').map(a => (
-                    <option key={a.id} value={a.id}>{a.file_name}</option>
-                  ))}
-                </select>
-                <select
-                  value={testPostAccountId}
-                  onChange={(e) => setTestPostAccountId(e.target.value)}
-                  className="px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">Select account...</option>
-                  {accounts.map(a => (
-                    <option key={a.id} value={a.id}>@{a.username || 'Unknown'}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="text"
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <select
+                    value={testPostAssetId || ''}
+                    onChange={(e) => setTestPostAssetId(e.target.value)}
+                    className="flex-1 px-3 py-2.5 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Select a photo...</option>
+                    {assets.filter(a => a.file_type === 'image').map(a => (
+                      <option key={a.id} value={a.id}>{a.file_name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={testPostAccountId}
+                    onChange={(e) => setTestPostAccountId(e.target.value)}
+                    className="sm:w-auto px-3 py-2.5 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Select account...</option>
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>@{a.username || 'Unknown'}</option>
+                    ))}
+                  </select>
+                </div>
+                <textarea
                   value={testPostCaption}
                   onChange={(e) => setTestPostCaption(e.target.value)}
+                  rows={3}
                   placeholder="Caption (optional)..."
-                  className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-3 py-2.5 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                 />
                 <button
                   onClick={handleTestPost}
                   disabled={!testPostAssetId || !testPostAccountId || isPostingTest}
-                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+                  className="px-4 py-2.5 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
                 >
                   {isPostingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   Post Test
