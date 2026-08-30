@@ -6,9 +6,36 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Instagram OAuth start — generates the Facebook/Instagram OAuth dialog URL
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  // Debug endpoint: GET request returns masked app ID and redirect URI for troubleshooting
+  if (req.method === "GET") {
+    const appId = Deno.env.get("INSTAGRAM_APP_ID");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
+    if (!appId) {
+      return new Response(JSON.stringify({ error: "INSTAGRAM_APP_ID not set", redirect_uri: redirectUri }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const trimmed = appId.trim();
+    const isNumeric = /^\d+$/.test(trimmed);
+    return new Response(JSON.stringify({
+      app_id_length: trimmed.length,
+      app_id_prefix: trimmed.slice(0, 4),
+      app_id_is_numeric: isNumeric,
+      app_id_has_quotes: trimmed.startsWith('"') || trimmed.startsWith("'"),
+      app_id_has_spaces: trimmed !== appId,
+      redirect_uri: redirectUri,
+      auth_url_preview: `https://www.facebook.com/v21.0/dialog/oauth?client_id=${trimmed}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=instagram_basic&response_type=code&state=test`,
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
