@@ -346,6 +346,22 @@ export function InstagramTab() {
                   </div>
                 </div>
 
+                {/* Reconnect via OAuth for manual accounts (posting requires Graph API token) */}
+                {acct.auth_method === 'manual' && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Manual tokens may not support posting. Reconnect via Instagram Login to enable posting.
+                    </p>
+                    <button
+                      onClick={handleOAuthConnect}
+                      className="ml-auto px-3 py-1 text-xs font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg whitespace-nowrap flex items-center gap-1"
+                    >
+                      <Link2 className="w-3 h-3" /> Reconnect
+                    </button>
+                  </div>
+                )}
+
                 {/* Token expired — show update token field */}
                 {acct.token_expired && editingTokenFor === acct.id && (
                   <div className="mt-3 flex items-center gap-2">

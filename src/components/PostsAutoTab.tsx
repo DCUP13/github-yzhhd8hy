@@ -152,6 +152,7 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
   // Test post state
   const [testPostAssetId, setTestPostAssetId] = useState<string | null>(null);
   const [testPostAccountId, setTestPostAccountId] = useState<string>('');
+  const [testPostCaption, setTestPostCaption] = useState<string>('');
   const [isPostingTest, setIsPostingTest] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -559,6 +560,7 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
           action: 'test_post',
           asset_id: testPostAssetId,
           account_id: testPostAccountId,
+          caption: testPostCaption,
         }),
       });
 
@@ -566,6 +568,7 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
         const result = await response.json();
         toast.success(`Test post published! Media ID: ${result.media_id}`);
         setTestPostAssetId(null);
+        setTestPostCaption('');
       } else {
         const err = await response.json().catch(() => ({}));
         toast.error(`Test post failed: ${err.error || 'Unknown error'}`);
@@ -785,10 +788,19 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
                     <option key={a.id} value={a.id}>@{a.username || 'Unknown'}</option>
                   ))}
                 </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={testPostCaption}
+                  onChange={(e) => setTestPostCaption(e.target.value)}
+                  placeholder="Caption (optional)..."
+                  className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
                 <button
                   onClick={handleTestPost}
                   disabled={!testPostAssetId || !testPostAccountId || isPostingTest}
-                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
                 >
                   {isPostingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   Post Test

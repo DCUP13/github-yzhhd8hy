@@ -113,11 +113,12 @@ Deno.serve(async (req: Request) => {
     );
 
     const body = await req.json().catch(() => ({}));
-    const { variation_id, action, asset_id, account_id } = body as {
+    const { variation_id, action, asset_id, account_id, caption } = body as {
       variation_id?: string;
       action?: string;
       asset_id?: string;
       account_id?: string;
+      caption?: string;
     };
 
     const BUCKET_NAME = Deno.env.get("S3_BUCKET_NAME");
@@ -175,7 +176,7 @@ Deno.serve(async (req: Request) => {
         access_token: accessToken,
         media_type: mediaType,
         image_url: asset.cloudfront_url,
-        caption: 'Test post',
+        caption: caption || 'Test post',
       });
 
       const mediaResponse = await fetch(createMediaUrl, { method: 'POST', body: mediaParams });

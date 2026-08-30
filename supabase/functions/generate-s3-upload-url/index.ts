@@ -180,10 +180,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Generate a new unique filename for every upload
+    // Use the original filename in S3 (sanitized), preserving the user's naming
     const ext = fileName.split('.').pop() || 'bin';
-    const uniqueName = `${crypto.randomUUID()}.${ext}`;
-    const s3Key = `instagram/${folder}/${user.id}/${uniqueName}`;
+    const baseName = fileName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const s3Key = `instagram/${folder}/${user.id}/${baseName}.${ext}`;
 
     const fileBuffer = new Uint8Array(await file.arrayBuffer());
 
