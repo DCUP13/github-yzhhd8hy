@@ -112,7 +112,7 @@ export function InstagramTab() {
       window.history.replaceState({}, '', newUrl);
     } else if (oauthError) {
       const messages: Record<string, string> = {
-        no_ig_account: 'No Instagram Business Account was found linked to your Facebook Pages. Make sure your Instagram account is a Business account connected to a Facebook Page.',
+        no_ig_account: 'No matching Instagram Business Account was found for this account. Make sure you log in with the Facebook account that manages this specific Instagram page, and that the Instagram account is a Business account linked to a Facebook Page.',
         no_pages: 'No Facebook Pages found. You need at least one Facebook Page to connect Instagram.',
         token_exchange_failed: 'Failed to exchange the authorization code for an access token.',
         long_lived_failed: 'Failed to get a long-lived access token.',
@@ -371,12 +371,14 @@ export function InstagramTab() {
                   </div>
                 </div>
 
-                {/* Reconnect via OAuth for manual accounts (posting requires Graph API token) */}
-                {acct.auth_method === 'manual' && (
+                {/* Reconnect via OAuth — show for manual accounts or expired tokens */}
+                {(acct.auth_method === 'manual' || acct.token_expired) && (
                   <div className="mt-3 flex items-center gap-2">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                     <p className="text-xs text-amber-600 dark:text-amber-400">
-                      Manual tokens may not support posting. Reconnect via Instagram Login to enable posting.
+                      {acct.auth_method === 'manual'
+                        ? 'Manual tokens may not support posting. Reconnect via Instagram Login to enable posting.'
+                        : 'This account\'s token may be invalid or belongs to a different Facebook account. Reconnect to get a fresh token.'}
                     </p>
                     <button
                       onClick={() => handleOAuthConnect(acct.id)}

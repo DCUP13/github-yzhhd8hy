@@ -6,6 +6,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface IgAccount {
+  ig_user_id: string;
+  username: string;
+  profile_picture_url: string | null;
+  followers_count: number | null;
+  follows_count: number | null;
+  media_count: number | null;
+  page_access_token: string;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -35,7 +45,6 @@ Deno.serve(async (req: Request) => {
 
     const reconnectAccountId = stateData.reconnect_account_id || "";
 
-    // Determine the app's frontend URL for redirect — prefer origin from state, fall back to referer
     let appOrigin = stateData.origin || "";
     if (!appOrigin) {
       const referer = req.headers.get("referer") ?? "";
@@ -44,9 +53,7 @@ Deno.serve(async (req: Request) => {
           const refererUrl = new URL(referer);
           appOrigin = `${refererUrl.protocol}//${refererUrl.host}`;
         }
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }
     if (!appOrigin) {
       appOrigin = supabaseUrl;
@@ -99,26 +106,26 @@ Deno.serve(async (req: Request) => {
       return Response.redirect(`${settingsUrl}&oauth_error=no_long_token`, 302);
     }
 
-    // Get the user's Pages
-    const pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token&access_token=${longLivedToken}`;
-    const pagesRes = await fetch(pagesUrl);
+    // Get ALL the user's Pages (with pagination support)
+    const pages: Array<{ id: string; access_token: string }> = [];
+    let pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token&limit=100&access_token=${longLivedToken}`;
 
-    if (!pagesRes.ok) {
-      return Response.redirect(`${settingsUrl}&oauth_error=pages_failed`, 302);
+    while (pagesUrl) {
+      const pagesRes = await fetch(pagesUrl);
+      if (!pagesRes.ok) {
+        return Response.redirect(`${settingsUrl}&oauth_error=pages_failed`, 302);
+      }
+      const pagesData = await pagesRes.json();
+      pages.push(...(pagesData.data ?? []));
+      pagesUrl = pagesData.paging?.next ?? "";
     }
-
-    const pagesData = await pagesRes.json();
-    const pages: Array<{ id: string; access_token: string }> = pagesData.data ?? [];
 
     if (pages.length === 0) {
       return Response.redirect(`${settingsUrl}&oauth_error=no_pages`, 302);
     }
 
-    // Get the Instagram Business Account from the first Page
-    let igUserId: string | null = null;
-    let igUsername: string | null = null;
-    let igProfilePic: string | null = null;
-    let pageAccessToken: string | null = null;
+    // Discover ALL Instagram Business Accounts across ALL Pages
+    const igAccounts: IgAccount[] = [];
 
     for (const page of pages) {
       const igUrl = `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`;
@@ -126,70 +133,24 @@ Deno.serve(async (req: Request) => {
       if (igRes.ok) {
         const igBody = await igRes.json();
         if (igBody.instagram_business_account?.id) {
-          igUserId = igBody.instagram_business_account.id;
-          pageAccessToken = page.access_token;
+          const igUserId = igBody.instagram_business_account.id;
           const profileUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${page.access_token}`;
           const profileRes = await fetch(profileUrl);
+          let profile: Record<string, unknown> = {};
           if (profileRes.ok) {
-            const profile = await profileRes.json();
-            igUsername = profile.username ?? null;
-            igProfilePic = profile.profile_picture_url ?? null;
+            profile = await profileRes.json();
           }
-          break;
+          igAccounts.push({
+            ig_user_id: igUserId,
+            username: (profile.username as string) ?? "",
+            profile_picture_url: (profile.profile_picture_url as string) ?? null,
+            followers_count: (profile.followers_count as number) ?? null,
+            follows_count: (profile.follows_count as number) ?? null,
+            media_count: (profile.media_count as number) ?? null,
+            page_access_token: page.access_token,
+          });
         }
       }
-    }
-
-    if (!igUserId) {
-      // Fallback: no IG Business Account found through Pages.
-      // The user may be reconnecting a specific existing account.
-      // If we know which account (from the state), update that one; otherwise upgrade the oldest.
-      const supabaseClientFallback = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      );
-
-      let targetAccountId: string | null = null;
-
-      if (reconnectAccountId) {
-        const { data: target } = await supabaseClientFallback
-          .from("instagram_accounts")
-          .select("id")
-          .eq("id", reconnectAccountId)
-          .eq("user_id", userId)
-          .maybeSingle();
-        if (target) {
-          targetAccountId = target.id;
-        }
-      }
-
-      if (!targetAccountId) {
-        const { data: existingAccounts } = await supabaseClientFallback
-          .from("instagram_accounts")
-          .select("id, ig_user_id, username")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: true });
-
-        if (existingAccounts && existingAccounts.length > 0) {
-          targetAccountId = existingAccounts[0].id;
-        }
-      }
-
-      if (targetAccountId) {
-        await supabaseClientFallback
-          .from("instagram_accounts")
-          .update({
-            access_token: longLivedToken,
-            connected: true,
-            auth_method: "oauth",
-            token_expired: false,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", targetAccountId);
-        return Response.redirect(`${settingsUrl}&oauth=success`, 302);
-      }
-
-      return Response.redirect(`${settingsUrl}&oauth_error=no_ig_account`, 302);
     }
 
     const supabaseClient = createClient(
@@ -197,36 +158,103 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const tokenToStore = pageAccessToken ?? longLivedToken;
-
-    const payload = {
-      user_id: userId,
-      ig_user_id: igUserId,
-      username: igUsername,
-      access_token: tokenToStore,
-      connected: true,
-      auth_method: "oauth",
-      profile_picture_url: igProfilePic,
-      token_expired: false,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { data: existing } = await supabaseClient
-      .from("instagram_accounts")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("ig_user_id", igUserId)
-      .maybeSingle();
-
-    if (existing) {
-      await supabaseClient
+    // If reconnecting a specific account, find the matching IG account by username
+    if (reconnectAccountId) {
+      // Load the existing account to get its username
+      const { data: existingAccount } = await supabaseClient
         .from("instagram_accounts")
-        .update(payload)
-        .eq("id", existing.id);
-    } else {
-      await supabaseClient
+        .select("id, username, ig_user_id")
+        .eq("id", reconnectAccountId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (existingAccount) {
+        // Try to find a matching IG account by username
+        let match: IgAccount | undefined = igAccounts.find(
+          (a) => a.username && existingAccount.username && a.username.toLowerCase() === existingAccount.username.toLowerCase()
+        );
+
+        // If no username match, and there's only one IG account found, use it
+        if (!match && igAccounts.length === 1) {
+          match = igAccounts[0];
+        }
+
+        // If no username match but we have multiple IG accounts, pick the one whose ID is already stored
+        if (!match && igAccounts.length > 1) {
+          match = igAccounts.find((a) => a.ig_user_id === existingAccount.ig_user_id);
+        }
+
+        if (match) {
+          await supabaseClient
+            .from("instagram_accounts")
+            .update({
+              ig_user_id: match.ig_user_id,
+              username: match.username,
+              access_token: match.page_access_token,
+              connected: true,
+              auth_method: "oauth",
+              profile_picture_url: match.profile_picture_url,
+              followers_count: match.followers_count,
+              media_count: match.media_count,
+              token_expired: false,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", reconnectAccountId);
+          return Response.redirect(`${settingsUrl}&oauth=success`, 302);
+        }
+
+        // No matching IG account found for this username — store the token but mark as needing attention
+        await supabaseClient
+          .from("instagram_accounts")
+          .update({
+            access_token: longLivedToken,
+            connected: true,
+            auth_method: "oauth",
+            token_expired: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", reconnectAccountId);
+        return Response.redirect(`${settingsUrl}&oauth_error=no_ig_account`, 302);
+      }
+    }
+
+    // Fresh connect (not reconnecting): store all discovered IG accounts
+    if (igAccounts.length === 0) {
+      return Response.redirect(`${settingsUrl}&oauth_error=no_ig_account`, 302);
+    }
+
+    for (const igAccount of igAccounts) {
+      const { data: existing } = await supabaseClient
         .from("instagram_accounts")
-        .insert(payload);
+        .select("id")
+        .eq("user_id", userId)
+        .eq("ig_user_id", igAccount.ig_user_id)
+        .maybeSingle();
+
+      const payload = {
+        user_id: userId,
+        ig_user_id: igAccount.ig_user_id,
+        username: igAccount.username,
+        access_token: igAccount.page_access_token,
+        connected: true,
+        auth_method: "oauth",
+        profile_picture_url: igAccount.profile_picture_url,
+        followers_count: igAccount.followers_count,
+        media_count: igAccount.media_count,
+        token_expired: false,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (existing) {
+        await supabaseClient
+          .from("instagram_accounts")
+          .update(payload)
+          .eq("id", existing.id);
+      } else {
+        await supabaseClient
+          .from("instagram_accounts")
+          .insert(payload);
+      }
     }
 
     return Response.redirect(`${settingsUrl}&oauth=success`, 302);
