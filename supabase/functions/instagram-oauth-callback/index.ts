@@ -17,24 +17,36 @@ Deno.serve(async (req: Request) => {
     const stateParam = url.searchParams.get("state");
     const errorParam = url.searchParams.get("error");
 
-    // Determine the app's frontend URL for redirect
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
-    // Build a redirect back to the app's Instagram settings page
-    // We use the origin from the request referer or fall back to a generic app URL
-    const referer = req.headers.get("referer") ?? "";
-    let appOrigin = "";
+    // Parse state to get user_id and app origin
+    let stateData: { user_id: string; ts: number; origin?: string };
     try {
-      if (referer) {
-        const refererUrl = new URL(referer);
-        appOrigin = `${refererUrl.protocol}//${refererUrl.host}`;
-      }
+      stateData = JSON.parse(atob(stateParam ?? ""));
     } catch {
-      // ignore
+      return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth=done&oauth_error=invalid_state`, 302);
+    }
+
+    const userId = stateData.user_id;
+    if (!userId) {
+      return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth=done&oauth_error=no_user`, 302);
+    }
+
+    // Determine the app's frontend URL for redirect — prefer origin from state, fall back to referer
+    let appOrigin = stateData.origin || "";
+    if (!appOrigin) {
+      const referer = req.headers.get("referer") ?? "";
+      try {
+        if (referer) {
+          const refererUrl = new URL(referer);
+          appOrigin = `${refererUrl.protocol}//${refererUrl.host}`;
+        }
+      } catch {
+        // ignore
+      }
     }
     if (!appOrigin) {
-      // Fall back to the supabase project URL's host (unlikely to be the app)
       appOrigin = supabaseUrl;
     }
 
@@ -46,19 +58,6 @@ Deno.serve(async (req: Request) => {
 
     if (!code || !stateParam) {
       return Response.redirect(`${settingsUrl}&oauth_error=missing_params`, 302);
-    }
-
-    // Parse state to get user_id
-    let stateData: { user_id: string; ts: number };
-    try {
-      stateData = JSON.parse(atob(stateParam));
-    } catch {
-      return Response.redirect(`${settingsUrl}&oauth_error=invalid_state`, 302);
-    }
-
-    const userId = stateData.user_id;
-    if (!userId) {
-      return Response.redirect(`${settingsUrl}&oauth_error=no_user`, 302);
     }
 
     const appId = Deno.env.get("INSTAGRAM_APP_ID");
@@ -73,8 +72,7 @@ Deno.serve(async (req: Request) => {
     const tokenRes = await fetch(tokenUrl);
 
     if (!tokenRes.ok) {
-      const errBody = await tokenRes.text();
-      return Response.redirect(`${settingsUrl}&oauth_error=${encodeURIComponent("token_exchange_failed")}`, 302);
+      return Response.redirect(`${settingsUrl}&oauth_error=token_exchange_failed`, 302);
     }
 
     const tokenData = await tokenRes.json();
@@ -108,7 +106,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const pagesData = await pagesRes.json();
-    const pages: any[] = pagesData.data ?? [];
+    const pages: Array<{ id: string; access_token: string }> = pagesData.data ?? [];
 
     if (pages.length === 0) {
       return Response.redirect(`${settingsUrl}&oauth_error=no_pages`, 302);
@@ -128,7 +126,6 @@ Deno.serve(async (req: Request) => {
         if (igBody.instagram_business_account?.id) {
           igUserId = igBody.instagram_business_account.id;
           pageAccessToken = page.access_token;
-          // Fetch profile data
           const profileUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${page.access_token}`;
           const profileRes = await fetch(profileUrl);
           if (profileRes.ok) {
@@ -145,23 +142,11 @@ Deno.serve(async (req: Request) => {
       return Response.redirect(`${settingsUrl}&oauth_error=no_ig_account`, 302);
     }
 
-    // Save to database — upsert the account
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // Check if this account already exists for this user
-    const { data: existing } = await supabaseClient
-      .from("instagram_accounts")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("ig_user_id", igUserId)
-      .maybeSingle();
-
-    // Store the Page access token — this is what the Instagram Graph API needs
-    // for sending DMs, fetching media metadata, and resolving sender profiles.
-    // Fall back to the long-lived user token if the page token wasn't captured.
     const tokenToStore = pageAccessToken ?? longLivedToken;
 
     const payload = {
@@ -175,6 +160,13 @@ Deno.serve(async (req: Request) => {
       token_expired: false,
       updated_at: new Date().toISOString(),
     };
+
+    const { data: existing } = await supabaseClient
+      .from("instagram_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("ig_user_id", igUserId)
+      .maybeSingle();
 
     if (existing) {
       await supabaseClient
@@ -191,6 +183,6 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("OAuth callback error:", error);
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth_error=${encodeURIComponent(error.message)}`, 302);
+    return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth=done&oauth_error=${encodeURIComponent(error.message)}`, 302);
   }
 });

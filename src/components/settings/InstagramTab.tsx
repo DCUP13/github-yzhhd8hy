@@ -117,9 +117,12 @@ export function InstagramTab() {
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const response = await fetch(`${supabaseUrl}/functions/v1/instagram-oauth-start`, {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
+        body: JSON.stringify({ app_origin: window.location.origin }),
       });
 
       if (!response.ok) {
@@ -129,7 +132,8 @@ export function InstagramTab() {
       }
 
       const { auth_url } = await response.json();
-      window.location.href = auth_url;
+      // Open in a new tab — Facebook blocks loading its OAuth dialog inside an iframe
+      window.open(auth_url, '_blank');
     } catch (error) {
       console.error('OAuth start error:', error);
       alert('Failed to start OAuth flow. Make sure INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET are set in your Supabase secrets.');

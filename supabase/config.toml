@@ -15,3 +15,9 @@ verify_jwt = true
 
 [functions.overlay-text-on-image]
 verify_jwt = true
+
+[functions.instagram-oauth-start]
+verify_jwt = true
+
+[functions.instagram-oauth-callback]
+verify_jwt = false
