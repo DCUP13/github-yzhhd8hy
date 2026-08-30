@@ -11,14 +11,14 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
+
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
     const stateParam = url.searchParams.get("state");
     const errorParam = url.searchParams.get("error");
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
     // Parse state to get user_id and app origin
     let stateData: { user_id: string; ts: number; origin?: string };
@@ -33,7 +33,7 @@ Deno.serve(async (req: Request) => {
       return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth=done&oauth_error=no_user`, 302);
     }
 
-    // Determine the app's frontend URL for redirect — prefer origin from state, fall back to referer
+    // Determine the app's frontend URL for redirect
     let appOrigin = stateData.origin || "";
     if (!appOrigin) {
       const referer = req.headers.get("referer") ?? "";
@@ -182,7 +182,6 @@ Deno.serve(async (req: Request) => {
     return Response.redirect(`${settingsUrl}&oauth=success`, 302);
   } catch (error) {
     console.error("OAuth callback error:", error);
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth=done&oauth_error=${encodeURIComponent(error.message)}`, 302);
   }
 });
