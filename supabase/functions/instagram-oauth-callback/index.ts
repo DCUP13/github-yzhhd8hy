@@ -139,6 +139,35 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!igUserId) {
+      // Fallback: no IG Business Account found through Pages.
+      // The user may be reconnecting an existing manually-connected account.
+      // Update their existing account(s) with the fresh long-lived token.
+      const supabaseClientFallback = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      );
+      const { data: existingAccounts } = await supabaseClientFallback
+        .from("instagram_accounts")
+        .select("id, ig_user_id, username")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+
+      if (existingAccounts && existingAccounts.length > 0) {
+        // Upgrade the first (oldest) account with the new token
+        const acct = existingAccounts[0];
+        await supabaseClientFallback
+          .from("instagram_accounts")
+          .update({
+            access_token: longLivedToken,
+            connected: true,
+            auth_method: "oauth",
+            token_expired: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", acct.id);
+        return Response.redirect(`${settingsUrl}&oauth=success`, 302);
+      }
+
       return Response.redirect(`${settingsUrl}&oauth_error=no_ig_account`, 302);
     }
 

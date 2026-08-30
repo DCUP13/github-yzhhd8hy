@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Instagram as InstagramIcon, Check, AlertCircle, Link2, Eye, EyeOff, Plus, Trash2, RefreshCw, Key, Zap, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { toast } from '../../lib/toast';
 
 interface IgAccountRow {
   id: string;
@@ -101,9 +102,29 @@ export function InstagramTab() {
   // Check for OAuth callback params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('oauth') === 'success') {
+    const oauthStatus = params.get('oauth');
+    const oauthError = params.get('oauth_error');
+
+    if (oauthStatus === 'success') {
       setShowManualForm(false);
-      // Clean up URL
+      toast.success('Instagram connected successfully via OAuth.');
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    } else if (oauthError) {
+      const messages: Record<string, string> = {
+        no_ig_account: 'No Instagram Business Account was found linked to your Facebook Pages. Make sure your Instagram account is a Business account connected to a Facebook Page.',
+        no_pages: 'No Facebook Pages found. You need at least one Facebook Page to connect Instagram.',
+        token_exchange_failed: 'Failed to exchange the authorization code for an access token.',
+        long_lived_failed: 'Failed to get a long-lived access token.',
+        not_configured: 'Instagram OAuth is not configured. Contact support.',
+        missing_params: 'Missing authorization parameters from Instagram.',
+        no_token: 'No access token returned from Instagram.',
+        no_long_token: 'No long-lived token returned.',
+        pages_failed: 'Failed to fetch your Facebook Pages.',
+        invalid_state: 'Invalid state parameter. Please try connecting again.',
+        no_user: 'Could not determine which user to connect the account to.',
+      };
+      toast.error(messages[oauthError] || `OAuth error: ${oauthError}`);
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
