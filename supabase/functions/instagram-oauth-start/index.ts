@@ -29,6 +29,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
+    // Get the authenticated user
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "");
 
@@ -41,14 +42,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Accept app_origin from request body so the callback knows where to redirect
     const body = await req.json().catch(() => ({}));
     const appOrigin = (body as { app_origin?: string })?.app_origin || "";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
-    const scope = "instagram_basic,instagram_content_publish,instagram_manage_messages,pages_show_list,pages_read_engagement";
+    const scope = "instagram_basic,instagram_content_publish,instagram_manage_messages,pages_show_list,pages_read_engagement,pages_manage_engagement,pages_messaging";
 
+    // Generate a secure state parameter containing the user ID and app origin
     const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now(), origin: appOrigin }));
 
     const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=${encodeURIComponent(state)}`;
