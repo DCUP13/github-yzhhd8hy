@@ -193,6 +193,8 @@ Deno.serve(async (req: Request) => {
           const errJson = JSON.parse(errText);
           if (errJson?.error?.code === 190) {
             friendlyError = 'Your Instagram access token is invalid or expired. Go to Settings > Instagram and click Reconnect to get a fresh token via Instagram Login.';
+          } else if (errJson?.error?.code === 100 && errJson?.error?.error_subcode === 33) {
+            friendlyError = 'This access token does not have permission to post to this Instagram account. The token may belong to a different Facebook/Instagram account. Go to Settings > Instagram, click Reconnect on this specific account, and make sure you log in with the Facebook account that manages this Instagram page.';
           }
         } catch { /* keep default */ }
         throw new Error(friendlyError);
