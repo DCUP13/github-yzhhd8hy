@@ -34,12 +34,12 @@ Deno.serve(async (req: Request) => {
     try {
       stateData = JSON.parse(atob(stateParam ?? ""));
     } catch {
-      return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth=done&oauth_error=invalid_state`, 302);
+      return Response.redirect(`${supabaseUrl}/app/settings?oauth_error=invalid_state`, 302);
     }
 
     const userId = stateData.user_id;
     if (!userId) {
-      return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth=done&oauth_error=no_user`, 302);
+      return Response.redirect(`${supabaseUrl}/app/settings?oauth_error=no_user`, 302);
     }
 
     const reconnectAccountId = stateData.reconnect_account_id || "";
@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
       appOrigin = supabaseUrl;
     }
 
-    const settingsUrl = `${appOrigin}/app/instagram?tab=sharing&oauth=done`;
+    const settingsUrl = `${appOrigin}/app/settings`;
 
     if (errorParam) {
       return Response.redirect(`${settingsUrl}&oauth_error=${encodeURIComponent(errorParam)}`, 302);
@@ -276,6 +276,6 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("OAuth callback error:", error);
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    return Response.redirect(`${supabaseUrl}/app/instagram?tab=sharing&oauth=done&oauth_error=${encodeURIComponent(error.message)}`, 302);
+    return Response.redirect(`${supabaseUrl}/app/settings?oauth_error=${encodeURIComponent(error.message)}`, 302);
   }
 });

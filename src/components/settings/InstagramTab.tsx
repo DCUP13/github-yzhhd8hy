@@ -114,8 +114,9 @@ export function InstagramTab() {
       // Check for no_match_found with discovered usernames
       if (oauthError.startsWith('no_match_found:')) {
         const foundUsernames = oauthError.substring('no_match_found:'.length);
+        const existingUsername = accounts.find(a => a.id === stateData?.reconnect_account_id)?.username || 'this account';
         toast.error(
-          `The Facebook account you logged in with manages these Instagram accounts: ${foundUsernames}. None of them match "timeless.wealth.us". You need to log in with the Facebook account that manages the timeless.wealth.us Instagram page specifically. Disconnect this account and connect it fresh with the correct Facebook login.`
+          `The Facebook account you logged in with manages these Instagram accounts: ${foundUsernames}. None of them match "${existingUsername}". You need to log in with the Facebook account that manages that Instagram page specifically. Disconnect this account and connect it fresh with the correct Facebook login.`
         );
       } else {
         const messages: Record<string, string> = {
