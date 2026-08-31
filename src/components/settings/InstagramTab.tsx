@@ -169,8 +169,7 @@ export function InstagramTab() {
         alert('No OAuth URL returned from server. Response: ' + JSON.stringify(data));
         return;
       }
-      // Open in a new tab — Facebook blocks its OAuth dialog inside iframes
-      window.open(data.auth_url, '_blank', 'noopener,noreferrer');
+      window.location.href = data.auth_url;
     } catch (error) {
       console.error('OAuth start error:', error);
       const msg = error instanceof Error ? error.message : String(error);
