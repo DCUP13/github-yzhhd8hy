@@ -119,6 +119,13 @@ export function InstagramTab() {
         toast.error(
           `The Facebook account you logged in with manages these Instagram accounts: ${foundUsernames}. None of them match the account you're trying to reconnect. You need to log in with the Facebook account that manages that Instagram page specifically. Disconnect this account and connect it fresh with the correct Facebook login.`
         );
+      } else if (oauthError.startsWith('no_pages:')) {
+        const detail = oauthError.substring('no_pages:'.length);
+        if (detail.startsWith('missing_pages_show_list')) {
+          toast.error('Facebook did not grant the "pages_show_list" permission. This usually means your Meta app is in Development mode and your Facebook user is not added as a tester/developer. Go to your Meta App Dashboard → App Roles → add yourself, or switch the app to Live mode.');
+        } else {
+          toast.error(`No Facebook Pages were found for your account (${detail}). Make sure you are logged in as the admin of the Facebook Page that is linked to your Instagram Business account, and that the Meta app has been granted the pages_show_list and pages_read_engagement permissions.`);
+        }
       } else {
         const messages: Record<string, string> = {
           no_ig_account: 'No Instagram Business Account was found linked to your Facebook Pages. Make sure your Instagram account is a Business account connected to a Facebook Page, and you log in with the Facebook account that manages it.',

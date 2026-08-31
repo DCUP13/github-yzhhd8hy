@@ -110,6 +110,24 @@ Deno.serve(async (req: Request) => {
       return Response.redirect(settingsUrl(`oauth_error=no_long_token`), 302);
     }
 
+    // Debug: check what permissions were actually granted
+    const permsRes = await fetch(`https://graph.facebook.com/v21.0/me/permissions?access_token=${longLivedToken}`);
+    let grantedPerms: string[] = [];
+    if (permsRes.ok) {
+      const permsData = await permsRes.json();
+      grantedPerms = (permsData.data ?? []).map((p: { permission: string; status: string }) => p.permission);
+    }
+    console.log("Granted permissions:", grantedPerms);
+
+    // Debug: who is the authenticated user?
+    const meRes = await fetch(`https://graph.facebook.com/v21.0/me?fields=id,name,email&access_token=${longLivedToken}`);
+    let meInfo = "";
+    if (meRes.ok) {
+      const meData = await meRes.json();
+      meInfo = `${meData.name} (id: ${meData.id})`;
+      console.log("Authenticated FB user:", meInfo);
+    }
+
     // Get ALL the user's Pages (with pagination support)
     const pages: Array<{ id: string; access_token: string; name?: string }> = [];
     let pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${longLivedToken}`;
@@ -129,7 +147,11 @@ Deno.serve(async (req: Request) => {
     console.log(`Found ${pages.length} Facebook Pages:`, pages.map(p => ({ id: p.id, name: p.name })));
 
     if (pages.length === 0) {
-      return Response.redirect(settingsUrl(`oauth_error=no_pages`), 302);
+      const hasPagePerm = grantedPerms.includes("pages_show_list");
+      const detail = hasPagePerm
+        ? `no_pages:user=${encodeURIComponent(meInfo)},perms=${grantedPerms.join(",")}`
+        : `no_pages:missing_pages_show_list,perms=${grantedPerms.join(",")}`;
+      return Response.redirect(settingsUrl(`oauth_error=${encodeURIComponent(detail)}`), 302);
     }
 
     // Discover ALL Instagram Business Accounts across ALL Pages
