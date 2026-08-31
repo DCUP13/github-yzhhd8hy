@@ -13,7 +13,7 @@ interface IgAccount {
   followers_count: number | null;
   follows_count: number | null;
   media_count: number | null;
-  page_access_token: string;
+  access_token: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -62,7 +62,10 @@ Deno.serve(async (req: Request) => {
     const settingsUrl = (suffix: string) => `${settingsBase}?${suffix}`;
 
     if (errorParam) {
-      return Response.redirect(settingsUrl(`oauth_error=${encodeURIComponent(errorParam)}`), 302);
+      const errorReason = url.searchParams.get("error_reason") ?? errorParam;
+      const errorDesc = url.searchParams.get("error_description") ?? "";
+      const detail = errorDesc ? `${errorParam}:${errorDesc}` : errorReason;
+      return Response.redirect(settingsUrl(`oauth_error=${encodeURIComponent(detail)}`), 302);
     }
 
     if (!code || !stateParam) {
@@ -76,9 +79,19 @@ Deno.serve(async (req: Request) => {
       return Response.redirect(settingsUrl(`oauth_error=not_configured`), 302);
     }
 
-    // Exchange code for short-lived token
-    const tokenUrl = `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`;
-    const tokenRes = await fetch(tokenUrl);
+    // Exchange code for short-lived Instagram access token
+    // Uses api.instagram.com endpoint (not graph.facebook.com)
+    const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: appId,
+        client_secret: appSecret,
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+        code: code,
+      }),
+    });
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
@@ -88,13 +101,16 @@ Deno.serve(async (req: Request) => {
 
     const tokenData = await tokenRes.json();
     const shortLivedToken = tokenData.access_token;
+    const igUserId = tokenData.user_id;
 
     if (!shortLivedToken) {
       return Response.redirect(settingsUrl(`oauth_error=no_token`), 302);
     }
 
-    // Exchange for long-lived token
-    const longLivedUrl = `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`;
+    console.log("Short-lived token obtained for IG user:", igUserId);
+
+    // Exchange for long-lived Instagram access token (60 days)
+    const longLivedUrl = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${appSecret}&access_token=${shortLivedToken}`;
     const longLivedRes = await fetch(longLivedUrl);
 
     if (!longLivedRes.ok) {
@@ -110,182 +126,38 @@ Deno.serve(async (req: Request) => {
       return Response.redirect(settingsUrl(`oauth_error=no_long_token`), 302);
     }
 
-    // Debug: check what permissions were actually granted
-    const permsRes = await fetch(`https://graph.facebook.com/v21.0/me/permissions?access_token=${longLivedToken}`);
-    let grantedPerms: string[] = [];
-    if (permsRes.ok) {
-      const permsData = await permsRes.json();
-      grantedPerms = (permsData.data ?? []).map((p: { permission: string; status: string }) => p.permission);
-    }
-    console.log("Granted permissions:", grantedPerms);
+    console.log("Long-lived token obtained, expires in:", longLivedData.expires_in, "seconds");
 
-    // Debug: who is the authenticated user?
-    const meRes = await fetch(`https://graph.facebook.com/v21.0/me?fields=id,name,email&access_token=${longLivedToken}`);
-    let meInfo = "";
-    if (meRes.ok) {
-      const meData = await meRes.json();
-      meInfo = `${meData.name} (id: ${meData.id})`;
-      console.log("Authenticated FB user:", meInfo);
+    // Fetch the user's profile info using the Instagram token directly
+    const profileRes = await fetch(
+      `https://graph.instagram.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${longLivedToken}`
+    );
+
+    let profile: Record<string, unknown> = {};
+    if (profileRes.ok) {
+      profile = await profileRes.json();
+      console.log("Profile fetched:", profile.username, "followers:", profile.followers_count);
+    } else {
+      const profileErr = await profileRes.text();
+      console.error("Profile fetch failed:", profileErr);
     }
 
-    // Try fetching pages with BOTH tokens — the long-lived exchange can sometimes lose page access
-    // First try short-lived token
-    const shortPagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${shortLivedToken}`);
-    const shortPagesRaw = await shortPagesRes.text();
-    console.log("Short-lived token me/accounts status:", shortPagesRes.status, "body:", shortPagesRaw);
-
-    let pages: Array<{ id: string; access_token: string; name?: string }> = [];
-
-    if (shortPagesRes.ok) {
-      try {
-        const shortPagesData = JSON.parse(shortPagesRaw);
-        pages.push(...(shortPagesData.data ?? []));
-        let nextUrl = shortPagesData.paging?.next ?? "";
-        while (nextUrl) {
-          const nextRes = await fetch(nextUrl);
-          if (nextRes.ok) {
-            const nextData = await nextRes.json();
-            pages.push(...(nextData.data ?? []));
-            nextUrl = nextData.paging?.next ?? "";
-          } else {
-            break;
-          }
-        }
-      } catch { /* parse error handled below */ }
-    }
-
-    console.log(`Short-lived token found ${pages.length} pages`);
-
-    // If short-lived token returned no pages, try long-lived token
-    if (pages.length === 0) {
-      const longPagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${longLivedToken}`);
-      const longPagesRaw = await longPagesRes.text();
-      console.log("Long-lived token me/accounts status:", longPagesRes.status, "body:", longPagesRaw);
-
-      if (!longPagesRes.ok) {
-        console.error("Pages fetch failed with both tokens");
-        return Response.redirect(settingsUrl(`oauth_error=pages_failed`), 302);
-      }
-      try {
-        const longPagesData = JSON.parse(longPagesRaw);
-        pages.push(...(longPagesData.data ?? []));
-        let nextUrl = longPagesData.paging?.next ?? "";
-        while (nextUrl) {
-          const nextRes = await fetch(nextUrl);
-          if (nextRes.ok) {
-            const nextData = await nextRes.json();
-            pages.push(...(nextData.data ?? []));
-            nextUrl = nextData.paging?.next ?? "";
-          } else {
-            break;
-          }
-        }
-      } catch {
-        return Response.redirect(settingsUrl(`oauth_error=pages_failed`), 302);
-      }
-    }
-
-    // Also discover pages via Meta Business Manager — pages managed through
-    // Business Manager don't always appear in me/accounts but are accessible
-    // via the businesses edge. This catches the missing pages.
-    const existingPageIds = new Set(pages.map(p => p.id));
-    const bizUrl = `https://graph.facebook.com/v21.0/me/businesses?fields=id,name&limit=100&access_token=${shortLivedToken}`;
-    let bizNextUrl: string | null = bizUrl;
-    while (bizNextUrl) {
-      const bizRes = await fetch(bizNextUrl);
-      if (bizRes.ok) {
-        const bizData = await bizRes.json();
-        const businesses = bizData.data ?? [];
-        for (const biz of businesses) {
-          const ownedPagesUrl = `https://graph.facebook.com/v21.0/${biz.id}/owned_pages?fields=id,access_token,name&limit=100&access_token=${shortLivedToken}`;
-          const ownedPagesRes = await fetch(ownedPagesUrl);
-          if (ownedPagesRes.ok) {
-            const ownedPagesData = await ownedPagesRes.json();
-            for (const page of (ownedPagesData.data ?? [])) {
-              if (!existingPageIds.has(page.id)) {
-                pages.push(page);
-                existingPageIds.add(page.id);
-              }
-            }
-            // Handle pagination for owned_pages
-            let opNext = ownedPagesData.paging?.next ?? "";
-            while (opNext) {
-              const opNextRes = await fetch(opNext);
-              if (opNextRes.ok) {
-                const opNextData = await opNextRes.json();
-                for (const page of (opNextData.data ?? [])) {
-                  if (!existingPageIds.has(page.id)) {
-                    pages.push(page);
-                    existingPageIds.add(page.id);
-                  }
-                }
-                opNext = opNextData.paging?.next ?? "";
-              } else {
-                break;
-              }
-            }
-          }
-        }
-        bizNextUrl = bizData.paging?.next ?? "";
-      } else {
-        console.log("Businesses fetch failed:", bizRes.status, await bizRes.text());
-        bizNextUrl = null;
-      }
-    }
-
-    console.log(`Found ${pages.length} Facebook Pages total (incl. Business Manager):`, pages.map(p => ({ id: p.id, name: p.name })));
-
-    if (pages.length === 0) {
-      const hasPagePerm = grantedPerms.includes("pages_show_list");
-      const detail = hasPagePerm
-        ? `no_pages:user=${encodeURIComponent(meInfo)},perms=${grantedPerms.join(",")}`
-        : `no_pages:missing_pages_show_list,perms=${grantedPerms.join(",")}`;
-      return Response.redirect(settingsUrl(`oauth_error=${encodeURIComponent(detail)}`), 302);
-    }
-
-    // Discover ALL Instagram accounts across ALL Pages
-    // Query both instagram_business_account (Business accounts) and connected_instagram_account (Creator accounts)
-    const igAccounts: IgAccount[] = [];
-
-    for (const page of pages) {
-      const igUrl = `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account,connected_instagram_account&access_token=${page.access_token}`;
-      const igRes = await fetch(igUrl);
-      const igRaw = await igRes.text();
-      console.log(`Page ${page.id} (${page.name}) IG discovery:`, igRes.status, igRaw);
-      if (igRes.ok) {
-        try {
-          const igBody = JSON.parse(igRaw);
-          // Check both Business and Creator account fields
-          const igUserId = igBody.instagram_business_account?.id ?? igBody.connected_instagram_account?.id;
-          if (igUserId) {
-            const profileUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${page.access_token}`;
-            const profileRes = await fetch(profileUrl);
-            let profile: Record<string, unknown> = {};
-            if (profileRes.ok) {
-              profile = await profileRes.json();
-            }
-            igAccounts.push({
-              ig_user_id: igUserId,
-              username: (profile.username as string) ?? "",
-              profile_picture_url: (profile.profile_picture_url as string) ?? null,
-              followers_count: (profile.followers_count as number) ?? null,
-              follows_count: (profile.follows_count as number) ?? null,
-              media_count: (profile.media_count as number) ?? null,
-              page_access_token: page.access_token,
-            });
-          }
-        } catch { /* parse error, skip this page */ }
-      }
-    }
-
-    console.log(`Found ${igAccounts.length} Instagram Business Accounts:`, igAccounts.map(a => ({ id: a.ig_user_id, username: a.username })));
+    const igAccount: IgAccount = {
+      ig_user_id: String(igUserId),
+      username: (profile.username as string) ?? "",
+      profile_picture_url: (profile.profile_picture_url as string) ?? null,
+      followers_count: (profile.followers_count as number) ?? null,
+      follows_count: (profile.follows_count as number) ?? null,
+      media_count: (profile.media_count as number) ?? null,
+      access_token: longLivedToken,
+    };
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // If reconnecting a specific account, find the matching IG account
+    // If reconnecting a specific account, update it
     if (reconnectAccountId) {
       const { data: existingAccount } = await supabaseClient
         .from("instagram_accounts")
@@ -295,99 +167,56 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (existingAccount) {
-        // Try to find a matching IG account by username
-        let match: IgAccount | undefined = igAccounts.find(
-          (a) => a.username && existingAccount.username && a.username.toLowerCase() === existingAccount.username.toLowerCase()
-        );
-
-        // If no username match, try matching by existing ig_user_id
-        if (!match && igAccounts.length > 1) {
-          match = igAccounts.find((a) => a.ig_user_id === existingAccount.ig_user_id);
-        }
-
-        // If no match and only one IG account found, use it
-        if (!match && igAccounts.length === 1) {
-          match = igAccounts[0];
-        }
-
-        if (match) {
-          await supabaseClient
-            .from("instagram_accounts")
-            .update({
-              ig_user_id: match.ig_user_id,
-              username: match.username || existingAccount.username,
-              access_token: match.page_access_token,
-              connected: true,
-              auth_method: "oauth",
-              profile_picture_url: match.profile_picture_url,
-              followers_count: match.followers_count,
-              media_count: match.media_count,
-              token_expired: false,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", reconnectAccountId);
-          return Response.redirect(settingsUrl(`oauth=success`), 302);
-        }
-
-        // No matching IG account found
-        // Store the long-lived token so the user can at least try the manual "Update access token" flow
         await supabaseClient
           .from("instagram_accounts")
           .update({
-            access_token: longLivedToken,
+            ig_user_id: igAccount.ig_user_id,
+            username: igAccount.username || existingAccount.username,
+            access_token: igAccount.access_token,
             connected: true,
             auth_method: "oauth",
-            token_expired: true,
+            profile_picture_url: igAccount.profile_picture_url,
+            followers_count: igAccount.followers_count,
+            media_count: igAccount.media_count,
+            token_expired: false,
             updated_at: new Date().toISOString(),
           })
           .eq("id", reconnectAccountId);
-
-        // Pass diagnostic info in the error
-        const foundUsernames = igAccounts.map(a => a.username).filter(Boolean).join(', ');
-        const errorMsg = foundUsernames
-          ? `no_match_found:${foundUsernames}`
-          : 'no_ig_account';
-        return Response.redirect(settingsUrl(`oauth_error=${encodeURIComponent(errorMsg)}`), 302);
+        return Response.redirect(settingsUrl(`oauth=success`), 302);
       }
     }
 
-    // Fresh connect (not reconnecting): store all discovered IG accounts
-    if (igAccounts.length === 0) {
-      return Response.redirect(settingsUrl(`oauth_error=no_ig_account`), 302);
-    }
+    // Fresh connect: upsert the account
+    const { data: existing } = await supabaseClient
+      .from("instagram_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("ig_user_id", igAccount.ig_user_id)
+      .maybeSingle();
 
-    for (const igAccount of igAccounts) {
-      const { data: existing } = await supabaseClient
+    const payload = {
+      user_id: userId,
+      ig_user_id: igAccount.ig_user_id,
+      username: igAccount.username,
+      access_token: igAccount.access_token,
+      connected: true,
+      auth_method: "oauth",
+      profile_picture_url: igAccount.profile_picture_url,
+      followers_count: igAccount.followers_count,
+      media_count: igAccount.media_count,
+      token_expired: false,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existing) {
+      await supabaseClient
         .from("instagram_accounts")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("ig_user_id", igAccount.ig_user_id)
-        .maybeSingle();
-
-      const payload = {
-        user_id: userId,
-        ig_user_id: igAccount.ig_user_id,
-        username: igAccount.username,
-        access_token: igAccount.page_access_token,
-        connected: true,
-        auth_method: "oauth",
-        profile_picture_url: igAccount.profile_picture_url,
-        followers_count: igAccount.followers_count,
-        media_count: igAccount.media_count,
-        token_expired: false,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (existing) {
-        await supabaseClient
-          .from("instagram_accounts")
-          .update(payload)
-          .eq("id", existing.id);
-      } else {
-        await supabaseClient
-          .from("instagram_accounts")
-          .insert(payload);
-      }
+        .update(payload)
+        .eq("id", existing.id);
+    } else {
+      await supabaseClient
+        .from("instagram_accounts")
+        .insert(payload);
     }
 
     return Response.redirect(settingsUrl(`oauth=success`), 302);

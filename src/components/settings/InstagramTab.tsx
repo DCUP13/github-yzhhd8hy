@@ -114,29 +114,22 @@ export function InstagramTab() {
       fetchAccounts();
     } else if (oauthError) {
       // Check for no_match_found with discovered usernames
-      if (oauthError.startsWith('no_match_found:')) {
+      if (oauthError.startsWith('access_denied')) {
+        toast.error('You cancelled the Instagram authorization. Please try again and allow access to your Instagram account.');
+      } else if (oauthError.startsWith('no_match_found:')) {
         const foundUsernames = oauthError.substring('no_match_found:'.length);
         toast.error(
-          `The Facebook account you logged in with manages these Instagram accounts: ${foundUsernames}. None of them match the account you're trying to reconnect. You need to log in with the Facebook account that manages that Instagram page specifically. Disconnect this account and connect it fresh with the correct Facebook login.`
+          `The Instagram account you logged in with (${foundUsernames}) doesn't match the account you're trying to reconnect. Disconnect this account and connect it fresh with the correct Instagram login.`
         );
-      } else if (oauthError.startsWith('no_pages:')) {
-        const detail = oauthError.substring('no_pages:'.length);
-        if (detail.startsWith('missing_pages_show_list')) {
-          toast.error('Facebook did not grant the "pages_show_list" permission. This usually means your Meta app is in Development mode and your Facebook user is not added as a tester/developer. Go to your Meta App Dashboard → App Roles → add yourself, or switch the app to Live mode.');
-        } else {
-          toast.error(`No Facebook Pages were found for your account (${detail}). Make sure you are logged in as the admin of the Facebook Page that is linked to your Instagram Business account, and that the Meta app has been granted the pages_show_list and pages_read_engagement permissions.`);
-        }
       } else {
         const messages: Record<string, string> = {
-          no_ig_account: 'No Instagram Business Account was found linked to your Facebook Pages. Make sure your Instagram account is a Business account connected to a Facebook Page, and you log in with the Facebook account that manages it.',
-          no_pages: 'No Facebook Pages found. You need at least one Facebook Page to connect Instagram.',
-          token_exchange_failed: 'Failed to exchange the authorization code for an access token.',
-          long_lived_failed: 'Failed to get a long-lived access token.',
+          no_ig_account: 'No Instagram professional account was found. Make sure your Instagram account is set up as a Business or Creator account.',
+          token_exchange_failed: 'Failed to exchange the authorization code for an access token. Please try again.',
+          long_lived_failed: 'Failed to get a long-lived access token. Please try again.',
           not_configured: 'Instagram OAuth is not configured. Contact support.',
           missing_params: 'Missing authorization parameters from Instagram.',
           no_token: 'No access token returned from Instagram.',
           no_long_token: 'No long-lived token returned.',
-          pages_failed: 'Failed to fetch your Facebook Pages.',
           invalid_state: 'Invalid state parameter. Please try connecting again.',
           no_user: 'Could not determine which user to connect the account to.',
         };
@@ -411,8 +404,8 @@ export function InstagramTab() {
                     <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                     <p className="text-xs text-amber-600 dark:text-amber-400">
                       {acct.auth_method === 'manual'
-                        ? 'Manual tokens may not support posting. Reconnect via Instagram Login to enable posting.'
-                        : 'This account\'s token may be invalid or belongs to a different Facebook account. Reconnect to get a fresh token.'}
+                        ? 'Manual tokens may not support all features. Reconnect via Instagram Login to enable full functionality.'
+                        : 'This account\'s token may be invalid or expired. Reconnect to get a fresh token.'}
                     </p>
                     <button
                       onClick={() => handleOAuthConnect(acct.id)}
@@ -494,7 +487,7 @@ export function InstagramTab() {
         {useOAuth ? (
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
             <p className="text-xs text-gray-600 dark:text-gray-300 mb-3">
-              Click the button below to authorize your Instagram Business or Creator account through Meta's secure login. No need to copy IDs or tokens manually.
+              Click the button below to log in with your Instagram Business or Creator account. You'll be redirected to Instagram to authorize access — no need to copy IDs or tokens manually.
             </p>
             {oauthUrl ? (
               <div className="space-y-3">
@@ -505,10 +498,10 @@ export function InstagramTab() {
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
                 >
                   <InstagramIcon className="w-4 h-4" />
-                  Open Facebook Login
+                  Open Instagram Login
                 </a>
                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                  A new tab will open for you to authorize your Instagram account. After completing the login, come back here — your account will appear automatically.
+                  A new tab will open for you to log in to Instagram and authorize access. After completing the login, come back here — your account will appear automatically.
                 </p>
                 <button
                   onClick={() => setOauthUrl(null)}
