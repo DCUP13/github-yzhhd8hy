@@ -479,7 +479,7 @@ export function InstagramTab() {
               Click the button below to authorize your Instagram Business or Creator account through Meta's secure login. No need to copy IDs or tokens manually.
             </p>
             <button
-              onClick={handleOAuthConnect}
+              onClick={() => handleOAuthConnect()}
               disabled={oauthStarting}
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50"
             >
