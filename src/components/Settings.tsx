@@ -19,7 +19,11 @@ interface SettingsProps {
 type SettingsTab = 'user' | 'general' | 'amazon' | 'rapid-api' | 'data-quality' | 'instagram';
 
 export function Settings({ onSignOut: _onSignOut, currentView: _currentView, memberUserId, onBackToTeam }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('oauth') || params.get('oauth_error')) return 'instagram';
+    return 'general';
+  });
   const [userEmail, setUserEmail] = useState('');
   const [orgName, setOrgName] = useState('');
   const [userRole, setUserRole] = useState('member');

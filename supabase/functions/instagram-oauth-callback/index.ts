@@ -58,21 +58,22 @@ Deno.serve(async (req: Request) => {
       appOrigin = supabaseUrl;
     }
 
-    const settingsUrl = `${appOrigin}/app/settings`;
+    const settingsBase = `${appOrigin}/app/settings`;
+    const settingsUrl = (suffix: string) => `${settingsBase}?${suffix}`;
 
     if (errorParam) {
-      return Response.redirect(`${settingsUrl}&oauth_error=${encodeURIComponent(errorParam)}`, 302);
+      return Response.redirect(settingsUrl(`oauth_error=${encodeURIComponent(errorParam)}`), 302);
     }
 
     if (!code || !stateParam) {
-      return Response.redirect(`${settingsUrl}&oauth_error=missing_params`, 302);
+      return Response.redirect(settingsUrl(`oauth_error=missing_params`), 302);
     }
 
     const appId = Deno.env.get("INSTAGRAM_APP_ID");
     const appSecret = Deno.env.get("INSTAGRAM_APP_SECRET");
 
     if (!appId || !appSecret) {
-      return Response.redirect(`${settingsUrl}&oauth_error=not_configured`, 302);
+      return Response.redirect(settingsUrl(`oauth_error=not_configured`), 302);
     }
 
     // Exchange code for short-lived token
@@ -82,14 +83,14 @@ Deno.serve(async (req: Request) => {
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
       console.error("Token exchange failed:", errText);
-      return Response.redirect(`${settingsUrl}&oauth_error=token_exchange_failed`, 302);
+      return Response.redirect(settingsUrl(`oauth_error=token_exchange_failed`), 302);
     }
 
     const tokenData = await tokenRes.json();
     const shortLivedToken = tokenData.access_token;
 
     if (!shortLivedToken) {
-      return Response.redirect(`${settingsUrl}&oauth_error=no_token`, 302);
+      return Response.redirect(settingsUrl(`oauth_error=no_token`), 302);
     }
 
     // Exchange for long-lived token
@@ -99,14 +100,14 @@ Deno.serve(async (req: Request) => {
     if (!longLivedRes.ok) {
       const errText = await longLivedRes.text();
       console.error("Long-lived token exchange failed:", errText);
-      return Response.redirect(`${settingsUrl}&oauth_error=long_lived_failed`, 302);
+      return Response.redirect(settingsUrl(`oauth_error=long_lived_failed`), 302);
     }
 
     const longLivedData = await longLivedRes.json();
     const longLivedToken = longLivedData.access_token;
 
     if (!longLivedToken) {
-      return Response.redirect(`${settingsUrl}&oauth_error=no_long_token`, 302);
+      return Response.redirect(settingsUrl(`oauth_error=no_long_token`), 302);
     }
 
     // Get ALL the user's Pages (with pagination support)
@@ -118,7 +119,7 @@ Deno.serve(async (req: Request) => {
       if (!pagesRes.ok) {
         const errText = await pagesRes.text();
         console.error("Pages fetch failed:", errText);
-        return Response.redirect(`${settingsUrl}&oauth_error=pages_failed`, 302);
+        return Response.redirect(settingsUrl(`oauth_error=pages_failed`), 302);
       }
       const pagesData = await pagesRes.json();
       pages.push(...(pagesData.data ?? []));
@@ -128,7 +129,7 @@ Deno.serve(async (req: Request) => {
     console.log(`Found ${pages.length} Facebook Pages:`, pages.map(p => ({ id: p.id, name: p.name })));
 
     if (pages.length === 0) {
-      return Response.redirect(`${settingsUrl}&oauth_error=no_pages`, 302);
+      return Response.redirect(settingsUrl(`oauth_error=no_pages`), 302);
     }
 
     // Discover ALL Instagram Business Accounts across ALL Pages
@@ -208,7 +209,7 @@ Deno.serve(async (req: Request) => {
               updated_at: new Date().toISOString(),
             })
             .eq("id", reconnectAccountId);
-          return Response.redirect(`${settingsUrl}&oauth=success`, 302);
+          return Response.redirect(settingsUrl(`oauth=success`), 302);
         }
 
         // No matching IG account found
@@ -229,13 +230,13 @@ Deno.serve(async (req: Request) => {
         const errorMsg = foundUsernames
           ? `no_match_found:${foundUsernames}`
           : 'no_ig_account';
-        return Response.redirect(`${settingsUrl}&oauth_error=${encodeURIComponent(errorMsg)}`, 302);
+        return Response.redirect(settingsUrl(`oauth_error=${encodeURIComponent(errorMsg)}`), 302);
       }
     }
 
     // Fresh connect (not reconnecting): store all discovered IG accounts
     if (igAccounts.length === 0) {
-      return Response.redirect(`${settingsUrl}&oauth_error=no_ig_account`, 302);
+      return Response.redirect(settingsUrl(`oauth_error=no_ig_account`), 302);
     }
 
     for (const igAccount of igAccounts) {
@@ -272,7 +273,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return Response.redirect(`${settingsUrl}&oauth=success`, 302);
+    return Response.redirect(settingsUrl(`oauth=success`), 302);
   } catch (error) {
     console.error("OAuth callback error:", error);
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
