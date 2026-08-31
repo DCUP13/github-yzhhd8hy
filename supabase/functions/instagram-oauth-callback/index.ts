@@ -128,23 +128,64 @@ Deno.serve(async (req: Request) => {
       console.log("Authenticated FB user:", meInfo);
     }
 
-    // Get ALL the user's Pages (with pagination support)
-    const pages: Array<{ id: string; access_token: string; name?: string }> = [];
-    let pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${longLivedToken}`;
+    // Try fetching pages with BOTH tokens — the long-lived exchange can sometimes lose page access
+    // First try short-lived token
+    const shortPagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${shortLivedToken}`);
+    const shortPagesRaw = await shortPagesRes.text();
+    console.log("Short-lived token me/accounts status:", shortPagesRes.status, "body:", shortPagesRaw);
 
-    while (pagesUrl) {
-      const pagesRes = await fetch(pagesUrl);
-      if (!pagesRes.ok) {
-        const errText = await pagesRes.text();
-        console.error("Pages fetch failed:", errText);
-        return Response.redirect(settingsUrl(`oauth_error=pages_failed`), 302);
-      }
-      const pagesData = await pagesRes.json();
-      pages.push(...(pagesData.data ?? []));
-      pagesUrl = pagesData.paging?.next ?? "";
+    let pages: Array<{ id: string; access_token: string; name?: string }> = [];
+
+    if (shortPagesRes.ok) {
+      try {
+        const shortPagesData = JSON.parse(shortPagesRaw);
+        pages.push(...(shortPagesData.data ?? []));
+        let nextUrl = shortPagesData.paging?.next ?? "";
+        while (nextUrl) {
+          const nextRes = await fetch(nextUrl);
+          if (nextRes.ok) {
+            const nextData = await nextRes.json();
+            pages.push(...(nextData.data ?? []));
+            nextUrl = nextData.paging?.next ?? "";
+          } else {
+            break;
+          }
+        }
+      } catch { /* parse error handled below */ }
     }
 
-    console.log(`Found ${pages.length} Facebook Pages:`, pages.map(p => ({ id: p.id, name: p.name })));
+    console.log(`Short-lived token found ${pages.length} pages`);
+
+    // If short-lived token returned no pages, try long-lived token
+    if (pages.length === 0) {
+      const longPagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${longLivedToken}`);
+      const longPagesRaw = await longPagesRes.text();
+      console.log("Long-lived token me/accounts status:", longPagesRes.status, "body:", longPagesRaw);
+
+      if (!longPagesRes.ok) {
+        console.error("Pages fetch failed with both tokens");
+        return Response.redirect(settingsUrl(`oauth_error=pages_failed`), 302);
+      }
+      try {
+        const longPagesData = JSON.parse(longPagesRaw);
+        pages.push(...(longPagesData.data ?? []));
+        let nextUrl = longPagesData.paging?.next ?? "";
+        while (nextUrl) {
+          const nextRes = await fetch(nextUrl);
+          if (nextRes.ok) {
+            const nextData = await nextRes.json();
+            pages.push(...(nextData.data ?? []));
+            nextUrl = nextData.paging?.next ?? "";
+          } else {
+            break;
+          }
+        }
+      } catch {
+        return Response.redirect(settingsUrl(`oauth_error=pages_failed`), 302);
+      }
+    }
+
+    console.log(`Found ${pages.length} Facebook Pages total:`, pages.map(p => ({ id: p.id, name: p.name })));
 
     if (pages.length === 0) {
       const hasPagePerm = grantedPerms.includes("pages_show_list");
@@ -154,32 +195,38 @@ Deno.serve(async (req: Request) => {
       return Response.redirect(settingsUrl(`oauth_error=${encodeURIComponent(detail)}`), 302);
     }
 
-    // Discover ALL Instagram Business Accounts across ALL Pages
+    // Discover ALL Instagram accounts across ALL Pages
+    // Query both instagram_business_account (Business accounts) and connected_instagram_account (Creator accounts)
     const igAccounts: IgAccount[] = [];
 
     for (const page of pages) {
-      const igUrl = `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`;
+      const igUrl = `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account,connected_instagram_account&access_token=${page.access_token}`;
       const igRes = await fetch(igUrl);
+      const igRaw = await igRes.text();
+      console.log(`Page ${page.id} (${page.name}) IG discovery:`, igRes.status, igRaw);
       if (igRes.ok) {
-        const igBody = await igRes.json();
-        if (igBody.instagram_business_account?.id) {
-          const igUserId = igBody.instagram_business_account.id;
-          const profileUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${page.access_token}`;
-          const profileRes = await fetch(profileUrl);
-          let profile: Record<string, unknown> = {};
-          if (profileRes.ok) {
-            profile = await profileRes.json();
+        try {
+          const igBody = JSON.parse(igRaw);
+          // Check both Business and Creator account fields
+          const igUserId = igBody.instagram_business_account?.id ?? igBody.connected_instagram_account?.id;
+          if (igUserId) {
+            const profileUrl = `https://graph.facebook.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${page.access_token}`;
+            const profileRes = await fetch(profileUrl);
+            let profile: Record<string, unknown> = {};
+            if (profileRes.ok) {
+              profile = await profileRes.json();
+            }
+            igAccounts.push({
+              ig_user_id: igUserId,
+              username: (profile.username as string) ?? "",
+              profile_picture_url: (profile.profile_picture_url as string) ?? null,
+              followers_count: (profile.followers_count as number) ?? null,
+              follows_count: (profile.follows_count as number) ?? null,
+              media_count: (profile.media_count as number) ?? null,
+              page_access_token: page.access_token,
+            });
           }
-          igAccounts.push({
-            ig_user_id: igUserId,
-            username: (profile.username as string) ?? "",
-            profile_picture_url: (profile.profile_picture_url as string) ?? null,
-            followers_count: (profile.followers_count as number) ?? null,
-            follows_count: (profile.follows_count as number) ?? null,
-            media_count: (profile.media_count as number) ?? null,
-            page_access_token: page.access_token,
-          });
-        }
+        } catch { /* parse error, skip this page */ }
       }
     }
 
