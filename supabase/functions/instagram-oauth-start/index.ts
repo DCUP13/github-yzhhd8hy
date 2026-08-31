@@ -51,12 +51,12 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
-    const scope = "instagram_basic,instagram_content_publish,instagram_manage_messages,pages_show_list,pages_read_engagement";
+    const scope = "instagram_basic,instagram_content_publish,instagram_manage_messages,pages_show_list,pages_read_engagement,pages_manage_metadata,business_management";
 
     // Generate a secure state parameter containing the user ID, app origin, and optional reconnect target
     const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now(), origin: appOrigin, reconnect_account_id: reconnectAccountId }));
 
-    const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=${encodeURIComponent(state)}`;
+    const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=${encodeURIComponent(state)}&auth_type=rerequest`;
 
     return new Response(JSON.stringify({ auth_url: authUrl }), {
       status: 200,
