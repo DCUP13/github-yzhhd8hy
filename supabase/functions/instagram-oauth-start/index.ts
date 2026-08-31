@@ -16,6 +16,7 @@ Deno.serve(async (req: Request) => {
     const appSecret = Deno.env.get("INSTAGRAM_APP_SECRET");
 
     if (!appId || !appSecret) {
+      console.error("INSTAGRAM_APP_ID or INSTAGRAM_APP_SECRET not found in env. Available keys:", Object.keys(Deno.env.toObject()).filter(k => k.startsWith("INSTAGRAM")));
       return new Response(JSON.stringify({
         error: "OAuth is not configured. Add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to your Supabase secrets.",
       }), {

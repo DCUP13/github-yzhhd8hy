@@ -155,17 +155,25 @@ export function InstagramTab() {
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        alert(err.error || 'Failed to start OAuth flow');
+        let errMsg = `Failed to start OAuth flow (status ${response.status})`;
+        try {
+          const err = await response.json();
+          errMsg = err.error || errMsg;
+        } catch { /* response body wasn't JSON */ }
+        alert(errMsg);
         return;
       }
 
-      const { auth_url } = await response.json();
-      // Navigate in the same tab so the redirect back is visible
-      window.location.href = auth_url;
+      const data = await response.json();
+      if (!data.auth_url) {
+        alert('No OAuth URL returned from server. Response: ' + JSON.stringify(data));
+        return;
+      }
+      window.location.href = data.auth_url;
     } catch (error) {
       console.error('OAuth start error:', error);
-      alert('Failed to start OAuth flow. Make sure INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET are set in your Supabase secrets.');
+      const msg = error instanceof Error ? error.message : String(error);
+      alert(`Failed to start OAuth flow: ${msg}`);
     } finally {
       setOauthStarting(false);
     }
