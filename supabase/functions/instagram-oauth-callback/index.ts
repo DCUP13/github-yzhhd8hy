@@ -185,7 +185,55 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    console.log(`Found ${pages.length} Facebook Pages total:`, pages.map(p => ({ id: p.id, name: p.name })));
+    // Also discover pages via Meta Business Manager — pages managed through
+    // Business Manager don't always appear in me/accounts but are accessible
+    // via the businesses edge. This catches the missing pages.
+    const existingPageIds = new Set(pages.map(p => p.id));
+    const bizUrl = `https://graph.facebook.com/v21.0/me/businesses?fields=id,name&limit=100&access_token=${shortLivedToken}`;
+    let bizNextUrl: string | null = bizUrl;
+    while (bizNextUrl) {
+      const bizRes = await fetch(bizNextUrl);
+      if (bizRes.ok) {
+        const bizData = await bizRes.json();
+        const businesses = bizData.data ?? [];
+        for (const biz of businesses) {
+          const ownedPagesUrl = `https://graph.facebook.com/v21.0/${biz.id}/owned_pages?fields=id,access_token,name&limit=100&access_token=${shortLivedToken}`;
+          const ownedPagesRes = await fetch(ownedPagesUrl);
+          if (ownedPagesRes.ok) {
+            const ownedPagesData = await ownedPagesRes.json();
+            for (const page of (ownedPagesData.data ?? [])) {
+              if (!existingPageIds.has(page.id)) {
+                pages.push(page);
+                existingPageIds.add(page.id);
+              }
+            }
+            // Handle pagination for owned_pages
+            let opNext = ownedPagesData.paging?.next ?? "";
+            while (opNext) {
+              const opNextRes = await fetch(opNext);
+              if (opNextRes.ok) {
+                const opNextData = await opNextRes.json();
+                for (const page of (opNextData.data ?? [])) {
+                  if (!existingPageIds.has(page.id)) {
+                    pages.push(page);
+                    existingPageIds.add(page.id);
+                  }
+                }
+                opNext = opNextData.paging?.next ?? "";
+              } else {
+                break;
+              }
+            }
+          }
+        }
+        bizNextUrl = bizData.paging?.next ?? "";
+      } else {
+        console.log("Businesses fetch failed:", bizRes.status, await bizRes.text());
+        bizNextUrl = null;
+      }
+    }
+
+    console.log(`Found ${pages.length} Facebook Pages total (incl. Business Manager):`, pages.map(p => ({ id: p.id, name: p.name })));
 
     if (pages.length === 0) {
       const hasPagePerm = grantedPerms.includes("pages_show_list");
