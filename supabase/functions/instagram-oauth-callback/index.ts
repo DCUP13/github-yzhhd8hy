@@ -128,23 +128,66 @@ Deno.serve(async (req: Request) => {
       console.log("Authenticated FB user:", meInfo);
     }
 
-    // Get ALL the user's Pages (with pagination support)
-    const pages: Array<{ id: string; access_token: string; name?: string }> = [];
-    let pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${longLivedToken}`;
+    // Try fetching pages with BOTH tokens — the long-lived exchange can sometimes lose page access
+    // First try short-lived token
+    const shortPagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${shortLivedToken}`);
+    const shortPagesRaw = await shortPagesRes.text();
+    console.log("Short-lived token me/accounts status:", shortPagesRes.status, "body:", shortPagesRaw);
 
-    while (pagesUrl) {
-      const pagesRes = await fetch(pagesUrl);
-      if (!pagesRes.ok) {
-        const errText = await pagesRes.text();
-        console.error("Pages fetch failed:", errText);
-        return Response.redirect(settingsUrl(`oauth_error=pages_failed`), 302);
-      }
-      const pagesData = await pagesRes.json();
-      pages.push(...(pagesData.data ?? []));
-      pagesUrl = pagesData.paging?.next ?? "";
+    let pages: Array<{ id: string; access_token: string; name?: string }> = [];
+
+    // Parse short-lived token results
+    if (shortPagesRes.ok) {
+      try {
+        const shortPagesData = JSON.parse(shortPagesRaw);
+        pages.push(...(shortPagesData.data ?? []));
+        // Handle pagination
+        let nextUrl = shortPagesData.paging?.next ?? "";
+        while (nextUrl) {
+          const nextRes = await fetch(nextUrl);
+          if (nextRes.ok) {
+            const nextData = await nextRes.json();
+            pages.push(...(nextData.data ?? []));
+            nextUrl = nextData.paging?.next ?? "";
+          } else {
+            break;
+          }
+        }
+      } catch { /* parse error handled below */ }
     }
 
-    console.log(`Found ${pages.length} Facebook Pages:`, pages.map(p => ({ id: p.id, name: p.name })));
+    console.log(`Short-lived token found ${pages.length} pages`);
+
+    // If short-lived token returned no pages, try long-lived token
+    if (pages.length === 0) {
+      const longPagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${longLivedToken}`);
+      const longPagesRaw = await longPagesRes.text();
+      console.log("Long-lived token me/accounts status:", longPagesRes.status, "body:", longPagesRaw);
+
+      if (!longPagesRes.ok) {
+        console.error("Pages fetch failed with both tokens");
+        return Response.redirect(settingsUrl(`oauth_error=pages_failed`), 302);
+      }
+      try {
+        const longPagesData = JSON.parse(longPagesRaw);
+        pages.push(...(longPagesData.data ?? []));
+        let nextUrl = longPagesData.paging?.next ?? "";
+        while (nextUrl) {
+          const nextRes = await fetch(nextUrl);
+          if (nextRes.ok) {
+            const nextData = await nextRes.json();
+            pages.push(...(nextData.data ?? []));
+            nextUrl = nextData.paging?.next ?? "";
+          } else {
+            break;
+          }
+        }
+      } catch {
+        return Response.redirect(settingsUrl(`oauth_error=pages_failed`), 302);
+      }
+    }
+
+    console.log(`Found ${pages.length} Facebook Pages total:`, pages.map(p => ({ id: p.id, name: p.name })));
 
     if (pages.length === 0) {
       const hasPagePerm = grantedPerms.includes("pages_show_list");
