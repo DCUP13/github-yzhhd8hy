@@ -42,6 +42,7 @@ export function InstagramTab() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [oauthStarting, setOauthStarting] = useState(false);
+  const [oauthUrl, setOauthUrl] = useState<string | null>(null);
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -149,14 +150,10 @@ export function InstagramTab() {
 
   const handleOAuthConnect = async (reconnectAccountId?: string) => {
     setOauthStarting(true);
-    // Open a blank tab immediately (before async) so popup blockers don't fire
-    const popup = window.open('', '_blank');
+    setOauthUrl(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        popup?.close();
-        return;
-      }
+      if (!session) return;
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const response = await fetch(`${supabaseUrl}/functions/v1/instagram-oauth-start`, {
@@ -174,25 +171,17 @@ export function InstagramTab() {
           const err = await response.json();
           errMsg = err.error || errMsg;
         } catch { /* response body wasn't JSON */ }
-        popup?.close();
         alert(errMsg);
         return;
       }
 
       const data = await response.json();
       if (!data.auth_url) {
-        popup?.close();
         alert('No OAuth URL returned from server. Response: ' + JSON.stringify(data));
         return;
       }
-      if (popup) {
-        popup.location.href = data.auth_url;
-      } else {
-        // Fallback if popup was blocked
-        window.location.href = data.auth_url;
-      }
+      setOauthUrl(data.auth_url);
     } catch (error) {
-      popup?.close();
       console.error('OAuth start error:', error);
       const msg = error instanceof Error ? error.message : String(error);
       alert(`Failed to start OAuth flow: ${msg}`);
@@ -500,14 +489,37 @@ export function InstagramTab() {
             <p className="text-xs text-gray-600 dark:text-gray-300 mb-3">
               Click the button below to authorize your Instagram Business or Creator account through Meta's secure login. No need to copy IDs or tokens manually.
             </p>
-            <button
-              onClick={() => handleOAuthConnect()}
-              disabled={oauthStarting}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50"
-            >
-              <InstagramIcon className="w-4 h-4" />
-              {oauthStarting ? 'Redirecting...' : 'Connect with Instagram'}
-            </button>
+            {oauthUrl ? (
+              <div className="space-y-3">
+                <a
+                  href={oauthUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
+                >
+                  <InstagramIcon className="w-4 h-4" />
+                  Open Facebook Login
+                </a>
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  A new tab will open for you to authorize your Instagram account. After completing the login, come back here — your account will appear automatically.
+                </p>
+                <button
+                  onClick={() => setOauthUrl(null)}
+                  className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => handleOAuthConnect()}
+                disabled={oauthStarting}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50"
+              >
+                <InstagramIcon className="w-4 h-4" />
+                {oauthStarting ? 'Preparing...' : 'Connect with Instagram'}
+              </button>
+            )}
             <p className="mt-2 text-xs text-gray-400">
               Requires INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET in Supabase secrets.
             </p>
