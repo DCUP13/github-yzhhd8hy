@@ -111,20 +111,28 @@ export function InstagramTab() {
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     } else if (oauthError) {
-      const messages: Record<string, string> = {
-        no_ig_account: 'No matching Instagram Business Account was found for this account. Make sure you log in with the Facebook account that manages this specific Instagram page, and that the Instagram account is a Business account linked to a Facebook Page.',
-        no_pages: 'No Facebook Pages found. You need at least one Facebook Page to connect Instagram.',
-        token_exchange_failed: 'Failed to exchange the authorization code for an access token.',
-        long_lived_failed: 'Failed to get a long-lived access token.',
-        not_configured: 'Instagram OAuth is not configured. Contact support.',
-        missing_params: 'Missing authorization parameters from Instagram.',
-        no_token: 'No access token returned from Instagram.',
-        no_long_token: 'No long-lived token returned.',
-        pages_failed: 'Failed to fetch your Facebook Pages.',
-        invalid_state: 'Invalid state parameter. Please try connecting again.',
-        no_user: 'Could not determine which user to connect the account to.',
-      };
-      toast.error(messages[oauthError] || `OAuth error: ${oauthError}`);
+      // Check for no_match_found with discovered usernames
+      if (oauthError.startsWith('no_match_found:')) {
+        const foundUsernames = oauthError.substring('no_match_found:'.length);
+        toast.error(
+          `The Facebook account you logged in with manages these Instagram accounts: ${foundUsernames}. None of them match "timeless.wealth.us". You need to log in with the Facebook account that manages the timeless.wealth.us Instagram page specifically. Disconnect this account and connect it fresh with the correct Facebook login.`
+        );
+      } else {
+        const messages: Record<string, string> = {
+          no_ig_account: 'No Instagram Business Account was found linked to your Facebook Pages. Make sure your Instagram account is a Business account connected to a Facebook Page, and you log in with the Facebook account that manages it.',
+          no_pages: 'No Facebook Pages found. You need at least one Facebook Page to connect Instagram.',
+          token_exchange_failed: 'Failed to exchange the authorization code for an access token.',
+          long_lived_failed: 'Failed to get a long-lived access token.',
+          not_configured: 'Instagram OAuth is not configured. Contact support.',
+          missing_params: 'Missing authorization parameters from Instagram.',
+          no_token: 'No access token returned from Instagram.',
+          no_long_token: 'No long-lived token returned.',
+          pages_failed: 'Failed to fetch your Facebook Pages.',
+          invalid_state: 'Invalid state parameter. Please try connecting again.',
+          no_user: 'Could not determine which user to connect the account to.',
+        };
+        toast.error(messages[oauthError] || `OAuth error: ${oauthError}`);
+      }
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
@@ -153,8 +161,8 @@ export function InstagramTab() {
       }
 
       const { auth_url } = await response.json();
-      // Open in a new tab — Facebook blocks loading its OAuth dialog inside an iframe
-      window.open(auth_url, '_blank');
+      // Navigate in the same tab so the redirect back is visible
+      window.location.href = auth_url;
     } catch (error) {
       console.error('OAuth start error:', error);
       alert('Failed to start OAuth flow. Make sure INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET are set in your Supabase secrets.');

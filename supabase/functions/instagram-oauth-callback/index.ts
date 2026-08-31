@@ -30,7 +30,6 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
-    // Parse state to get user_id and app origin
     let stateData: { user_id: string; ts: number; origin?: string; reconnect_account_id?: string };
     try {
       stateData = JSON.parse(atob(stateParam ?? ""));
@@ -81,6 +80,8 @@ Deno.serve(async (req: Request) => {
     const tokenRes = await fetch(tokenUrl);
 
     if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      console.error("Token exchange failed:", errText);
       return Response.redirect(`${settingsUrl}&oauth_error=token_exchange_failed`, 302);
     }
 
@@ -96,6 +97,8 @@ Deno.serve(async (req: Request) => {
     const longLivedRes = await fetch(longLivedUrl);
 
     if (!longLivedRes.ok) {
+      const errText = await longLivedRes.text();
+      console.error("Long-lived token exchange failed:", errText);
       return Response.redirect(`${settingsUrl}&oauth_error=long_lived_failed`, 302);
     }
 
@@ -107,18 +110,22 @@ Deno.serve(async (req: Request) => {
     }
 
     // Get ALL the user's Pages (with pagination support)
-    const pages: Array<{ id: string; access_token: string }> = [];
-    let pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token&limit=100&access_token=${longLivedToken}`;
+    const pages: Array<{ id: string; access_token: string; name?: string }> = [];
+    let pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,name&limit=100&access_token=${longLivedToken}`;
 
     while (pagesUrl) {
       const pagesRes = await fetch(pagesUrl);
       if (!pagesRes.ok) {
+        const errText = await pagesRes.text();
+        console.error("Pages fetch failed:", errText);
         return Response.redirect(`${settingsUrl}&oauth_error=pages_failed`, 302);
       }
       const pagesData = await pagesRes.json();
       pages.push(...(pagesData.data ?? []));
       pagesUrl = pagesData.paging?.next ?? "";
     }
+
+    console.log(`Found ${pages.length} Facebook Pages:`, pages.map(p => ({ id: p.id, name: p.name })));
 
     if (pages.length === 0) {
       return Response.redirect(`${settingsUrl}&oauth_error=no_pages`, 302);
@@ -153,14 +160,15 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    console.log(`Found ${igAccounts.length} Instagram Business Accounts:`, igAccounts.map(a => ({ id: a.ig_user_id, username: a.username })));
+
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // If reconnecting a specific account, find the matching IG account by username
+    // If reconnecting a specific account, find the matching IG account
     if (reconnectAccountId) {
-      // Load the existing account to get its username
       const { data: existingAccount } = await supabaseClient
         .from("instagram_accounts")
         .select("id, username, ig_user_id")
@@ -174,14 +182,14 @@ Deno.serve(async (req: Request) => {
           (a) => a.username && existingAccount.username && a.username.toLowerCase() === existingAccount.username.toLowerCase()
         );
 
-        // If no username match, and there's only one IG account found, use it
-        if (!match && igAccounts.length === 1) {
-          match = igAccounts[0];
-        }
-
-        // If no username match but we have multiple IG accounts, pick the one whose ID is already stored
+        // If no username match, try matching by existing ig_user_id
         if (!match && igAccounts.length > 1) {
           match = igAccounts.find((a) => a.ig_user_id === existingAccount.ig_user_id);
+        }
+
+        // If no match and only one IG account found, use it
+        if (!match && igAccounts.length === 1) {
+          match = igAccounts[0];
         }
 
         if (match) {
@@ -189,7 +197,7 @@ Deno.serve(async (req: Request) => {
             .from("instagram_accounts")
             .update({
               ig_user_id: match.ig_user_id,
-              username: match.username,
+              username: match.username || existingAccount.username,
               access_token: match.page_access_token,
               connected: true,
               auth_method: "oauth",
@@ -203,7 +211,8 @@ Deno.serve(async (req: Request) => {
           return Response.redirect(`${settingsUrl}&oauth=success`, 302);
         }
 
-        // No matching IG account found for this username — store the token but mark as needing attention
+        // No matching IG account found
+        // Store the long-lived token so the user can at least try the manual "Update access token" flow
         await supabaseClient
           .from("instagram_accounts")
           .update({
@@ -214,7 +223,13 @@ Deno.serve(async (req: Request) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", reconnectAccountId);
-        return Response.redirect(`${settingsUrl}&oauth_error=no_ig_account`, 302);
+
+        // Pass diagnostic info in the error
+        const foundUsernames = igAccounts.map(a => a.username).filter(Boolean).join(', ');
+        const errorMsg = foundUsernames
+          ? `no_match_found:${foundUsernames}`
+          : 'no_ig_account';
+        return Response.redirect(`${settingsUrl}&oauth_error=${encodeURIComponent(errorMsg)}`, 302);
       }
     }
 
