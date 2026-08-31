@@ -110,13 +110,13 @@ export function InstagramTab() {
       toast.success('Instagram connected successfully via OAuth.');
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
+      fetchAccounts();
     } else if (oauthError) {
       // Check for no_match_found with discovered usernames
       if (oauthError.startsWith('no_match_found:')) {
         const foundUsernames = oauthError.substring('no_match_found:'.length);
-        const existingUsername = accounts.find(a => a.id === stateData?.reconnect_account_id)?.username || 'this account';
         toast.error(
-          `The Facebook account you logged in with manages these Instagram accounts: ${foundUsernames}. None of them match "${existingUsername}". You need to log in with the Facebook account that manages that Instagram page specifically. Disconnect this account and connect it fresh with the correct Facebook login.`
+          `The Facebook account you logged in with manages these Instagram accounts: ${foundUsernames}. None of them match the account you're trying to reconnect. You need to log in with the Facebook account that manages that Instagram page specifically. Disconnect this account and connect it fresh with the correct Facebook login.`
         );
       } else {
         const messages: Record<string, string> = {
@@ -136,14 +136,27 @@ export function InstagramTab() {
       }
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
+      fetchAccounts();
     }
   }, []);
 
+  // Refresh accounts when window regains focus (e.g. returning from OAuth popup tab)
+  useEffect(() => {
+    const onFocus = () => fetchAccounts();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchAccounts]);
+
   const handleOAuthConnect = async (reconnectAccountId?: string) => {
     setOauthStarting(true);
+    // Open a blank tab immediately (before async) so popup blockers don't fire
+    const popup = window.open('', '_blank');
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        popup?.close();
+        return;
+      }
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const response = await fetch(`${supabaseUrl}/functions/v1/instagram-oauth-start`, {
@@ -161,17 +174,25 @@ export function InstagramTab() {
           const err = await response.json();
           errMsg = err.error || errMsg;
         } catch { /* response body wasn't JSON */ }
+        popup?.close();
         alert(errMsg);
         return;
       }
 
       const data = await response.json();
       if (!data.auth_url) {
+        popup?.close();
         alert('No OAuth URL returned from server. Response: ' + JSON.stringify(data));
         return;
       }
-      window.location.href = data.auth_url;
+      if (popup) {
+        popup.location.href = data.auth_url;
+      } else {
+        // Fallback if popup was blocked
+        window.location.href = data.auth_url;
+      }
     } catch (error) {
+      popup?.close();
       console.error('OAuth start error:', error);
       const msg = error instanceof Error ? error.message : String(error);
       alert(`Failed to start OAuth flow: ${msg}`);
