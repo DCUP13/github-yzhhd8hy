@@ -174,9 +174,10 @@ export function InstagramTab() {
         alert('No OAuth URL returned from server. Response: ' + JSON.stringify(data));
         return;
       }
-      // Redirect to Instagram — after login, Instagram redirects to the Supabase
-      // callback which exchanges the code and redirects back to the app settings page.
-      window.location.href = data.auth_url;
+      // Open Instagram login in a new tab — Instagram blocks iframe embedding,
+      // so it can't load inside the dev environment's iframe. The Supabase callback
+      // will redirect back to the app after the exchange completes.
+      window.open(data.auth_url, '_blank', 'noopener,noreferrer');
     } catch (error) {
       console.error('OAuth start error:', error);
       const msg = error instanceof Error ? error.message : String(error);
