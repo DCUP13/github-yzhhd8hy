@@ -142,8 +142,10 @@ Deno.serve(async (req: Request) => {
     console.log("Long-lived token obtained, expires in:", longLivedData.expires_in, "seconds");
 
     // Fetch the user's profile info using the Instagram token
-    const profileRes = await fetch(
-      `https://graph.instagram.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${longLivedToken}`
+    // Try the user_id first, then fall back to /me if it fails
+    const profileFields = "fields=username,profile_picture_url,followers_count,follows_count,media_count";
+    let profileRes = await fetch(
+      `https://graph.instagram.com/v21.0/${igUserId}?${profileFields}&access_token=${longLivedToken}`
     );
 
     let profile: Record<string, unknown> = {};
@@ -151,8 +153,20 @@ Deno.serve(async (req: Request) => {
       profile = await profileRes.json();
       console.log("Profile fetched:", profile.username, "followers:", profile.followers_count);
     } else {
-      const profileErr = await profileRes.text();
-      console.error("Profile fetch failed:", profileErr);
+      // Try /me as fallback — sometimes the user_id from token exchange differs
+      const meRes = await fetch(
+        `https://graph.instagram.com/v21.0/me?${profileFields}&access_token=${longLivedToken}`
+      );
+      if (meRes.ok) {
+        profile = await meRes.json();
+        console.log("Profile fetched via /me fallback:", profile.username, "followers:", profile.followers_count);
+        if (profile.id) {
+          igUserId = String(profile.id);
+        }
+      } else {
+        const profileErr = await meRes.text();
+        console.error("Profile fetch failed (both user_id and /me):", profileErr);
+      }
     }
 
     const igAccount: IgAccount = {
