@@ -21,9 +21,3 @@ verify_jwt = true
 
 [functions.instagram-oauth-callback]
 verify_jwt = false
-
-[functions.instagram-deauthorize]
-verify_jwt = false
-
-[functions.instagram-data-deletion]
-verify_jwt = false
