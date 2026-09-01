@@ -53,7 +53,7 @@ Deno.serve(async (req: Request) => {
     const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now(), origin: appOrigin, reconnect_account_id: reconnectAccountId }));
 
     // Instagram Business Login — uses instagram.com/oauth/authorize (not Facebook)
-    const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&force_authentication=1&enable_fb_login=1&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
+    const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
 
     return new Response(JSON.stringify({ auth_url: authUrl }), {
       status: 200,
