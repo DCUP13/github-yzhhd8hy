@@ -79,19 +79,12 @@ Deno.serve(async (req: Request) => {
       return Response.redirect(settingsUrl(`oauth_error=not_configured`), 302);
     }
 
-    // Exchange code for short-lived Instagram access token
-    // Uses api.instagram.com endpoint (not graph.facebook.com)
-    const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: appId,
-        client_secret: appSecret,
-        grant_type: "authorization_code",
-        redirect_uri: redirectUri,
-        code: code,
-      }),
-    });
+    // Exchange code for a short-lived access token via Facebook's Graph API
+    // (required for Meta apps — Instagram's direct endpoint doesn't work)
+    const tokenRes = await fetch(
+      `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`,
+      { method: "GET" }
+    );
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
@@ -101,13 +94,12 @@ Deno.serve(async (req: Request) => {
 
     const tokenData = await tokenRes.json();
     const shortLivedToken = tokenData.access_token;
-    const igUserId = tokenData.user_id;
 
     if (!shortLivedToken) {
       return Response.redirect(settingsUrl(`oauth_error=no_token`), 302);
     }
 
-    console.log("Short-lived token obtained for IG user:", igUserId);
+    console.log("Short-lived token obtained, exchanging for long-lived Instagram token...");
 
     // Exchange for long-lived Instagram access token (60 days)
     const longLivedUrl = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${appSecret}&access_token=${shortLivedToken}`;
@@ -128,7 +120,23 @@ Deno.serve(async (req: Request) => {
 
     console.log("Long-lived token obtained, expires in:", longLivedData.expires_in, "seconds");
 
-    // Fetch the user's profile info using the Instagram token directly
+    // Get the Instagram user ID from the long-lived token
+    const meRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${longLivedToken}`);
+    let igUserId = "";
+    let username = "";
+
+    if (meRes.ok) {
+      const meData = await meRes.json();
+      igUserId = meData.id;
+      username = meData.username;
+      console.log("IG user:", igUserId, username);
+    } else {
+      const meErr = await meRes.text();
+      console.error("Failed to get IG user info:", meErr);
+      return Response.redirect(settingsUrl(`oauth_error=no_ig_account`), 302);
+    }
+
+    // Fetch the user's profile info
     const profileRes = await fetch(
       `https://graph.instagram.com/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count&access_token=${longLivedToken}`
     );
@@ -144,7 +152,7 @@ Deno.serve(async (req: Request) => {
 
     const igAccount: IgAccount = {
       ig_user_id: String(igUserId),
-      username: (profile.username as string) ?? "",
+      username: (profile.username as string) ?? username ?? "",
       profile_picture_url: (profile.profile_picture_url as string) ?? null,
       followers_count: (profile.followers_count as number) ?? null,
       follows_count: (profile.follows_count as number) ?? null,

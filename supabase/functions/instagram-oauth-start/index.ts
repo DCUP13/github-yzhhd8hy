@@ -16,7 +16,7 @@ Deno.serve(async (req: Request) => {
     const appSecret = Deno.env.get("INSTAGRAM_APP_SECRET");
 
     if (!appId || !appSecret) {
-      console.error("INSTAGRAM_APP_ID or INSTAGRAM_APP_SECRET not found in env. Available keys:", Object.keys(Deno.env.toObject()).filter(k => k.startsWith("INSTAGRAM")));
+      console.error("INSTAGRAM_APP_ID or INSTAGRAM_APP_SECRET not found in env.");
       return new Response(JSON.stringify({
         error: "OAuth is not configured. Add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to your Supabase secrets.",
       }), {
@@ -30,7 +30,6 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // Get the authenticated user
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "");
 
@@ -43,23 +42,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Accept app_origin from request body so the callback knows where to redirect
     const body = await req.json().catch(() => ({}));
     const appOrigin = (body as { app_origin?: string })?.app_origin || "";
     const reconnectAccountId = (body as { reconnect_account_id?: string })?.reconnect_account_id || "";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    // Must use the Supabase callback URL — this is what's registered in the Meta App Dashboard
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
-    // Instagram Business Login scopes (new naming convention)
+    // Instagram Business Login scopes for the Instagram Graph API
     const scope = "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights";
 
-    // State carries user ID, app origin, and optional reconnect target
     const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now(), origin: appOrigin, reconnect_account_id: reconnectAccountId }));
 
-    // Use Instagram's direct OAuth authorize endpoint
-    const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}&force_reauth=true`;
+    // Use Facebook's OAuth dialog — required for Meta apps (not standalone Instagram apps)
+    const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
 
     return new Response(JSON.stringify({ auth_url: authUrl }), {
       status: 200,
