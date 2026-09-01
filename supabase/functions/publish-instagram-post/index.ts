@@ -138,7 +138,7 @@ async function resolveIgUserId(
 
   try {
     const meRes = await fetch(
-      graphUrl(`https://graph.instagram.com/v21.0/me?fields=id,username`, accessToken),
+      graphUrl(`https://graph.instagram.com/v26.0/me?fields=id,username`, accessToken),
       { headers: authHeaders(accessToken) },
     );
     if (meRes.ok) {
@@ -160,7 +160,7 @@ async function resolveIgUserId(
 }
 
 /** Wait for a video container to finish processing. */
-async function waitForVideoProcessing(
+async function waitForMediaReady(
   base: string,
   creationId: string,
   accessToken: string,
@@ -168,16 +168,24 @@ async function waitForVideoProcessing(
 ): Promise<void> {
   let done = false;
   let attempts = 0;
-  while (!done && attempts < 30) {
-    await new Promise(r => setTimeout(r, 5000));
-    const statusUrl = graphUrl(`${base}/v21.0/${creationId}?fields=status_code`, accessToken);
+  const maxAttempts = 60;
+  while (!done && attempts < maxAttempts) {
+    await new Promise(r => setTimeout(r, 3000));
+    const statusUrl = graphUrl(`${base}/v26.0/${creationId}?fields=status_code`, accessToken);
     const statusResponse = await fetch(statusUrl, { headers: authHeaders(accessToken) });
     if (statusResponse.ok) {
       const statusResult = await statusResponse.json();
-      if (statusResult.status_code === 'FINISHED') done = true;
-      else if (statusResult.status_code === 'ERROR') throw new Error(`Video processing failed for ${label}`);
+      const status = statusResult.status_code;
+      if (status === 'FINISHED') {
+        done = true;
+      } else if (status === 'ERROR') {
+        throw new Error(`Media processing failed for ${label}`);
+      }
     }
     attempts++;
+  }
+  if (!done) {
+    throw new Error(`Media processing timed out for ${label} after ${maxAttempts * 3}s`);
   }
 }
 
@@ -285,7 +293,7 @@ Deno.serve(async (req: Request) => {
       const mediaType = isVideo ? 'VIDEO' : 'IMAGE';
 
       // Create media container
-      const createMediaUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media`, accessToken);
+      const createMediaUrl = graphUrl(`${base}/v26.0/${effectiveIgUserId}/media`, accessToken);
       const mediaParams = new URLSearchParams({
         media_type: mediaType,
         image_url: asset.cloudfront_url,
@@ -306,11 +314,11 @@ Deno.serve(async (req: Request) => {
 
       // Wait for video processing if needed
       if (isVideo) {
-        await waitForVideoProcessing(base, creationId, accessToken, 'test post');
+        await waitForMediaReady(base, creationId, accessToken, 'test post');
       }
 
       // Publish
-      const publishUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media_publish`, accessToken);
+      const publishUrl = graphUrl(`${base}/v26.0/${effectiveIgUserId}/media_publish`, accessToken);
       const publishParams = new URLSearchParams({ creation_id: creationId });
       const publishResponse = await fetch(publishUrl, {
         method: 'POST',
@@ -423,7 +431,7 @@ Deno.serve(async (req: Request) => {
         });
 
         const childResponse = await fetch(
-          graphUrl(`${base}/v21.0/${effectiveIgUserId}/media`, accessToken),
+          graphUrl(`${base}/v26.0/${effectiveIgUserId}/media`, accessToken),
           {
             method: 'POST',
             headers: { ...authHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -438,7 +446,7 @@ Deno.serve(async (req: Request) => {
         childIds.push(childResult.id);
 
         if (isVideo) {
-          await waitForVideoProcessing(base, childResult.id, accessToken, `carousel child ${i}`);
+          await waitForMediaReady(base, childResult.id, accessToken, `carousel child ${i}`);
         }
       }
 
@@ -449,7 +457,7 @@ Deno.serve(async (req: Request) => {
         caption: fullCaption,
       });
       const carouselResponse = await fetch(
-        graphUrl(`${base}/v21.0/${effectiveIgUserId}/media`, accessToken),
+        graphUrl(`${base}/v26.0/${effectiveIgUserId}/media`, accessToken),
         {
           method: 'POST',
           headers: { ...authHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -463,8 +471,10 @@ Deno.serve(async (req: Request) => {
       const carouselResult = await carouselResponse.json();
       const creationId = carouselResult.id;
 
+      await waitForMediaReady(base, creationId, accessToken, 'carousel container');
+
       // Publish the carousel
-      const carouselPublishUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media_publish`, accessToken);
+      const carouselPublishUrl = graphUrl(`${base}/v26.0/${effectiveIgUserId}/media_publish`, accessToken);
       const carouselPublishParams = new URLSearchParams({ creation_id: creationId });
       const publishResponse = await fetch(carouselPublishUrl, {
         method: 'POST',
@@ -483,7 +493,7 @@ Deno.serve(async (req: Request) => {
       const isVideo = variation.s3_key.endsWith('.mp4') || variation.s3_key.endsWith('.mov');
       const mediaType = isVideo ? 'VIDEO' : 'IMAGE';
 
-      const createMediaUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media`, accessToken);
+      const createMediaUrl = graphUrl(`${base}/v26.0/${effectiveIgUserId}/media`, accessToken);
       const mediaParams = new URLSearchParams({
         media_type: mediaType,
         image_url: variation.cloudfront_url,
@@ -501,11 +511,9 @@ Deno.serve(async (req: Request) => {
       const mediaResult = await mediaResponse.json();
       const creationId = mediaResult.id;
 
-      if (isVideo) {
-        await waitForVideoProcessing(base, creationId, accessToken, 'single post');
-      }
+      await waitForMediaReady(base, creationId, accessToken, 'single post');
 
-      const singlePublishUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media_publish`, accessToken);
+      const singlePublishUrl = graphUrl(`${base}/v26.0/${effectiveIgUserId}/media_publish`, accessToken);
       const singlePublishParams = new URLSearchParams({ creation_id: creationId });
       const publishResponse = await fetch(singlePublishUrl, {
         method: 'POST',
@@ -523,7 +531,7 @@ Deno.serve(async (req: Request) => {
     // Get permalink
     let permalink = '';
     try {
-      const permalinkUrl = graphUrl(`${base}/v21.0/${mediaId}?fields=permalink`, accessToken);
+      const permalinkUrl = graphUrl(`${base}/v26.0/${mediaId}?fields=permalink`, accessToken);
       const permalinkResponse = await fetch(permalinkUrl, { headers: authHeaders(accessToken) });
       if (permalinkResponse.ok) {
         const permalinkResult = await permalinkResponse.json();
