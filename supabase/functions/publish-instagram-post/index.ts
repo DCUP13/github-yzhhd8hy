@@ -176,8 +176,27 @@ Deno.serve(async (req: Request) => {
       const isVideo = asset.s3_key.endsWith('.mp4') || asset.s3_key.endsWith('.mov');
       const mediaType = isVideo ? 'VIDEO' : 'IMAGE';
 
+      // Resolve the correct ig_user_id — the stored value may have precision loss from JSON parsing
+      let effectiveIgUserId = account.ig_user_id;
+      if (accessToken.startsWith('IGA')) {
+        try {
+          const meRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${accessToken}`);
+          if (meRes.ok) {
+            const meText = await meRes.text();
+            const meId = meText.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/)?.[1] ?? meText.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/)?.[2];
+            if (meId && meId !== effectiveIgUserId) {
+              console.log(`Correcting ig_user_id from ${effectiveIgUserId} to ${meId}`);
+              effectiveIgUserId = meId;
+              await supabase.from("instagram_accounts").update({ ig_user_id: meId }).eq("id", account_id);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to verify ig_user_id via /me:", e);
+        }
+      }
+
       // Create media container
-      const createMediaUrl = `https://graph.facebook.com/v21.0/${account.ig_user_id}/media`;
+      const createMediaUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media`;
       const mediaParams = new URLSearchParams({
         access_token: accessToken,
         media_type: mediaType,
@@ -218,7 +237,7 @@ Deno.serve(async (req: Request) => {
       }
 
       // Publish
-      const publishUrl = `https://graph.facebook.com/v21.0/${account.ig_user_id}/media_publish`;
+      const publishUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media_publish`;
       const publishParams = new URLSearchParams({ access_token: accessToken, creation_id: creationId });
       const publishResponse = await fetch(publishUrl, { method: 'POST', body: publishParams });
       if (!publishResponse.ok) {
@@ -294,6 +313,25 @@ Deno.serve(async (req: Request) => {
     const accessToken = (account as Record<string, unknown>)?.access_token as string | undefined;
     if (!accessToken) throw new Error('No access token found for this Instagram account');
 
+    // Resolve the correct ig_user_id — the stored value may have precision loss from JSON parsing
+    let effectiveIgUserId = account.ig_user_id;
+    if (accessToken.startsWith('IGA')) {
+      try {
+        const meRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${accessToken}`);
+        if (meRes.ok) {
+          const meText = await meRes.text();
+          const meId = meText.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/)?.[1] ?? meText.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/)?.[2];
+          if (meId && meId !== effectiveIgUserId) {
+            console.log(`Correcting ig_user_id from ${effectiveIgUserId} to ${meId}`);
+            effectiveIgUserId = meId;
+            await supabase.from("instagram_accounts").update({ ig_user_id: meId }).eq("id", account.id);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to verify ig_user_id via /me:", e);
+      }
+    }
+
     await supabase.from("instagram_post_variations")
       .update({ status: 'publishing', updated_at: new Date().toISOString() })
       .eq("id", variation_id);
@@ -319,7 +357,7 @@ Deno.serve(async (req: Request) => {
         // If carousel_texts has text for this image, we'd apply it via the overlay function
         // For now, the caption is on the parent carousel
 
-        const childResponse = await fetch(`https://graph.facebook.com/v21.0/${account.ig_user_id}/media`, {
+        const childResponse = await fetch(`https://graph.facebook.com/v21.0/${effectiveIgUserId}/media`, {
           method: 'POST', body: childParams,
         });
         if (!childResponse.ok) {
@@ -354,7 +392,7 @@ Deno.serve(async (req: Request) => {
         children: childIds.join(','),
         caption: fullCaption,
       });
-      const carouselResponse = await fetch(`https://graph.facebook.com/v21.0/${account.ig_user_id}/media`, {
+      const carouselResponse = await fetch(`https://graph.facebook.com/v21.0/${effectiveIgUserId}/media`, {
         method: 'POST', body: carouselParams,
       });
       if (!carouselResponse.ok) {
@@ -365,9 +403,9 @@ Deno.serve(async (req: Request) => {
       const creationId = carouselResult.id;
 
       // Publish the carousel
-      const publishUrl = `https://graph.facebook.com/v21.0/${account.ig_user_id}/media_publish`;
-      const publishParams = new URLSearchParams({ access_token: accessToken, creation_id: creationId });
-      const publishResponse = await fetch(publishUrl, { method: 'POST', body: publishParams });
+      const carouselPublishUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media_publish`;
+      const carouselPublishParams = new URLSearchParams({ access_token: accessToken, creation_id: creationId });
+      const publishResponse = await fetch(carouselPublishUrl, { method: 'POST', body: carouselPublishParams });
       if (!publishResponse.ok) {
         const errText = await publishResponse.text();
         throw new Error(`Failed to publish carousel: ${errText}`);
@@ -380,7 +418,7 @@ Deno.serve(async (req: Request) => {
       const isVideo = variation.s3_key.endsWith('.mp4') || variation.s3_key.endsWith('.mov');
       const mediaType = isVideo ? 'VIDEO' : 'IMAGE';
 
-      const createMediaUrl = `https://graph.facebook.com/v21.0/${account.ig_user_id}/media`;
+      const createMediaUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media`;
       const mediaParams = new URLSearchParams({
         access_token: accessToken,
         media_type: mediaType,
@@ -411,9 +449,9 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      const publishUrl = `https://graph.facebook.com/v21.0/${account.ig_user_id}/media_publish`;
-      const publishParams = new URLSearchParams({ access_token: accessToken, creation_id: creationId });
-      const publishResponse = await fetch(publishUrl, { method: 'POST', body: publishParams });
+      const singlePublishUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media_publish`;
+      const singlePublishParams = new URLSearchParams({ access_token: accessToken, creation_id: creationId });
+      const publishResponse = await fetch(singlePublishUrl, { method: 'POST', body: singlePublishParams });
       if (!publishResponse.ok) {
         const errText = await publishResponse.text();
         throw new Error(`Failed to publish media: ${errText}`);

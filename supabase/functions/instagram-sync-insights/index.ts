@@ -124,7 +124,14 @@ Deno.serve(async (req: Request) => {
     // Try the user ID first, then fall back to /me if the profile can't be found.
     const baseUrl = apiBase(accessToken);
 
-    async function fetchProfile(userIdParam: string): Promise<{ ok: boolean; status: number; body: any }> {
+    // Parse profile response as text, then extract id as string to preserve precision
+    // Instagram user IDs can exceed Number.MAX_SAFE_INTEGER, so JSON.parse() corrupts them
+    function extractStringId(text: string): string | undefined {
+      const match = text.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/);
+      return match?.[1] ?? match?.[2];
+    }
+
+    async function fetchProfile(userIdParam: string): Promise<{ ok: boolean; status: number; body: any; rawText: string }> {
       const fields = "fields=username,profile_picture_url,followers_count,follows_count,media_count";
       let res: Response;
       if (isInstagramToken(accessToken)) {
@@ -132,8 +139,9 @@ Deno.serve(async (req: Request) => {
       } else {
         res = await fetch(graphUrl(`${baseUrl}/v21.0/${userIdParam}?${fields}`, accessToken));
       }
-      const body = res.ok ? await res.json() : await res.json().catch(() => ({}));
-      return { ok: res.ok, status: res.status, body };
+      const rawText = await res.text();
+      const body = rawText ? JSON.parse(rawText) : {};
+      return { ok: res.ok, status: res.status, body, rawText };
     }
 
     let profileRes = await fetchProfile(igUserId);
@@ -145,12 +153,12 @@ Deno.serve(async (req: Request) => {
       if (meRes.ok) {
         profileRes = meRes;
         // Update the ig_user_id in the database if /me returns a different id
-        const meId = meRes.body.id;
-        if (meId && String(meId) !== igUserId) {
+        const meId = extractStringId(meRes.rawText);
+        if (meId && meId !== igUserId) {
           console.log("Updating ig_user_id from", igUserId, "to", meId);
           await supabaseClient
             .from("instagram_accounts")
-            .update({ ig_user_id: String(meId), updated_at: new Date().toISOString() })
+            .update({ ig_user_id: meId, updated_at: new Date().toISOString() })
             .eq("id", accountId);
         }
       }
@@ -178,7 +186,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const profile = profileRes.body;
-    const effectiveUserId = profile.id ? String(profile.id) : igUserId;
+    const effectiveUserId = extractStringId(profileRes.rawText) ?? igUserId;
 
     // 2. Fetch recent media (up to 25 posts)
     let mediaRes: Response;

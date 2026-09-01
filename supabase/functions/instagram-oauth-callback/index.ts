@@ -99,20 +99,23 @@ Deno.serve(async (req: Request) => {
       return Response.redirect(settingsUrl(`oauth_error=token_exchange_failed`), 302);
     }
 
-    const tokenData = await tokenRes.json();
+    // Parse as text first, then extract user_id as string to avoid number precision loss
+    // Instagram user IDs can exceed Number.MAX_SAFE_INTEGER, so JSON.parse() corrupts them
+    const tokenRawText = await tokenRes.text();
 
-    // The response can be either a flat object {access_token, user_id} or
-    // wrapped in a data array [{access_token, user_id, permissions}]
-    let shortLivedToken: string | undefined;
-    let igUserId: string | undefined;
-
-    if (Array.isArray(tokenData.data) && tokenData.data.length > 0) {
-      shortLivedToken = tokenData.data[0].access_token;
-      igUserId = tokenData.data[0].user_id;
-    } else {
-      shortLivedToken = tokenData.access_token;
-      igUserId = tokenData.user_id;
+    function extractStringField(text: string, field: string): string | undefined {
+      // Match "field":"value" or "field":number — capture as string to preserve precision
+      const regex = new RegExp(`"${field}"\\s*:\\s*(?:"([^"]+)"|(\\d+))`);
+      const match = text.match(regex);
+      if (match) return match[1] ?? match[2];
+      return undefined;
     }
+
+    let shortLivedToken: string | undefined = extractStringField(tokenRawText, "access_token");
+    let igUserId: string | undefined = extractStringField(tokenRawText, "user_id");
+
+    // If the response is wrapped in a data array, the first access_token/user_id pair is what we need
+    // The regex above already finds the first occurrence, which handles both flat and array responses
 
     if (!shortLivedToken) {
       console.error("No access_token in response:", JSON.stringify(tokenData));
@@ -149,8 +152,10 @@ Deno.serve(async (req: Request) => {
     );
 
     let profile: Record<string, unknown> = {};
+    let profileRawText: string | undefined;
     if (profileRes.ok) {
-      profile = await profileRes.json();
+      profileRawText = await profileRes.text();
+      profile = JSON.parse(profileRawText);
       console.log("Profile fetched:", profile.username, "followers:", profile.followers_count);
     } else {
       // Try /me as fallback — sometimes the user_id from token exchange differs
@@ -158,10 +163,13 @@ Deno.serve(async (req: Request) => {
         `https://graph.instagram.com/v21.0/me?${profileFields}&access_token=${longLivedToken}`
       );
       if (meRes.ok) {
-        profile = await meRes.json();
+        profileRawText = await meRes.text();
+        profile = JSON.parse(profileRawText);
         console.log("Profile fetched via /me fallback:", profile.username, "followers:", profile.followers_count);
-        if (profile.id) {
-          igUserId = String(profile.id);
+        // Extract id as string to preserve precision
+        const profileId = extractStringField(profileRawText, "id");
+        if (profileId) {
+          igUserId = profileId;
         }
       } else {
         const profileErr = await meRes.text();
