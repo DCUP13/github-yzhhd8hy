@@ -16,7 +16,6 @@ Deno.serve(async (req: Request) => {
     const appSecret = Deno.env.get("INSTAGRAM_APP_SECRET");
 
     if (!appId || !appSecret) {
-      console.error("INSTAGRAM_APP_ID or INSTAGRAM_APP_SECRET not found in env.");
       return new Response(JSON.stringify({
         error: "OAuth is not configured. Add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to your Supabase secrets.",
       }), {
@@ -49,13 +48,12 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
-    // Instagram Business Login scopes for the Instagram Graph API
     const scope = "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights";
 
     const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now(), origin: appOrigin, reconnect_account_id: reconnectAccountId }));
 
-    // Use Facebook's OAuth dialog — required for Meta apps (not standalone Instagram apps)
-    const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
+    // Instagram Business Login — uses instagram.com/oauth/authorize (not Facebook)
+    const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
 
     return new Response(JSON.stringify({ auth_url: authUrl }), {
       status: 200,
