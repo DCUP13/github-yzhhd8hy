@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
     // The regex above already finds the first occurrence, which handles both flat and array responses
 
     if (!shortLivedToken) {
-      console.error("No access_token in response:", JSON.stringify(tokenData));
+      console.error("No access_token in response:", tokenRawText);
       return Response.redirect(settingsUrl(`oauth_error=no_token`), 302);
     }
 

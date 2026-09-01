@@ -8,6 +8,32 @@ const corsHeaders = {
 
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 
+// Instagram Business tokens (IGA...) only work with graph.instagram.com.
+// Facebook/Page tokens work with graph.facebook.com.
+function graphBase(token: string): string {
+  return token.startsWith('IGA')
+    ? 'https://graph.instagram.com'
+    : 'https://graph.facebook.com';
+}
+
+function authHeaders(token: string): Record<string, string> {
+  if (token.startsWith('IGA')) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
+
+function graphUrl(url: string, token: string): string {
+  if (token.startsWith('IGA')) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}access_token=${token}`;
+}
+
+function extractStringId(text: string): string | undefined {
+  const match = text.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/);
+  return match?.[1] ?? match?.[2];
+}
+
 async function sha256(message: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(message);
@@ -100,20 +126,98 @@ async function copyS3Object(
   }
 }
 
+/** Fetch the correct ig_user_id via /me, fixing precision loss from initial storage. */
+async function resolveIgUserId(
+  supabase: ReturnType<typeof createClient>,
+  account: Record<string, unknown>,
+  accountId: string,
+  accessToken: string,
+): Promise<string> {
+  const storedId = account.ig_user_id as string;
+  if (!accessToken.startsWith('IGA')) return storedId;
+
+  try {
+    const meRes = await fetch(
+      graphUrl(`https://graph.instagram.com/v21.0/me?fields=id,username`, accessToken),
+      { headers: authHeaders(accessToken) },
+    );
+    if (meRes.ok) {
+      const meText = await meRes.text();
+      const meId = extractStringId(meText);
+      if (meId && meId !== storedId) {
+        console.log(`Correcting ig_user_id from ${storedId} to ${meId}`);
+        await supabase.from("instagram_accounts").update({ ig_user_id: meId }).eq("id", accountId);
+        return meId;
+      }
+      if (meId) return meId;
+    } else {
+      console.error("Failed to fetch /me:", await meRes.text());
+    }
+  } catch (e) {
+    console.error("Failed to verify ig_user_id via /me:", e);
+  }
+  return storedId;
+}
+
+/** Wait for a video container to finish processing. */
+async function waitForVideoProcessing(
+  base: string,
+  creationId: string,
+  accessToken: string,
+  label: string,
+): Promise<void> {
+  let done = false;
+  let attempts = 0;
+  while (!done && attempts < 30) {
+    await new Promise(r => setTimeout(r, 5000));
+    const statusUrl = graphUrl(`${base}/v21.0/${creationId}?fields=status_code`, accessToken);
+    const statusResponse = await fetch(statusUrl, { headers: authHeaders(accessToken) });
+    if (statusResponse.ok) {
+      const statusResult = await statusResponse.json();
+      if (statusResult.status_code === 'FINISHED') done = true;
+      else if (statusResult.status_code === 'ERROR') throw new Error(`Video processing failed for ${label}`);
+    }
+    attempts++;
+  }
+}
+
+/** Parse Graph API error and return a friendly message for common error codes. */
+function friendlyGraphError(errText: string, fallback: string): string {
+  try {
+    const errJson = JSON.parse(errText);
+    if (errJson?.error?.code === 190) {
+      return 'Your Instagram access token is invalid or expired. Go to Settings > Instagram and click Reconnect to get a fresh token via Instagram Login.';
+    }
+    if (errJson?.error?.code === 100) {
+      return `Instagram API rejected the request: ${errJson.error.message || errText.slice(0, 200)}`;
+    }
+    return `${fallback}: ${errText.slice(0, 300)}`;
+  } catch {
+    return `${fallback}: ${errText.slice(0, 300)}`;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  // Read the body once up front so the error handler can use it without req.clone()
+  let requestBody: Record<string, unknown> = {};
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
-    );
+    requestBody = await req.json().catch(() => ({}));
+  } catch {
+    // Body already consumed or invalid — continue with empty object
+  }
 
-    const body = await req.json().catch(() => ({}));
-    const { variation_id, action, asset_id, account_id, caption } = body as {
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } },
+  );
+
+  try {
+    const { variation_id, action, asset_id, account_id, caption } = requestBody as {
       variation_id?: string;
       action?: string;
       asset_id?: string;
@@ -160,8 +264,9 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const accessToken = (account as Record<string, unknown>)?.access_token as string | undefined;
-      const authMethod = (account as Record<string, unknown>)?.auth_method as string | undefined;
+      const accountRec = account as Record<string, unknown>;
+      const accessToken = accountRec.access_token as string | undefined;
+      const authMethod = accountRec.auth_method as string | undefined;
       if (!accessToken) {
         return new Response(JSON.stringify({ error: "No access token for this account" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -173,76 +278,48 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      const base = graphBase(accessToken);
+      const effectiveIgUserId = await resolveIgUserId(supabase, accountRec, account_id, accessToken);
+
       const isVideo = asset.s3_key.endsWith('.mp4') || asset.s3_key.endsWith('.mov');
       const mediaType = isVideo ? 'VIDEO' : 'IMAGE';
 
-      // Resolve the correct ig_user_id — the stored value may have precision loss from JSON parsing
-      let effectiveIgUserId = account.ig_user_id;
-      if (accessToken.startsWith('IGA')) {
-        try {
-          const meRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${accessToken}`);
-          if (meRes.ok) {
-            const meText = await meRes.text();
-            const meId = meText.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/)?.[1] ?? meText.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/)?.[2];
-            if (meId && meId !== effectiveIgUserId) {
-              console.log(`Correcting ig_user_id from ${effectiveIgUserId} to ${meId}`);
-              effectiveIgUserId = meId;
-              await supabase.from("instagram_accounts").update({ ig_user_id: meId }).eq("id", account_id);
-            }
-          }
-        } catch (e) {
-          console.error("Failed to verify ig_user_id via /me:", e);
-        }
-      }
-
       // Create media container
-      const createMediaUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media`;
+      const createMediaUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media`, accessToken);
       const mediaParams = new URLSearchParams({
-        access_token: accessToken,
         media_type: mediaType,
         image_url: asset.cloudfront_url,
         caption: caption || 'Test post',
       });
 
-      const mediaResponse = await fetch(createMediaUrl, { method: 'POST', body: mediaParams });
+      const mediaResponse = await fetch(createMediaUrl, {
+        method: 'POST',
+        headers: { ...authHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: accessToken.startsWith('IGA') ? mediaParams : new URLSearchParams({ ...Object.fromEntries(mediaParams), access_token: accessToken }),
+      });
       if (!mediaResponse.ok) {
         const errText = await mediaResponse.text();
-        let friendlyError = `Failed to create media container: ${errText}`;
-        try {
-          const errJson = JSON.parse(errText);
-          if (errJson?.error?.code === 190) {
-            friendlyError = 'Your Instagram access token is invalid or expired. Go to Settings > Instagram and click Reconnect to get a fresh token via Instagram Login.';
-          }
-        } catch { /* keep default */ }
-        throw new Error(friendlyError);
+        throw new Error(friendlyGraphError(errText, 'Failed to create media container'));
       }
       const mediaResult = await mediaResponse.json();
       const creationId = mediaResult.id;
 
       // Wait for video processing if needed
       if (isVideo) {
-        let done = false;
-        let attempts = 0;
-        while (!done && attempts < 30) {
-          await new Promise(r => setTimeout(r, 5000));
-          const statusUrl = `https://graph.facebook.com/v21.0/${creationId}?fields=status_code&access_token=${accessToken}`;
-          const statusResponse = await fetch(statusUrl);
-          if (statusResponse.ok) {
-            const statusResult = await statusResponse.json();
-            if (statusResult.status_code === 'FINISHED') done = true;
-            else if (statusResult.status_code === 'ERROR') throw new Error('Video processing failed');
-          }
-          attempts++;
-        }
+        await waitForVideoProcessing(base, creationId, accessToken, 'test post');
       }
 
       // Publish
-      const publishUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media_publish`;
-      const publishParams = new URLSearchParams({ access_token: accessToken, creation_id: creationId });
-      const publishResponse = await fetch(publishUrl, { method: 'POST', body: publishParams });
+      const publishUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media_publish`, accessToken);
+      const publishParams = new URLSearchParams({ creation_id: creationId });
+      const publishResponse = await fetch(publishUrl, {
+        method: 'POST',
+        headers: { ...authHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: accessToken.startsWith('IGA') ? publishParams : new URLSearchParams({ ...Object.fromEntries(publishParams), access_token: accessToken }),
+      });
       if (!publishResponse.ok) {
         const errText = await publishResponse.text();
-        throw new Error(`Failed to publish: ${errText}`);
+        throw new Error(friendlyGraphError(errText, 'Failed to publish'));
       }
       const publishResult = await publishResponse.json();
       const mediaId = publishResult.media_id || publishResult.id;
@@ -310,27 +387,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const accessToken = (account as Record<string, unknown>)?.access_token as string | undefined;
+    const accountRec = account as Record<string, unknown>;
+    const accessToken = accountRec.access_token as string | undefined;
     if (!accessToken) throw new Error('No access token found for this Instagram account');
 
-    // Resolve the correct ig_user_id — the stored value may have precision loss from JSON parsing
-    let effectiveIgUserId = account.ig_user_id;
-    if (accessToken.startsWith('IGA')) {
-      try {
-        const meRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${accessToken}`);
-        if (meRes.ok) {
-          const meText = await meRes.text();
-          const meId = meText.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/)?.[1] ?? meText.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/)?.[2];
-          if (meId && meId !== effectiveIgUserId) {
-            console.log(`Correcting ig_user_id from ${effectiveIgUserId} to ${meId}`);
-            effectiveIgUserId = meId;
-            await supabase.from("instagram_accounts").update({ ig_user_id: meId }).eq("id", account.id);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to verify ig_user_id via /me:", e);
-      }
-    }
+    const base = graphBase(accessToken);
+    const effectiveIgUserId = await resolveIgUserId(supabase, accountRec, account.id, accessToken);
 
     await supabase.from("instagram_post_variations")
       .update({ status: 'publishing', updated_at: new Date().toISOString() })
@@ -339,6 +401,12 @@ Deno.serve(async (req: Request) => {
     const fullCaption = `${variation.caption}\n\n${(variation.hashtags || []).join(' ')}`.trim();
     const carouselUrls: string[] = variation.carousel_urls || [variation.cloudfront_url];
     const isCarousel = carouselUrls.length > 1;
+    const isIgToken = accessToken.startsWith('IGA');
+
+    function buildBody(params: URLSearchParams): URLSearchParams {
+      if (isIgToken) return params;
+      return new URLSearchParams({ ...Object.fromEntries(params), access_token: accessToken });
+    }
 
     let mediaId: string;
 
@@ -350,65 +418,62 @@ Deno.serve(async (req: Request) => {
         const url = carouselUrls[i];
         const isVideo = url.endsWith('.mp4') || url.endsWith('.mov');
         const childParams = new URLSearchParams({
-          access_token: accessToken,
           media_type: isVideo ? 'VIDEO' : 'IMAGE',
           image_url: url,
         });
-        // If carousel_texts has text for this image, we'd apply it via the overlay function
-        // For now, the caption is on the parent carousel
 
-        const childResponse = await fetch(`https://graph.facebook.com/v21.0/${effectiveIgUserId}/media`, {
-          method: 'POST', body: childParams,
-        });
+        const childResponse = await fetch(
+          graphUrl(`${base}/v21.0/${effectiveIgUserId}/media`, accessToken),
+          {
+            method: 'POST',
+            headers: { ...authHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: buildBody(childParams),
+          },
+        );
         if (!childResponse.ok) {
           const errText = await childResponse.text();
-          throw new Error(`Failed to create carousel child ${i}: ${errText}`);
+          throw new Error(friendlyGraphError(errText, `Failed to create carousel child ${i}`));
         }
         const childResult = await childResponse.json();
         childIds.push(childResult.id);
 
-        // Wait for video processing if needed
         if (isVideo) {
-          let done = false;
-          let attempts = 0;
-          while (!done && attempts < 30) {
-            await new Promise(r => setTimeout(r, 5000));
-            const statusUrl = `https://graph.facebook.com/v21.0/${childResult.id}?fields=status_code&access_token=${accessToken}`;
-            const statusResponse = await fetch(statusUrl);
-            if (statusResponse.ok) {
-              const statusResult = await statusResponse.json();
-              if (statusResult.status_code === 'FINISHED') done = true;
-              else if (statusResult.status_code === 'ERROR') throw new Error(`Video processing failed for child ${i}`);
-            }
-            attempts++;
-          }
+          await waitForVideoProcessing(base, childResult.id, accessToken, `carousel child ${i}`);
         }
       }
 
       // Create carousel container
       const carouselParams = new URLSearchParams({
-        access_token: accessToken,
         media_type: 'CAROUSEL',
         children: childIds.join(','),
         caption: fullCaption,
       });
-      const carouselResponse = await fetch(`https://graph.facebook.com/v21.0/${effectiveIgUserId}/media`, {
-        method: 'POST', body: carouselParams,
-      });
+      const carouselResponse = await fetch(
+        graphUrl(`${base}/v21.0/${effectiveIgUserId}/media`, accessToken),
+        {
+          method: 'POST',
+          headers: { ...authHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: buildBody(carouselParams),
+        },
+      );
       if (!carouselResponse.ok) {
         const errText = await carouselResponse.text();
-        throw new Error(`Failed to create carousel container: ${errText}`);
+        throw new Error(friendlyGraphError(errText, 'Failed to create carousel container'));
       }
       const carouselResult = await carouselResponse.json();
       const creationId = carouselResult.id;
 
       // Publish the carousel
-      const carouselPublishUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media_publish`;
-      const carouselPublishParams = new URLSearchParams({ access_token: accessToken, creation_id: creationId });
-      const publishResponse = await fetch(carouselPublishUrl, { method: 'POST', body: carouselPublishParams });
+      const carouselPublishUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media_publish`, accessToken);
+      const carouselPublishParams = new URLSearchParams({ creation_id: creationId });
+      const publishResponse = await fetch(carouselPublishUrl, {
+        method: 'POST',
+        headers: { ...authHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: buildBody(carouselPublishParams),
+      });
       if (!publishResponse.ok) {
         const errText = await publishResponse.text();
-        throw new Error(`Failed to publish carousel: ${errText}`);
+        throw new Error(friendlyGraphError(errText, 'Failed to publish carousel'));
       }
       const publishResult = await publishResponse.json();
       mediaId = publishResult.media_id || publishResult.id;
@@ -418,43 +483,38 @@ Deno.serve(async (req: Request) => {
       const isVideo = variation.s3_key.endsWith('.mp4') || variation.s3_key.endsWith('.mov');
       const mediaType = isVideo ? 'VIDEO' : 'IMAGE';
 
-      const createMediaUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media`;
+      const createMediaUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media`, accessToken);
       const mediaParams = new URLSearchParams({
-        access_token: accessToken,
         media_type: mediaType,
         image_url: variation.cloudfront_url,
         caption: fullCaption,
       });
-      const mediaResponse = await fetch(createMediaUrl, { method: 'POST', body: mediaParams });
+      const mediaResponse = await fetch(createMediaUrl, {
+        method: 'POST',
+        headers: { ...authHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: buildBody(mediaParams),
+      });
       if (!mediaResponse.ok) {
         const errText = await mediaResponse.text();
-        throw new Error(`Failed to create media container: ${errText}`);
+        throw new Error(friendlyGraphError(errText, 'Failed to create media container'));
       }
       const mediaResult = await mediaResponse.json();
       const creationId = mediaResult.id;
 
       if (isVideo) {
-        let done = false;
-        let attempts = 0;
-        while (!done && attempts < 30) {
-          await new Promise(r => setTimeout(r, 5000));
-          const statusUrl = `https://graph.facebook.com/v21.0/${creationId}?fields=status_code&access_token=${accessToken}`;
-          const statusResponse = await fetch(statusUrl);
-          if (statusResponse.ok) {
-            const statusResult = await statusResponse.json();
-            if (statusResult.status_code === 'FINISHED') done = true;
-            else if (statusResult.status_code === 'ERROR') throw new Error('Video processing failed');
-          }
-          attempts++;
-        }
+        await waitForVideoProcessing(base, creationId, accessToken, 'single post');
       }
 
-      const singlePublishUrl = `https://graph.facebook.com/v21.0/${effectiveIgUserId}/media_publish`;
-      const singlePublishParams = new URLSearchParams({ access_token: accessToken, creation_id: creationId });
-      const publishResponse = await fetch(singlePublishUrl, { method: 'POST', body: singlePublishParams });
+      const singlePublishUrl = graphUrl(`${base}/v21.0/${effectiveIgUserId}/media_publish`, accessToken);
+      const singlePublishParams = new URLSearchParams({ creation_id: creationId });
+      const publishResponse = await fetch(singlePublishUrl, {
+        method: 'POST',
+        headers: { ...authHeaders(accessToken), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: buildBody(singlePublishParams),
+      });
       if (!publishResponse.ok) {
         const errText = await publishResponse.text();
-        throw new Error(`Failed to publish media: ${errText}`);
+        throw new Error(friendlyGraphError(errText, 'Failed to publish media'));
       }
       const publishResult = await publishResponse.json();
       mediaId = publishResult.media_id || publishResult.id;
@@ -463,8 +523,8 @@ Deno.serve(async (req: Request) => {
     // Get permalink
     let permalink = '';
     try {
-      const permalinkUrl = `https://graph.facebook.com/v21.0/${mediaId}?fields=permalink&access_token=${accessToken}`;
-      const permalinkResponse = await fetch(permalinkUrl);
+      const permalinkUrl = graphUrl(`${base}/v21.0/${mediaId}?fields=permalink`, accessToken);
+      const permalinkResponse = await fetch(permalinkUrl, { headers: authHeaders(accessToken) });
       if (permalinkResponse.ok) {
         const permalinkResult = await permalinkResponse.json();
         permalink = permalinkResult.permalink || '';
@@ -498,21 +558,16 @@ Deno.serve(async (req: Request) => {
 
   } catch (error) {
     console.error("publish-instagram-post error:", error);
-    try {
-      const body = await req.clone().json().catch(() => ({}));
-      const { variation_id } = body as { variation_id?: string };
-      if (variation_id) {
-        const supabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-          { auth: { persistSession: false } },
-        );
+    // Use the body we read at the top — no req.clone() needed
+    const { variation_id } = requestBody as { variation_id?: string };
+    if (variation_id) {
+      try {
         await supabase.from("instagram_post_variations")
           .update({ status: 'failed', error_message: error.message, retry_count: 1, updated_at: new Date().toISOString() })
           .eq("id", variation_id);
+      } catch (e) {
+        console.error("Failed to mark variation as failed:", e);
       }
-    } catch (e) {
-      console.error("Failed to mark variation as failed:", e);
     }
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
