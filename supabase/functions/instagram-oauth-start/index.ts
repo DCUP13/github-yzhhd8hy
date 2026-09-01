@@ -29,7 +29,6 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // Get the authenticated user
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "");
 
@@ -42,15 +41,19 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const body = await req.json().catch(() => ({}));
+    const appOrigin = (body as { app_origin?: string })?.app_origin || "";
+    const reconnectAccountId = (body as { reconnect_account_id?: string })?.reconnect_account_id || "";
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
 
-    const scope = "instagram_basic,instagram_content_publish,instagram_manage_messages,pages_show_list,pages_read_engagement,pages_manage_engagement,pages_messaging,business_basic_msg,business_manage_messages";
+    const scope = "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights";
 
-    // Generate a secure state parameter containing the user ID
-    const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now() }));
+    const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now(), origin: appOrigin, reconnect_account_id: reconnectAccountId }));
 
-    const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=${encodeURIComponent(state)}`;
+    // Instagram Business Login — uses instagram.com/oauth/authorize (not Facebook)
+    const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&force_authentication=1&enable_fb_login=1&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
 
     return new Response(JSON.stringify({ auth_url: authUrl }), {
       status: 200,

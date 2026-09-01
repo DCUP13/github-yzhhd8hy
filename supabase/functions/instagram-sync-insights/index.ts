@@ -21,7 +21,12 @@ function cleanToken(raw: string): string {
 
 function isTokenInvalidError(body: GraphApiError): boolean {
   const code = body.error?.code;
+  // Code 100 = "Object does not exist" — this is a permissions/object issue, NOT a token issue
   return code === 190 || code === 102 || code === 200 || code === 463 || code === 467;
+}
+
+function isProfileNotFoundError(body: GraphApiError): boolean {
+  return body.error?.code === 100;
 }
 
 function graphUrl(base: string, accessToken: string): string {
@@ -116,24 +121,51 @@ Deno.serve(async (req: Request) => {
     // 1. Fetch account-level data from Graph API
     // Instagram tokens (IGA...) use graph.instagram.com with Bearer header.
     // Facebook/Page tokens use graph.facebook.com with access_token query param.
+    // Try the user ID first, then fall back to /me if the profile can't be found.
     const baseUrl = apiBase(accessToken);
-    let profileRes: Response;
-    if (isInstagramToken(accessToken)) {
-      profileRes = await fetch(
-        `${baseUrl}/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count`,
-        { headers: authHeaders(accessToken) },
-      );
-    } else {
-      profileRes = await fetch(
-        graphUrl(
-          `${baseUrl}/v21.0/${igUserId}?fields=username,profile_picture_url,followers_count,follows_count,media_count`,
-          accessToken,
-        ),
-      );
+
+    // Parse profile response as text, then extract id as string to preserve precision
+    // Instagram user IDs can exceed Number.MAX_SAFE_INTEGER, so JSON.parse() corrupts them
+    function extractStringId(text: string): string | undefined {
+      const match = text.match(/"id"\s*:\s*(?:"([^"]+)"|(\d+))/);
+      return match?.[1] ?? match?.[2];
+    }
+
+    async function fetchProfile(userIdParam: string): Promise<{ ok: boolean; status: number; body: any; rawText: string }> {
+      const fields = "fields=username,profile_picture_url,followers_count,follows_count,media_count";
+      let res: Response;
+      if (isInstagramToken(accessToken)) {
+        res = await fetch(`${baseUrl}/v21.0/${userIdParam}?${fields}`, { headers: authHeaders(accessToken) });
+      } else {
+        res = await fetch(graphUrl(`${baseUrl}/v21.0/${userIdParam}?${fields}`, accessToken));
+      }
+      const rawText = await res.text();
+      const body = rawText ? JSON.parse(rawText) : {};
+      return { ok: res.ok, status: res.status, body, rawText };
+    }
+
+    let profileRes = await fetchProfile(igUserId);
+
+    // If profile fetch by user_id fails with code 100, try /me as fallback
+    if (!profileRes.ok && isProfileNotFoundError(profileRes.body)) {
+      console.log("Profile fetch by user_id failed, trying /me fallback");
+      const meRes = await fetchProfile("me");
+      if (meRes.ok) {
+        profileRes = meRes;
+        // Update the ig_user_id in the database if /me returns a different id
+        const meId = extractStringId(meRes.rawText);
+        if (meId && meId !== igUserId) {
+          console.log("Updating ig_user_id from", igUserId, "to", meId);
+          await supabaseClient
+            .from("instagram_accounts")
+            .update({ ig_user_id: meId, updated_at: new Date().toISOString() })
+            .eq("id", accountId);
+        }
+      }
     }
 
     if (!profileRes.ok) {
-      const errBody: GraphApiError = await profileRes.json().catch(() => ({}));
+      const errBody: GraphApiError = profileRes.body;
       const errMsg = errBody.error?.message ?? `HTTP ${profileRes.status}`;
 
       if (isTokenInvalidError(errBody) || profileRes.status === 401 || profileRes.status === 403) {
@@ -153,19 +185,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const profile = await profileRes.json();
+    const profile = profileRes.body;
+    const effectiveUserId = extractStringId(profileRes.rawText) ?? igUserId;
 
     // 2. Fetch recent media (up to 25 posts)
     let mediaRes: Response;
     if (isInstagramToken(accessToken)) {
       mediaRes = await fetch(
-        `${baseUrl}/v21.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
+        `${baseUrl}/v21.0/${effectiveUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
         { headers: authHeaders(accessToken) },
       );
     } else {
       mediaRes = await fetch(
         graphUrl(
-          `${baseUrl}/v21.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
+          `${baseUrl}/v21.0/${effectiveUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
           accessToken,
         ),
       );

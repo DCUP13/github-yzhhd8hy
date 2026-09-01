@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Instagram as InstagramIcon, Check, AlertCircle, Link2, Eye, EyeOff, Plus, Trash2, RefreshCw, Key, Zap, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { toast } from '../../lib/toast';
 
 interface IgAccountRow {
   id: string;
@@ -41,6 +42,7 @@ export function InstagramTab() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [oauthStarting, setOauthStarting] = useState(false);
+  const [oauthUrl, setOauthUrl] = useState<string | null>(null);
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -98,41 +100,88 @@ export function InstagramTab() {
     };
   }, [fetchAccounts]);
 
-  // Check for OAuth callback params
+  // Check for OAuth callback params (from the old server-side callback flow)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('oauth') === 'success') {
+    const oauthStatus = params.get('oauth');
+    const oauthError = params.get('oauth_error');
+
+    if (oauthStatus === 'success') {
       setShowManualForm(false);
-      // Clean up URL
+      toast.success('Instagram connected successfully.');
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
+      fetchAccounts();
+    } else if (oauthError) {
+      if (oauthError.startsWith('access_denied')) {
+        toast.error('You cancelled the Instagram authorization. Please try again and allow access to your Instagram account.');
+      } else {
+        const messages: Record<string, string> = {
+          no_ig_account: 'No Instagram professional account was found. Make sure your Instagram account is set up as a Business or Creator account.',
+          token_exchange_failed: 'Failed to exchange the authorization code for an access token. Please try again.',
+          long_lived_failed: 'Failed to get a long-lived access token. Please try again.',
+          not_configured: 'Instagram OAuth is not configured. Contact support.',
+          missing_params: 'Missing authorization parameters from Instagram.',
+          no_token: 'No access token returned from Instagram.',
+          no_long_token: 'No long-lived token returned.',
+          invalid_state: 'Invalid state parameter. Please try connecting again.',
+          no_user: 'Could not determine which user to connect the account to.',
+        };
+        toast.error(messages[oauthError] || `OAuth error: ${oauthError}`);
+      }
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+      fetchAccounts();
     }
   }, []);
 
-  const handleOAuthConnect = async () => {
+  // Refresh accounts when window regains focus (e.g. returning from OAuth popup tab)
+  useEffect(() => {
+    const onFocus = () => fetchAccounts();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchAccounts]);
+
+  const handleOAuthConnect = async (reconnectAccountId?: string) => {
     setOauthStarting(true);
+    setOauthUrl(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const response = await fetch(`${supabaseUrl}/functions/v1/instagram-oauth-start`, {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
+        body: JSON.stringify({ app_origin: window.location.origin, reconnect_account_id: reconnectAccountId }),
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        alert(err.error || 'Failed to start OAuth flow');
+        let errMsg = `Failed to start OAuth flow (status ${response.status})`;
+        try {
+          const err = await response.json();
+          errMsg = err.error || errMsg;
+        } catch { /* response body wasn't JSON */ }
+        alert(errMsg);
         return;
       }
 
-      const { auth_url } = await response.json();
-      window.location.href = auth_url;
+      const data = await response.json();
+      if (!data.auth_url) {
+        alert('No OAuth URL returned from server. Response: ' + JSON.stringify(data));
+        return;
+      }
+      // Open Instagram login in a new tab — Instagram blocks iframe embedding,
+      // so it can't load inside the dev environment's iframe. The Supabase callback
+      // will redirect back to the app after the exchange completes.
+      window.open(data.auth_url, '_blank', 'noopener,noreferrer');
     } catch (error) {
       console.error('OAuth start error:', error);
-      alert('Failed to start OAuth flow. Make sure INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET are set in your Supabase secrets.');
+      const msg = error instanceof Error ? error.message : String(error);
+      alert(`Failed to start OAuth flow: ${msg}`);
     } finally {
       setOauthStarting(false);
     }
@@ -346,6 +395,24 @@ export function InstagramTab() {
                   </div>
                 </div>
 
+                {/* Reconnect via OAuth — show for manual accounts or expired tokens */}
+                {(acct.auth_method === 'manual' || acct.token_expired) && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      {acct.auth_method === 'manual'
+                        ? 'Manual tokens may not support all features. Reconnect via Instagram Login to enable full functionality.'
+                        : 'This account\'s token may be invalid or expired. Reconnect to get a fresh token.'}
+                    </p>
+                    <button
+                      onClick={() => handleOAuthConnect(acct.id)}
+                      className="ml-auto px-3 py-1 text-xs font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg whitespace-nowrap flex items-center gap-1"
+                    >
+                      <Link2 className="w-3 h-3" /> Reconnect
+                    </button>
+                  </div>
+                )}
+
                 {/* Token expired — show update token field */}
                 {acct.token_expired && editingTokenFor === acct.id && (
                   <div className="mt-3 flex items-center gap-2">
@@ -417,18 +484,18 @@ export function InstagramTab() {
         {useOAuth ? (
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
             <p className="text-xs text-gray-600 dark:text-gray-300 mb-3">
-              Click the button below to authorize your Instagram Business or Creator account through Meta's secure login. No need to copy IDs or tokens manually.
+              Click the button below to log in with your Instagram Business or Creator account. You'll be redirected to Instagram to authorize access — no need to copy IDs or tokens manually.
             </p>
             <button
-              onClick={handleOAuthConnect}
+              onClick={() => handleOAuthConnect()}
               disabled={oauthStarting}
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50"
             >
               <InstagramIcon className="w-4 h-4" />
-              {oauthStarting ? 'Redirecting...' : 'Connect with Instagram'}
+              {oauthStarting ? 'Preparing...' : 'Connect with Instagram'}
             </button>
-            <p className="mt-2 text-xs text-gray-400">
-              Requires INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET in Supabase secrets.
+            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+              You'll be redirected to Instagram to log in. After authorizing, you'll come back here automatically.
             </p>
           </div>
         ) : (

@@ -1,0 +1,32 @@
+[functions.generate-s3-upload-url]
+verify_jwt = true
+
+[functions.generate-post-variations]
+verify_jwt = true
+
+[functions.publish-instagram-post]
+verify_jwt = true
+
+[functions.process-instagram-queue]
+verify_jwt = false
+
+[functions.transcribe-video]
+verify_jwt = true
+
+[functions.overlay-text-on-image]
+verify_jwt = true
+
+[functions.instagram-oauth-start]
+verify_jwt = true
+
+[functions.instagram-oauth-callback]
+verify_jwt = false
+
+[functions.instagram-sync-insights]
+verify_jwt = true
+
+[functions.instagram-deauthorize]
+verify_jwt = false
+
+[functions.instagram-data-deletion]
+verify_jwt = false
