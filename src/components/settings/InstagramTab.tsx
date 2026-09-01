@@ -174,8 +174,8 @@ export function InstagramTab() {
         alert('No OAuth URL returned from server. Response: ' + JSON.stringify(data));
         return;
       }
-      // Redirect the current tab to Instagram — after login, Instagram redirects
-      // back to the app origin with the code in the URL, which App.tsx catches.
+      // Redirect to Instagram — after login, Instagram redirects to the Supabase
+      // callback which exchanges the code and redirects back to the app settings page.
       window.location.href = data.auth_url;
     } catch (error) {
       console.error('OAuth start error:', error);
