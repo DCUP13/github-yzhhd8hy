@@ -21,3 +21,6 @@ verify_jwt = true
 
 [functions.instagram-oauth-callback]
 verify_jwt = false
+
+[functions.instagram-oauth-exchange]
+verify_jwt = true

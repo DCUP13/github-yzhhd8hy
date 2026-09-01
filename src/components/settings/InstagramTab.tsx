@@ -100,7 +100,7 @@ export function InstagramTab() {
     };
   }, [fetchAccounts]);
 
-  // Check for OAuth callback params
+  // Check for OAuth callback params (from the old server-side callback flow)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const oauthStatus = params.get('oauth');
@@ -108,19 +108,13 @@ export function InstagramTab() {
 
     if (oauthStatus === 'success') {
       setShowManualForm(false);
-      toast.success('Instagram connected successfully via OAuth.');
+      toast.success('Instagram connected successfully.');
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
       fetchAccounts();
     } else if (oauthError) {
-      // Check for no_match_found with discovered usernames
       if (oauthError.startsWith('access_denied')) {
         toast.error('You cancelled the Instagram authorization. Please try again and allow access to your Instagram account.');
-      } else if (oauthError.startsWith('no_match_found:')) {
-        const foundUsernames = oauthError.substring('no_match_found:'.length);
-        toast.error(
-          `The Instagram account you logged in with (${foundUsernames}) doesn't match the account you're trying to reconnect. Disconnect this account and connect it fresh with the correct Instagram login.`
-        );
       } else {
         const messages: Record<string, string> = {
           no_ig_account: 'No Instagram professional account was found. Make sure your Instagram account is set up as a Business or Creator account.',
@@ -180,7 +174,9 @@ export function InstagramTab() {
         alert('No OAuth URL returned from server. Response: ' + JSON.stringify(data));
         return;
       }
-      setOauthUrl(data.auth_url);
+      // Redirect the current tab to Instagram — after login, Instagram redirects
+      // back to the app origin with the code in the URL, which App.tsx catches.
+      window.location.href = data.auth_url;
     } catch (error) {
       console.error('OAuth start error:', error);
       const msg = error instanceof Error ? error.message : String(error);
@@ -489,39 +485,16 @@ export function InstagramTab() {
             <p className="text-xs text-gray-600 dark:text-gray-300 mb-3">
               Click the button below to log in with your Instagram Business or Creator account. You'll be redirected to Instagram to authorize access — no need to copy IDs or tokens manually.
             </p>
-            {oauthUrl ? (
-              <div className="space-y-3">
-                <a
-                  href={oauthUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg"
-                >
-                  <InstagramIcon className="w-4 h-4" />
-                  Open Instagram Login
-                </a>
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  A new tab will open for you to log in to Instagram and authorize access. After completing the login, come back here — your account will appear automatically.
-                </p>
-                <button
-                  onClick={() => setOauthUrl(null)}
-                  className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => handleOAuthConnect()}
-                disabled={oauthStarting}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50"
-              >
-                <InstagramIcon className="w-4 h-4" />
-                {oauthStarting ? 'Preparing...' : 'Connect with Instagram'}
-              </button>
-            )}
-            <p className="mt-2 text-xs text-gray-400">
-              Requires INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET in Supabase secrets.
+            <button
+              onClick={() => handleOAuthConnect()}
+              disabled={oauthStarting}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50"
+            >
+              <InstagramIcon className="w-4 h-4" />
+              {oauthStarting ? 'Preparing...' : 'Connect with Instagram'}
+            </button>
+            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+              You'll be redirected to Instagram to log in. After authorizing, you'll come back here automatically.
             </p>
           </div>
         ) : (

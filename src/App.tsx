@@ -13,6 +13,7 @@ import { Instagram } from './components/Instagram';
 import { TeamView as TeamPage } from './components/TeamPage';
 import { SupportPage } from './components/SupportPage';
 import { useUnreadChatCount } from './lib/useUnreadChatCount';
+import { toast } from './lib/toast';
 import { EmailProvider } from './contexts/EmailContext';
 import { OrganizationProvider } from './contexts/OrganizationContext';
 import { supabase } from './lib/supabase';
@@ -82,11 +83,69 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [igExchangeStatus, setIgExchangeStatus] = useState<'idle' | 'exchanging' | 'done'>('idle');
 
   const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({ instagram: false, linkedin: false });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const unreadChatCount = useUnreadChatCount();
+
+  // Handle Instagram OAuth code when Instagram redirects back to the app
+  useEffect(() => {
+    if (!isAuthenticated || igExchangeStatus !== 'idle') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const igCode = params.get('code');
+    const igState = params.get('state');
+    const igError = params.get('error');
+
+    // Only process if this looks like an Instagram OAuth redirect (has code or error, plus state)
+    if (!igCode && !igError) return;
+    if (!igState && !igError) return;
+
+    setIgExchangeStatus('exchanging');
+
+    (async () => {
+      try {
+        if (igError) {
+          const errorDesc = params.get('error_description') ?? igError;
+          throw new Error(errorDesc === 'user_denied' ? 'You cancelled the Instagram authorization.' : errorDesc);
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Not authenticated');
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const redirectUri = window.location.origin;
+
+        const response = await fetch(`${supabaseUrl}/functions/v1/instagram-oauth-exchange`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ code: igCode, state: igState, redirect_uri: redirectUri }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to connect Instagram account');
+        }
+
+        const data = await response.json();
+        toast.success(`Instagram account @${data.username || 'connected'} linked successfully.`);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        toast.error(`Instagram connection failed: ${msg}`);
+      } finally {
+        // Clean the URL and navigate to settings
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+        setIgExchangeStatus('done');
+        navigateToApp('settings');
+      }
+    })();
+  }, [isAuthenticated, igExchangeStatus, navigateToApp]);
 
   const fetchUserRole = async (userId: string) => {
     try {

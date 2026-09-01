@@ -16,7 +16,6 @@ Deno.serve(async (req: Request) => {
     const appSecret = Deno.env.get("INSTAGRAM_APP_SECRET");
 
     if (!appId || !appSecret) {
-      console.error("INSTAGRAM_APP_ID or INSTAGRAM_APP_SECRET not found in env. Available keys:", Object.keys(Deno.env.toObject()).filter(k => k.startsWith("INSTAGRAM")));
       return new Response(JSON.stringify({
         error: "OAuth is not configured. Add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to your Supabase secrets.",
       }), {
@@ -30,7 +29,6 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // Get the authenticated user
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "");
 
@@ -43,21 +41,21 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Accept app_origin from request body so the callback knows where to redirect
     const body = await req.json().catch(() => ({}));
     const appOrigin = (body as { app_origin?: string })?.app_origin || "";
     const reconnectAccountId = (body as { reconnect_account_id?: string })?.reconnect_account_id || "";
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const redirectUri = `${supabaseUrl}/functions/v1/instagram-oauth-callback`;
+    // The redirect URI must match what's registered in the Meta App Dashboard.
+    // Instagram redirects back to the app's own domain, not to a Supabase function.
+    const redirectUri = appOrigin || "https://loiblast.com/";
 
     // Instagram Business Login scopes (new naming convention)
     const scope = "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights";
 
-    // Generate a secure state parameter containing the user ID, app origin, and optional reconnect target
-    const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now(), origin: appOrigin, reconnect_account_id: reconnectAccountId }));
+    // State carries user ID and reconnect target so the frontend exchange endpoint can use them
+    const state = btoa(JSON.stringify({ user_id: user.id, ts: Date.now(), reconnect_account_id: reconnectAccountId }));
 
-    // Use Instagram's direct OAuth authorize endpoint instead of Facebook's
+    // Use Instagram's direct OAuth authorize endpoint
     const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}&force_reauth=true`;
 
     return new Response(JSON.stringify({ auth_url: authUrl }), {
