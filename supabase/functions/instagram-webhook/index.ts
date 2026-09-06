@@ -891,17 +891,27 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
       console.log("processFlowReply: skipping new flow trigger — automated reply from owned account");
       return;
     }
-    // Check for DM-triggered flows
+    // Check for DM-triggered flows across ALL the user's accounts, not just
+    // the one that received the webhook. Instagram assigns different
+    // page-scoped IDs per conversation, so a message arriving on account A
+    // may need to trigger a flow configured on account B.
     if (ctx.accessToken && ctx.igUserId) {
       const { data: flows } = await supabaseClient
         .from("instagram_conversation_flows")
         .select("*")
         .eq("user_id", ctx.userId)
-        .eq("account_id", ctx.accountId)
         .eq("active", true)
         .eq("trigger_type", "dm_keyword");
 
       if (flows && flows.length > 0) {
+        // Fetch all the user's accounts so we can use the flow's own account
+        // credentials when sending responses.
+        const { data: userAccounts } = await supabaseClient
+          .from("instagram_accounts")
+          .select("id, access_token, ig_user_id, page_scoped_id, username, owner_profile_id")
+          .eq("user_id", ctx.userId);
+        const accountMap = new Map((userAccounts ?? []).map((a: any) => [a.id, a]));
+
         const msgLower = ctx.messageText.toLowerCase();
         for (const flow of flows) {
           const keyword = (flow.trigger_keyword || "").toLowerCase().trim();
@@ -931,19 +941,33 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
             continue;
           }
 
-          console.log("processFlowReply: starting flow session for flow:", flow.id, "firstStepId:", flow.first_step_id);
+          // Use the flow's own account credentials for sending, not the
+          // webhook account's credentials.
+          const flowAccount = accountMap.get(flow.account_id);
+          if (!flowAccount?.access_token) {
+            console.log("processFlowReply: skipping flow", flow.id, "— flow account has no access token");
+            continue;
+          }
+
+          console.log("processFlowReply: starting flow session for flow:", flow.id, "firstStepId:", flow.first_step_id, "on account:", flow.account_id);
+          // For self-messages, use the flow account's own owner_profile_id as
+          // the DM recipient (not the webhook account's recipientId, which is
+          // a different inbox ID that the flow account can't send to).
+          const flowRecipientId = ctx.isSelfMessage
+            ? (flowAccount.owner_profile_id ?? flowAccount.page_scoped_id ?? ctx.recipientId)
+            : ctx.recipientId;
           await startFlowSession(supabaseClient, {
             flowId: flow.id,
             userId: ctx.userId,
-            accountId: ctx.accountId,
+            accountId: flow.account_id,
             senderId: ctx.senderId,
             senderUsername: null,
             firstStepId: flow.first_step_id,
-            accessToken: ctx.accessToken,
-            igUserId: ctx.igUserId,
-            pageScopedId: ctx.pageScopedId,
-            username: ctx.username,
-            recipientId: ctx.recipientId,
+            accessToken: flowAccount.access_token,
+            igUserId: flowAccount.ig_user_id,
+            pageScopedId: flowAccount.page_scoped_id,
+            username: flowAccount.username,
+            recipientId: flowRecipientId,
             isSelfMessage: ctx.isSelfMessage,
           });
         }
@@ -954,7 +978,36 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
 
   if (!ctx.accessToken) return;
 
+  // Fetch all the user's accounts so we can resolve each session's flow
+  // account credentials for sending responses.
+  const { data: allUserAccounts } = await supabaseClient
+    .from("instagram_accounts")
+    .select("id, access_token, ig_user_id, page_scoped_id, username, owner_profile_id")
+    .eq("user_id", ctx.userId);
+  const sessionAccountMap = new Map((allUserAccounts ?? []).map((a: any) => [a.id, a]));
+
   for (const session of sessions) {
+    // Resolve the session's flow account credentials for sending responses.
+    // The session may belong to a different account than the one that received
+    // the webhook (e.g. flows on devoncuperus triggered by a message arriving
+    // on timeless). Always use the flow's own account to send.
+    const sessAccount = sessionAccountMap.get(session.account_id);
+    if (!sessAccount?.access_token) {
+      console.log("processFlowReply: skipping session", session.id, "— flow account has no access token");
+      continue;
+    }
+    const sessCtx = {
+      accessToken: sessAccount.access_token,
+      igUserId: sessAccount.ig_user_id,
+      pageScopedId: sessAccount.page_scoped_id,
+    };
+    // For self-messages, use the session account's own owner_profile_id as
+    // the DM recipient. The webhook's ctx.recipientId belongs to a different
+    // account's inbox and can't be used to send from this flow's account.
+    const sessRecipientId = ctx.isSelfMessage
+      ? (sessAccount.owner_profile_id ?? sessAccount.page_scoped_id ?? ctx.recipientId)
+      : ctx.recipientId;
+
     // Recover sessions that are "active" but have no current_step_id (can happen
     // when first_step_id was null at creation time). Try to find and execute the
     // first step for the flow.
@@ -983,12 +1036,12 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
       await executeFlowStep(supabaseClient, {
         sessionId: session.id,
         stepId: firstStep.id,
-        accessToken: ctx.accessToken,
-        igUserId: ctx.igUserId,
-        pageScopedId: ctx.pageScopedId,
+        accessToken: sessCtx.accessToken,
+        igUserId: sessCtx.igUserId,
+        pageScopedId: sessCtx.pageScopedId,
         senderId: ctx.senderId,
         userId: ctx.userId,
-        recipientId: ctx.recipientId,
+        recipientId: sessRecipientId,
         isSelfMessage: ctx.isSelfMessage,
       });
       continue;
@@ -1001,12 +1054,12 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
       await executeFlowStep(supabaseClient, {
         sessionId: session.id,
         stepId: session.current_step_id,
-        accessToken: ctx.accessToken,
-        igUserId: ctx.igUserId,
-        pageScopedId: ctx.pageScopedId,
+        accessToken: sessCtx.accessToken,
+        igUserId: sessCtx.igUserId,
+        pageScopedId: sessCtx.pageScopedId,
         senderId: ctx.senderId,
         userId: ctx.userId,
-        recipientId: ctx.recipientId,
+        recipientId: sessRecipientId,
         isSelfMessage: ctx.isSelfMessage,
       });
       continue;
@@ -1082,12 +1135,12 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
       await executeFlowStep(supabaseClient, {
         sessionId: session.id,
         stepId: nextStepId,
-        accessToken: ctx.accessToken,
-        igUserId: ctx.igUserId,
-        pageScopedId: ctx.pageScopedId,
+        accessToken: sessCtx.accessToken,
+        igUserId: sessCtx.igUserId,
+        pageScopedId: sessCtx.pageScopedId,
         senderId: ctx.senderId,
         userId: ctx.userId,
-        recipientId: ctx.recipientId,
+        recipientId: sessRecipientId,
         isSelfMessage: ctx.isSelfMessage,
       });
     } else {
