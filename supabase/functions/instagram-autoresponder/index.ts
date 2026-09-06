@@ -377,7 +377,8 @@ async function processQueueItem(supabase: any, queue_id: string): Promise<any> {
   const apiBase = isIgToken
     ? "https://graph.instagram.com"
     : "https://graph.facebook.com";
-  const sendUrl = `${apiBase}/v21.0/${account.ig_user_id}/messages`;
+  const senderId = account.page_scoped_id || account.ig_user_id;
+  const sendUrl = `${apiBase}/v26.0/${senderId}/messages`;
 
   const sendRes = await fetch(`${sendUrl}?access_token=${account.access_token}`, {
     method: "POST",

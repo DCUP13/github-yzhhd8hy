@@ -148,7 +148,7 @@ Deno.serve(async (req: Request) => {
     // Try the user_id first, then fall back to /me if it fails
     const profileFields = "fields=username,profile_picture_url,followers_count,follows_count,media_count";
     let profileRes = await fetch(
-      `https://graph.instagram.com/v21.0/${igUserId}?${profileFields}&access_token=${longLivedToken}`
+      `https://graph.instagram.com/v26.0/${igUserId}?${profileFields}&access_token=${longLivedToken}`
     );
 
     let profile: Record<string, unknown> = {};
@@ -160,7 +160,7 @@ Deno.serve(async (req: Request) => {
     } else {
       // Try /me as fallback — sometimes the user_id from token exchange differs
       const meRes = await fetch(
-        `https://graph.instagram.com/v21.0/me?${profileFields}&access_token=${longLivedToken}`
+        `https://graph.instagram.com/v26.0/me?${profileFields}&access_token=${longLivedToken}`
       );
       if (meRes.ok) {
         profileRawText = await meRes.text();

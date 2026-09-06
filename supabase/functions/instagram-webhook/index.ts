@@ -267,12 +267,15 @@ async function resolveAccount(
   // No fuzzy matching — substring checks on numeric IDs cause false positives
   // when one account's ID happens to contain another's as a substring.
 
-  // Last resort: if there's exactly one account with no page_scoped_id yet,
-  // assume this webhook is for that account and persist the mapping so future
-  // events match immediately. This is only safe when there's truly one
-  // unmatched account — otherwise we'd assign events to the wrong account.
+  // Last resort: if there's exactly one account in total with no page_scoped_id
+  // yet, assume this webhook is for that account and persist the mapping.
+  // This is only safe when there's truly one unmatched account — otherwise
+  // we'd assign events to the wrong account.
+  const { data: allAccounts } = await supabaseClient
+    .from("instagram_accounts")
+    .select("id, user_id, access_token, page_scoped_id, ig_user_id, username");
   const unmatched = (allAccounts ?? []).filter((a: any) => !a.page_scoped_id);
-  if (unmatched.length === 1 && allAccounts?.length === 1) {
+  if (unmatched.length === 1 && (allAccounts ?? []).length === 1) {
     const acct = unmatched[0];
     await supabaseClient
       .from("instagram_accounts")
