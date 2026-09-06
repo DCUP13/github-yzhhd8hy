@@ -140,28 +140,6 @@ Deno.serve(async (req: Request) => {
           const shouldProcessFlow = flowUserId && flowAccount && senderId && messageText && storedEventId
             && (!isEcho || isSelfMessage);
 
-          // Check if this is an automated reply from one of the user's own
-          // connected accounts. If so, we still process existing flow sessions
-          // (so you can walk through a flow), but skip starting NEW flows to
-          // prevent infinite loops between connected accounts.
-          // Self-messages are never blocked — you can always trigger your own
-          // flows by DMing yourself.
-          let skipNewTriggers = false;
-          if (shouldProcessFlow && flowUserId && !isSelfMessage && !isEcho) {
-            // Only apply if loop prevention is enabled for this user
-            const { data: refreshSettings } = await supabaseClient
-              .from("instagram_refresh_settings")
-              .select("loop_prevention_enabled")
-              .eq("user_id", flowUserId)
-              .maybeSingle();
-            const loopPreventionEnabled = refreshSettings?.loop_prevention_enabled ?? true;
-            if (loopPreventionEnabled) {
-              skipNewTriggers = await isAutomatedReplyFromOwnedAccount(
-                supabaseClient, flowUserId, messageText, igUserId,
-              );
-            }
-          }
-
           if (shouldProcessFlow) {
             await processFlowReply(supabaseClient, {
               userId: flowUserId,
@@ -175,7 +153,7 @@ Deno.serve(async (req: Request) => {
               username: flowAccount.username,
               isSelfMessage,
               recipientId,
-              skipNewTriggers,
+              skipNewTriggers: false,
             });
           }
         }
@@ -860,29 +838,6 @@ async function isAutomatedReplyFromOwnedAccount(
 async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
   console.log("processFlowReply called:", { userId: ctx.userId, senderId: ctx.senderId, messageText: ctx.messageText, accountId: ctx.accountId, hasToken: !!ctx.accessToken, igUserId: ctx.igUserId, pageScopedId: ctx.pageScopedId, isSelfMessage: ctx.isSelfMessage });
 
-  // Prevent infinite loops: if this is a self-message, check if we recently sent
-  // an AUTOMATED message with the same text FROM THIS SAME ACCOUNT. If so,
-  // skip — it's our own automated outgoing message coming back as an echo.
-  // We only check the same account (ig_user_id) so that automated messages from
-  // a different connected account don't block self-message testing.
-  if (ctx.isSelfMessage) {
-    const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
-    const { data: recentAutoOutgoing } = await supabaseClient
-      .from("instagram_webhook_events")
-      .select("id")
-      .eq("user_id", ctx.userId)
-      .eq("ig_user_id", ctx.pageScopedId ?? ctx.igUserId ?? "")
-      .eq("direction", "outgoing")
-      .eq("message_text", ctx.messageText)
-      .eq("auto_replied", true)
-      .gte("created_at", tenSecondsAgo)
-      .limit(1);
-    if (recentAutoOutgoing && recentAutoOutgoing.length > 0) {
-      console.log("processFlowReply: skipping self-message — matches recent automated outgoing from same account");
-      return;
-    }
-  }
-
   // Find active or waiting sessions for this sender across all flows owned by this user
   const { data: sessions } = await supabaseClient
     .from("instagram_flow_sessions")
@@ -894,12 +849,6 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
   console.log("processFlowReply: sessions found:", sessions?.length ?? 0);
 
   if (!sessions || sessions.length === 0) {
-    // Skip starting new flows if this is an automated reply from one of the
-    // user's own connected accounts (prevents loops between accounts).
-    if (ctx.skipNewTriggers) {
-      console.log("processFlowReply: skipping new flow trigger — automated reply from owned account");
-      return;
-    }
     // Check for DM-triggered flows across ALL the user's accounts, not just
     // the one that received the webhook. Instagram assigns different
     // page-scoped IDs per conversation, so a message arriving on account A
