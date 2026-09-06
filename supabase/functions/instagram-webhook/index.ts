@@ -157,7 +157,7 @@ Deno.serve(async (req: Request) => {
             const loopPreventionEnabled = refreshSettings?.loop_prevention_enabled ?? true;
             if (loopPreventionEnabled) {
               skipNewTriggers = await isAutomatedReplyFromOwnedAccount(
-                supabaseClient, flowUserId, messageText,
+                supabaseClient, flowUserId, messageText, igUserId,
               );
             }
           }
@@ -829,19 +829,26 @@ async function isAutomatedReplyFromOwnedAccount(
   supabaseClient: any,
   userId: string,
   messageText: string,
+  igUserId: string | null = null,
 ): Promise<boolean> {
   if (!messageText) return false;
 
   const sixtySecondsAgo = new Date(Date.now() - 60000).toISOString();
-  const { data: recentOutgoing } = await supabaseClient
+  let query = supabaseClient
     .from("instagram_webhook_events")
-    .select("id")
+    .select("id, ig_user_id")
     .eq("user_id", userId)
     .eq("direction", "outgoing")
     .eq("message_text", messageText)
     .eq("auto_replied", true)
     .gte("created_at", sixtySecondsAgo)
     .limit(1);
+
+  if (igUserId) {
+    query = query.eq("ig_user_id", igUserId);
+  }
+
+  const { data: recentOutgoing } = await query;
 
   return !!(recentOutgoing && recentOutgoing.length > 0);
 }
@@ -854,22 +861,24 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
   console.log("processFlowReply called:", { userId: ctx.userId, senderId: ctx.senderId, messageText: ctx.messageText, accountId: ctx.accountId, hasToken: !!ctx.accessToken, igUserId: ctx.igUserId, pageScopedId: ctx.pageScopedId, isSelfMessage: ctx.isSelfMessage });
 
   // Prevent infinite loops: if this is a self-message, check if we recently sent
-  // an AUTOMATED message (flow/auto-rule/autoresponder) with the same text. If so,
-  // skip — this is our own automated outgoing message coming back as an echo.
-  // Manual self-messages are NOT blocked — you can always trigger flows by DMing yourself.
+  // an AUTOMATED message with the same text FROM THIS SAME ACCOUNT. If so,
+  // skip — it's our own automated outgoing message coming back as an echo.
+  // We only check the same account (ig_user_id) so that automated messages from
+  // a different connected account don't block self-message testing.
   if (ctx.isSelfMessage) {
     const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
     const { data: recentAutoOutgoing } = await supabaseClient
       .from("instagram_webhook_events")
       .select("id")
       .eq("user_id", ctx.userId)
+      .eq("ig_user_id", ctx.pageScopedId ?? ctx.igUserId ?? "")
       .eq("direction", "outgoing")
       .eq("message_text", ctx.messageText)
       .eq("auto_replied", true)
       .gte("created_at", tenSecondsAgo)
       .limit(1);
     if (recentAutoOutgoing && recentAutoOutgoing.length > 0) {
-      console.log("processFlowReply: skipping self-message — matches recent automated outgoing message");
+      console.log("processFlowReply: skipping self-message — matches recent automated outgoing from same account");
       return;
     }
   }
@@ -1284,7 +1293,7 @@ async function storeEvent(
               .maybeSingle();
             const loopPreventionEnabled = refreshSettings?.loop_prevention_enabled ?? true;
             const isAutoFromOwned = loopPreventionEnabled && await isAutomatedReplyFromOwnedAccount(
-              supabaseClient, userId, event.message_text ?? "",
+              supabaseClient, userId, event.message_text ?? "", event.ig_user_id ?? null,
             );
             if (isAutoFromOwned) {
               console.log("storeEvent: skipping autoresponder — automated reply from owned account");
