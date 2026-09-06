@@ -250,14 +250,19 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   }, [selectedAccountId]);
 
   const fetchAccountData = async (account: IgAccount, userId: string) => {
-    // Fetch events for this specific account — filter by user_id (RLS) and
-    // ig_user_id (which stores the page_scoped_id of the receiving account)
-    // so only messages belonging to the selected account are shown.
+    // Fetch events for this specific account — webhook events store the
+    // page_scoped_id in the ig_user_id column. If page_scoped_id is null
+    // (shouldn't happen post-webhook, but guard anyway), fall back to ig_user_id.
+    const eventFilterId = account.page_scoped_id ?? account.ig_user_id ?? null;
+    if (!eventFilterId) {
+      console.warn('[Instagram] No page_scoped_id or ig_user_id for account', account.id);
+      setEvents([]);
+    }
     const [eventsRes, rulesRes, postsRes, snapshotsRes] = await Promise.all([
       supabase.from('instagram_webhook_events')
         .select('*')
         .eq('user_id', account.user_id)
-        .eq('ig_user_id', account.page_scoped_id)
+        .eq('ig_user_id', eventFilterId)
         .order('created_at', { ascending: false })
         .limit(100),
       supabase.from('instagram_auto_rules')
@@ -348,7 +353,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         (payload) => {
           const newEvent = payload.new as WebhookEvent;
           // Only show events for the selected account (ig_user_id = page_scoped_id)
-          if (newEvent.ig_user_id !== selectedAccount.page_scoped_id) return;
+          if (newEvent.ig_user_id !== (selectedAccount.page_scoped_id ?? selectedAccount.ig_user_id)) return;
           setEvents(prev => [newEvent, ...prev].slice(0, 100));
           if (activeTab !== 'inbox') {
             setNewEventCount(prev => prev + 1);
@@ -774,8 +779,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       }
     }
 
-    // Detect self-chats: only when the recipient is the account owner's own profile
-    const ownerId = selectedAccount?.owner_profile_id;
+    // Detect self-chats: the owner is identified by owner_profile_id when available.
+    // Fall back to page_scoped_id (the sender ID in outgoing echo messages) when
+    // owner_profile_id hasn't been populated yet.
+    const ownerId = selectedAccount?.owner_profile_id ?? selectedAccount?.page_scoped_id ?? null;
     for (const conv of convos.values()) {
       if (conv.type !== 'dm') continue;
       if (!conv.otherPartyId || !ownerId) continue;
@@ -800,6 +807,47 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   }, [conversations, inboxFilter]);
 
   const selectedConversation = filteredConversations.find(c => c.id === selectedConversationId) || null;
+
+  const handleSendTestToSelf = async () => {
+    if (!selectedAccount) return;
+    const selfRecipientId = selectedAccount.owner_profile_id ?? selectedAccount.page_scoped_id ?? null;
+    if (!selfRecipientId) {
+      alert('Cannot send a test message — this account does not have an owner profile ID yet. Send yourself a DM from the Instagram app first to populate it.');
+      return;
+    }
+    setIsSendingReply(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/instagram-send-reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          account_id: selectedAccount.id,
+          recipient_id: selfRecipientId,
+          message_text: 'Test message from Loiblast — checking autoresponder and flows.',
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        alert(err.error || 'Failed to send test message');
+        return;
+      }
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error sending test message:', error);
+      alert('Failed to send test message');
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
 
   const handleSendReply = async () => {
     if (!selectedConversation || !replyText.trim() || !selectedAccount) return;
@@ -1275,6 +1323,17 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                       {filter === 'all' ? 'All' : filter === 'messages' ? 'Messages' : 'Comments & Reels'}
                     </button>
                   ))}
+                  {accounts.some(a => a.id === selectedAccountId) && (
+                    <button
+                      onClick={handleSendTestToSelf}
+                      disabled={isSendingReply}
+                      className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-pink-700 bg-pink-50 hover:bg-pink-100 dark:text-pink-300 dark:bg-pink-900/20 dark:hover:bg-pink-900/40 disabled:opacity-50 transition-colors"
+                      title="Send a test message to yourself to test the autoresponder and flows"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      Test self-message
+                    </button>
+                  )}
                 </div>
 
                 {filteredConversations.length === 0 ? (

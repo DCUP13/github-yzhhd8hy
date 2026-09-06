@@ -30,3 +30,12 @@ verify_jwt = false
 
 [functions.instagram-data-deletion]
 verify_jwt = false
+
+[functions.instagram-webhook]
+verify_jwt = false
+
+[functions.instagram-send-reply]
+verify_jwt = true
+
+[functions.instagram-autoresponder]
+verify_jwt = false

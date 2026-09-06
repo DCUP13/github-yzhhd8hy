@@ -6,6 +6,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+function graphBase(token: string): string {
+  return token.startsWith("IGA")
+    ? "https://graph.instagram.com"
+    : "https://graph.facebook.com";
+}
+
+function authHeaders(token: string): Record<string, string> {
+  if (token.startsWith("IGA")) return { Authorization: `Bearer ${token}` };
+  return {};
+}
+
+function graphUrl(url: string, token: string): string {
+  if (token.startsWith("IGA")) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}access_token=${token}`;
+}
+
+/** Resolve the correct sender ID for messaging: page_scoped_id, not ig_user_id. */
+function resolveSenderId(account: Record<string, unknown>): string {
+  return (account.page_scoped_id as string) || (account.ig_user_id as string) || "";
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -73,21 +95,25 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Use the Instagram Graph API (graph.instagram.com) for IG-format tokens,
-    // and the Facebook Graph API (graph.facebook.com) for FB Page tokens.
-    const isIgToken = account.access_token.startsWith("IGAA");
-    const apiBase = isIgToken
-      ? "https://graph.instagram.com"
-      : "https://graph.facebook.com";
-    const senderId = account.ig_user_id;
-    const sendUrl = `${apiBase}/v21.0/${senderId}/messages`;
+    const accessToken = account.access_token as string;
+    const accountRec = account as Record<string, unknown>;
+    const base = graphBase(accessToken);
+    const senderId = resolveSenderId(accountRec);
 
-    const sendRes = await fetch(`${sendUrl}?access_token=${account.access_token}`, {
+    if (!senderId) {
+      return new Response(JSON.stringify({ error: "No valid sender ID for this account (page_scoped_id and ig_user_id are both null)" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const sendUrl = graphUrl(`${base}/v26.0/${senderId}/messages`, accessToken);
+    const sendRes = await fetch(sendUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
       body: JSON.stringify({
         recipient: { id: recipient_id },
         message: { text: message_text },
+        ...(accessToken.startsWith("IGA") ? {} : {}),
       }),
     });
 
@@ -99,10 +125,12 @@ Deno.serve(async (req: Request) => {
       try {
         const errJson = JSON.parse(errBody);
         errorMsg = errJson?.error?.message ?? errorMsg;
-        // Detect the 24-hour messaging window error
         if (errorMsg.includes("allowed window") || errorMsg.includes("24 hour") || errJson?.error?.code === 10) {
           windowClosed = true;
           errorMsg = "The 24-hour messaging window has closed. Instagram only allows replies within 24 hours of the person's last message to you. After that, standard replies are blocked.";
+        }
+        if (errJson?.error?.code === 190) {
+          errorMsg = "Your Instagram access token is invalid or expired. Go to Settings > Instagram and click Reconnect to get a fresh token via Instagram Login.";
         }
       } catch { /* ignore */ }
       return new Response(JSON.stringify({ error: errorMsg, window_closed: windowClosed }), {
