@@ -694,14 +694,14 @@ async function executeFlowStep(supabaseClient: any, ctx: FlowStepContext) {
     return;
   }
 
-  // Use ig_user_id as the sender for the API call (matching the autoresponder).
-  // For self-messages, use recipientId (the inbox ID) as the DM recipient,
-  // matching how the autoresponder sends — Instagram rejects sending to the
-  // page_scoped_id but accepts the inbox recipient_id. For normal DMs, send to
-  // the sender (the other person).
-  const senderIdForDm = ctx.igUserId || ctx.pageScopedId;
+  // Use page_scoped_id as the sender for the API call (matching the
+  // autoresponder: account.page_scaped_id is used as the sender in the
+  // /messages endpoint URL). The recipientId is set by the caller to the
+  // correct page-scoped ID for this flow's account.
+  const senderIdForDm = ctx.pageScopedId || ctx.igUserId;
   if (!senderIdForDm) return;
-  const dmRecipientId = ctx.isSelfMessage ? (ctx.recipientId || ctx.senderId) : ctx.senderId;
+  if (!ctx.recipientId) return;
+  const dmRecipientId = ctx.recipientId;
 
   // Send the step's message
   if (step.message_text || step.link_url || step.media_url) {
@@ -838,6 +838,29 @@ async function isAutomatedReplyFromOwnedAccount(
 async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
   console.log("processFlowReply called:", { userId: ctx.userId, senderId: ctx.senderId, messageText: ctx.messageText, accountId: ctx.accountId, hasToken: !!ctx.accessToken, igUserId: ctx.igUserId, pageScopedId: ctx.pageScopedId, isSelfMessage: ctx.isSelfMessage });
 
+  // For self-messages, check if this is an echo of our own automated outgoing
+  // message. The flow sends a message (e.g. "want to know the price"), and
+  // Instagram echoes it back as is_self=true, is_echo=true. Without this check,
+  // the echo would find the waiting_reply session and advance past it, skipping
+  // the wait_for_reply step.
+  if (ctx.isSelfMessage) {
+    const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
+    const { data: recentAutoOutgoing } = await supabaseClient
+      .from("instagram_webhook_events")
+      .select("id")
+      .eq("user_id", ctx.userId)
+      .eq("ig_user_id", ctx.pageScopedId ?? ctx.igUserId ?? "")
+      .eq("direction", "outgoing")
+      .eq("message_text", ctx.messageText)
+      .eq("auto_replied", true)
+      .gte("created_at", thirtySecondsAgo)
+      .limit(1);
+    if (recentAutoOutgoing && recentAutoOutgoing.length > 0) {
+      console.log("processFlowReply: skipping self-message echo — matches recent automated outgoing from same account");
+      return;
+    }
+  }
+
   // Find active or waiting sessions for this sender across all flows owned by this user
   const { data: sessions } = await supabaseClient
     .from("instagram_flow_sessions")
@@ -908,12 +931,24 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
           }
 
           console.log("processFlowReply: starting flow session for flow:", flow.id, "firstStepId:", flow.first_step_id, "on account:", flow.account_id);
-          // For self-messages, use the flow account's own owner_profile_id as
-          // the DM recipient (not the webhook account's recipientId, which is
-          // a different inbox ID that the flow account can't send to).
-          const flowRecipientId = ctx.isSelfMessage
-            ? (flowAccount.owner_profile_id ?? flowAccount.page_scoped_id ?? ctx.recipientId)
-            : ctx.recipientId;
+          // Determine the DM recipient ID for the flow's account.
+          // - Self-messages: use the flow account's own owner_profile_id
+          // - Cross-account (webhook account != flow account): the message
+          //   was sent FROM the webhook account TO the flow account. The
+          //   sender_id from the webhook is the webhook account's own
+          //   page-scoped ID, which the flow account can't use. Instead,
+          //   use the webhook account's page_scoped_id.
+          // - Same account: use ctx.recipientId (the sender's page-scoped ID
+          //   as seen by the flow account).
+          let flowRecipientId: string | null;
+          if (ctx.isSelfMessage) {
+            flowRecipientId = flowAccount.owner_profile_id ?? flowAccount.page_scoped_id ?? ctx.recipientId;
+          } else if (flow.account_id !== ctx.accountId) {
+            const webhookAccount = accountMap.get(ctx.accountId);
+            flowRecipientId = webhookAccount?.page_scoped_id ?? ctx.recipientId;
+          } else {
+            flowRecipientId = ctx.recipientId;
+          }
           await startFlowSession(supabaseClient, {
             flowId: flow.id,
             userId: ctx.userId,
@@ -959,12 +994,19 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
       igUserId: sessAccount.ig_user_id,
       pageScopedId: sessAccount.page_scoped_id,
     };
-    // For self-messages, use the session account's own owner_profile_id as
-    // the DM recipient. The webhook's ctx.recipientId belongs to a different
-    // account's inbox and can't be used to send from this flow's account.
-    const sessRecipientId = ctx.isSelfMessage
-      ? (sessAccount.owner_profile_id ?? sessAccount.page_scoped_id ?? ctx.recipientId)
-      : ctx.recipientId;
+    // Determine the DM recipient ID for the session's flow account.
+    // - Self-messages: use the session account's own owner_profile_id
+    // - Cross-account: use the webhook account's page_scoped_id
+    // - Same account: use ctx.recipientId
+    let sessRecipientId: string | null;
+    if (ctx.isSelfMessage) {
+      sessRecipientId = sessAccount.owner_profile_id ?? sessAccount.page_scoped_id ?? ctx.recipientId;
+    } else if (session.account_id !== ctx.accountId) {
+      const webhookAccount = sessionAccountMap.get(ctx.accountId);
+      sessRecipientId = webhookAccount?.page_scoped_id ?? ctx.recipientId;
+    } else {
+      sessRecipientId = ctx.recipientId;
+    }
 
     // Recover sessions that are "active" but have no current_step_id (can happen
     // when first_step_id was null at creation time). Try to find and execute the
