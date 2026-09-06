@@ -808,6 +808,47 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
   const selectedConversation = filteredConversations.find(c => c.id === selectedConversationId) || null;
 
+  const handleSendTestToSelf = async () => {
+    if (!selectedAccount) return;
+    const selfRecipientId = selectedAccount.owner_profile_id ?? selectedAccount.page_scoped_id ?? null;
+    if (!selfRecipientId) {
+      alert('Cannot send a test message — this account does not have an owner profile ID yet. Send yourself a DM from the Instagram app first to populate it.');
+      return;
+    }
+    setIsSendingReply(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/instagram-send-reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          account_id: selectedAccount.id,
+          recipient_id: selfRecipientId,
+          message_text: 'Test message from Loiblast — checking autoresponder and flows.',
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        alert(err.error || 'Failed to send test message');
+        return;
+      }
+
+      await fetchData();
+    } catch (error) {
+      console.error('Error sending test message:', error);
+      alert('Failed to send test message');
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
   const handleSendReply = async () => {
     if (!selectedConversation || !replyText.trim() || !selectedAccount) return;
     if (!selectedConversation.otherPartyId) {
@@ -1282,6 +1323,17 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                       {filter === 'all' ? 'All' : filter === 'messages' ? 'Messages' : 'Comments & Reels'}
                     </button>
                   ))}
+                  {accounts.some(a => a.id === selectedAccountId) && (
+                    <button
+                      onClick={handleSendTestToSelf}
+                      disabled={isSendingReply}
+                      className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-pink-700 bg-pink-50 hover:bg-pink-100 dark:text-pink-300 dark:bg-pink-900/20 dark:hover:bg-pink-900/40 disabled:opacity-50 transition-colors"
+                      title="Send a test message to yourself to test the autoresponder and flows"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      Test self-message
+                    </button>
+                  )}
                 </div>
 
                 {filteredConversations.length === 0 ? (
