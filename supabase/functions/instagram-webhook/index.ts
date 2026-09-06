@@ -933,21 +933,63 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
           console.log("processFlowReply: starting flow session for flow:", flow.id, "firstStepId:", flow.first_step_id, "on account:", flow.account_id);
           // Determine the DM recipient ID for the flow's account.
           // - Self-messages: use the flow account's own owner_profile_id
-          // - Cross-account (webhook account != flow account): the message
-          //   was sent FROM the webhook account TO the flow account. The
-          //   sender_id from the webhook is the webhook account's own
-          //   page-scoped ID, which the flow account can't use. Instead,
-          //   use the webhook account's page_scoped_id.
-          // - Same account: use ctx.recipientId (the sender's page-scoped ID
-          //   as seen by the flow account).
-          let flowRecipientId: string | null;
+          // - Same account (flow on the webhook account): use ctx.senderId —
+          //   the sender's PSID as seen by this account. This is correct and
+          //   works directly.
+          // - Cross-account (flow on a different account): Instagram assigns
+          //   different PSIDs per conversation. The sender's PSID as seen by
+          //   the webhook account (ctx.senderId) is NOT valid for the flow
+          //   account. We need the sender's PSID as seen by the flow account.
+          //   That PSID appears in the echo event on the flow account's webhook
+          //   (when the sender messaged the flow account, the flow account got
+          //   an echo with recipient_id = sender's PSID as seen by the flow
+          //   account). Look it up from recent events.
+          let flowRecipientId: string | null = null;
           if (ctx.isSelfMessage) {
             flowRecipientId = flowAccount.owner_profile_id ?? flowAccount.page_scoped_id ?? ctx.recipientId;
           } else if (flow.account_id !== ctx.accountId) {
-            const webhookAccount = accountMap.get(ctx.accountId);
-            flowRecipientId = webhookAccount?.page_scoped_id ?? ctx.recipientId;
+            // Look for a recent echo event on the flow account's webhook that
+            // has the same message text — its recipient_id is the sender's
+            // PSID as seen by the flow account.
+            const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
+            const { data: echoEvent } = await supabaseClient
+              .from("instagram_webhook_events")
+              .select("recipient_id")
+              .eq("user_id", ctx.userId)
+              .eq("ig_user_id", flowAccount.page_scoped_id ?? "")
+              .eq("direction", "outgoing")
+              .eq("message_text", ctx.messageText)
+              .gte("created_at", thirtySecondsAgo)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (echoEvent?.recipient_id) {
+              flowRecipientId = echoEvent.recipient_id;
+              console.log("processFlowReply: cross-account recipient resolved from echo event:", flowRecipientId);
+            } else {
+              // Fallback: look for any recent incoming event on the flow
+              // account from any sender — the sender_id will be the PSID
+              // as seen by the flow account.
+              const { data: incomingEvent } = await supabaseClient
+                .from("instagram_webhook_events")
+                .select("sender_id")
+                .eq("user_id", ctx.userId)
+                .eq("ig_user_id", flowAccount.page_scoped_id ?? "")
+                .eq("direction", "incoming")
+                .gte("created_at", thirtySecondsAgo)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (incomingEvent?.sender_id) {
+                flowRecipientId = incomingEvent.sender_id;
+                console.log("processFlowReply: cross-account recipient resolved from incoming event:", flowRecipientId);
+              } else {
+                console.log("processFlowReply: cross-account — could not resolve recipient PSID for flow account, skipping");
+                continue;
+              }
+            }
           } else {
-            flowRecipientId = ctx.recipientId;
+            flowRecipientId = ctx.senderId;
           }
           await startFlowSession(supabaseClient, {
             flowId: flow.id,
@@ -996,16 +1038,46 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
     };
     // Determine the DM recipient ID for the session's flow account.
     // - Self-messages: use the session account's own owner_profile_id
-    // - Cross-account: use the webhook account's page_scoped_id
-    // - Same account: use ctx.recipientId
-    let sessRecipientId: string | null;
+    // - Same account: use ctx.senderId (the person who sent the message)
+    // - Cross-account: look up the sender's PSID as seen by the flow account
+    //   from recent echo/incoming events on the flow account's webhook.
+    let sessRecipientId: string | null = null;
     if (ctx.isSelfMessage) {
       sessRecipientId = sessAccount.owner_profile_id ?? sessAccount.page_scoped_id ?? ctx.recipientId;
     } else if (session.account_id !== ctx.accountId) {
-      const webhookAccount = sessionAccountMap.get(ctx.accountId);
-      sessRecipientId = webhookAccount?.page_scoped_id ?? ctx.recipientId;
+      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
+      const { data: echoEvent } = await supabaseClient
+        .from("instagram_webhook_events")
+        .select("recipient_id")
+        .eq("user_id", ctx.userId)
+        .eq("ig_user_id", sessAccount.page_scoped_id ?? "")
+        .eq("direction", "outgoing")
+        .eq("message_text", ctx.messageText)
+        .gte("created_at", thirtySecondsAgo)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (echoEvent?.recipient_id) {
+        sessRecipientId = echoEvent.recipient_id;
+      } else {
+        const { data: incomingEvent } = await supabaseClient
+          .from("instagram_webhook_events")
+          .select("sender_id")
+          .eq("user_id", ctx.userId)
+          .eq("ig_user_id", sessAccount.page_scoped_id ?? "")
+          .eq("direction", "incoming")
+          .gte("created_at", thirtySecondsAgo)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        sessRecipientId = incomingEvent?.sender_id ?? null;
+      }
+      if (!sessRecipientId) {
+        console.log("processFlowReply: cross-account session — could not resolve recipient PSID, skipping");
+        continue;
+      }
     } else {
-      sessRecipientId = ctx.recipientId;
+      sessRecipientId = ctx.senderId;
     }
 
     // Recover sessions that are "active" but have no current_step_id (can happen
