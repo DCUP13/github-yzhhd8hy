@@ -264,24 +264,15 @@ async function resolveAccount(
     .maybeSingle();
   if (byPageId) return byPageId;
 
-  const { data: allAccounts } = await supabaseClient
-    .from("instagram_accounts")
-    .select("id, user_id, access_token, page_scoped_id, ig_user_id, username");
-  for (const acct of allAccounts ?? []) {
-    if (acct.ig_user_id && (
-      acct.ig_user_id === igUserId ||
-      acct.ig_user_id.includes(igUserId) ||
-      igUserId.includes(acct.ig_user_id)
-    )) {
-      return acct;
-    }
-  }
+  // No fuzzy matching — substring checks on numeric IDs cause false positives
+  // when one account's ID happens to contain another's as a substring.
 
   // Last resort: if there's exactly one account with no page_scoped_id yet,
   // assume this webhook is for that account and persist the mapping so future
-  // events match immediately.
+  // events match immediately. This is only safe when there's truly one
+  // unmatched account — otherwise we'd assign events to the wrong account.
   const unmatched = (allAccounts ?? []).filter((a: any) => !a.page_scoped_id);
-  if (unmatched.length === 1) {
+  if (unmatched.length === 1 && allAccounts?.length === 1) {
     const acct = unmatched[0];
     await supabaseClient
       .from("instagram_accounts")
@@ -296,7 +287,7 @@ async function resolveAccount(
 async function fetchMediaMeta(mediaId: string, accessToken: string): Promise<{ media_type: string; permalink: string; caption: string } | null> {
   try {
     const apiBase = getApiBase(accessToken);
-    const url = `${apiBase}/v21.0/${mediaId}?fields=media_type,permalink,caption&access_token=${accessToken}`;
+    const url = `${apiBase}/v26.0/${mediaId}?fields=media_type,permalink,caption&access_token=${accessToken}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
@@ -316,7 +307,7 @@ async function resolveSenderProfile(
 ): Promise<{ username: string; name: string; profile_pic: string } | null> {
   try {
     const apiBase = getApiBase(accessToken);
-    const url = `${apiBase}/v21.0/${senderId}?fields=username,name,profile_pic&access_token=${accessToken}`;
+    const url = `${apiBase}/v26.0/${senderId}?fields=username,name,profile_pic&access_token=${accessToken}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
@@ -342,7 +333,7 @@ async function sendInstagramDM(
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const isIgToken = accessToken.startsWith("IGAA");
   const apiBase = isIgToken ? "https://graph.instagram.com" : "https://graph.facebook.com";
-  const sendUrl = `${apiBase}/v21.0/${igUserId}/messages`;
+  const sendUrl = `${apiBase}/v26.0/${igUserId}/messages`;
 
   const messageBody: any = {};
   if (options.text) messageBody.text = options.text;
@@ -416,7 +407,7 @@ async function sendCommentReply(
 ): Promise<{ success: boolean; error?: string }> {
   const isIgToken = accessToken.startsWith("IGAA");
   const apiBase = isIgToken ? "https://graph.instagram.com" : "https://graph.facebook.com";
-  const url = `${apiBase}/v21.0/${commentId}/replies?access_token=${accessToken}`;
+  const url = `${apiBase}/v26.0/${commentId}/replies?access_token=${accessToken}`;
 
   const res = await fetch(url, {
     method: "POST",
