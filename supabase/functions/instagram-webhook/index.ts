@@ -861,6 +861,23 @@ async function processFlowReply(supabaseClient: any, ctx: FlowReplyContext) {
     }
   }
 
+  // Check if this incoming message is an automated reply from one of the
+  // user's own connected accounts. When account A's flow sends a reply
+  // containing the trigger keyword (e.g. "want to know the price"), account B
+  // receives it as an incoming DM. Without this guard, account B's flow would
+  // trigger on the keyword, send its own reply, and create an infinite loop.
+  // Manual messages between accounts have auto_replied=false and still trigger
+  // flows normally.
+  if (!ctx.isSelfMessage) {
+    const isAutoFromOwned = await isAutomatedReplyFromOwnedAccount(
+      supabaseClient, ctx.userId, ctx.messageText,
+    );
+    if (isAutoFromOwned) {
+      console.log("processFlowReply: skipping — incoming message is automated reply from owned account, preventing loop");
+      return;
+    }
+  }
+
   // Find active or waiting sessions for this sender across all flows owned by this user
   const { data: sessions } = await supabaseClient
     .from("instagram_flow_sessions")
