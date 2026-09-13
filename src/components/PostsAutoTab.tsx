@@ -117,6 +117,7 @@ interface CommentEvent {
   media_type: string | null;
   media_permalink: string | null;
   media_caption: string | null;
+  media_image_url: string | null;
   comment_id: string | null;
   parent_comment_id: string | null;
   created_at: string;
@@ -690,14 +691,15 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
   // Feed: group comment events by post (media_id)
   const feedPosts = useMemo(() => {
-    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; events: CommentEvent[] }>();
+    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; events: CommentEvent[] }>();
     for (const event of commentEvents) {
       const key = event.media_id ?? event.id;
       const existing = postMap.get(key);
       if (existing) {
         existing.events.push(event);
+        if (event.media_image_url && !existing.mediaImageUrl) existing.mediaImageUrl = event.media_image_url;
       } else {
-        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, events: [event] });
+        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, events: [event] });
       }
     }
     return Array.from(postMap.values()).sort((a, b) => {
@@ -1525,8 +1527,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       onClick={() => setExpandedPostId(isExpanded ? null : post.mediaId)}
                       className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
                     >
-                      <div className="w-10 h-10 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
-                        {post.mediaType === 'REEL' ? (
+                      <div className="w-10 h-10 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {post.mediaImageUrl ? (
+                          post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
+                            <video src={post.mediaImageUrl} className="w-full h-full object-cover" preload="metadata" muted />
+                          ) : (
+                            <img src={post.mediaImageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          )
+                        ) : post.mediaType === 'REEL' ? (
                           <VideoIcon className="w-5 h-5 text-pink-500" />
                         ) : (
                           <ImageIcon className="w-5 h-5 text-pink-500" />
@@ -1563,7 +1571,28 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
                     {/* Expanded comment threads */}
                     {isExpanded && (
-                      <div className="border-t border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700/50">
+                      <div className="border-t border-gray-200 dark:border-gray-700">
+                        {/* Post image/video preview */}
+                        {post.mediaImageUrl && (
+                          <div className="px-4 pt-3 pb-2">
+                            {post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
+                              <video
+                                src={post.mediaImageUrl}
+                                className="w-full max-h-64 rounded-lg object-cover"
+                                controls
+                                preload="metadata"
+                              />
+                            ) : (
+                              <img
+                                src={post.mediaImageUrl}
+                                alt=""
+                                className="w-full max-h-64 rounded-lg object-cover"
+                                loading="lazy"
+                              />
+                            )}
+                          </div>
+                        )}
+                        <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
                         {topLevel.map((comment) => {
                           const commentReplies = repliesByParent.get(comment.comment_id ?? '') ?? [];
                           const lastReplyId = commentReplies.length > 0
@@ -1649,6 +1678,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                             </div>
                           );
                         })}
+                        </div>
                       </div>
                     )}
                   </div>

@@ -26,6 +26,7 @@ interface WebhookEvent {
   media_type: string | null;
   media_permalink: string | null;
   media_caption: string | null;
+  media_image_url: string | null;
   comment_id: string | null;
   parent_comment_id: string | null;
   created_at: string;
@@ -662,6 +663,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     mediaType: string | null;
     mediaPermalink: string | null;
     mediaCaption: string | null;
+    mediaImageUrl: string | null;
     isSelfChat: boolean;
     lastCommentId: string | null;
   }
@@ -753,6 +755,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           mediaType: event.media_type,
           mediaPermalink: event.media_permalink,
           mediaCaption: event.media_caption,
+          mediaImageUrl: event.media_image_url,
           isSelfChat: isSelfEvent,
           lastCommentId: event.comment_id ?? null,
         });
@@ -782,6 +785,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         if (event.media_type && !existing.mediaType) existing.mediaType = event.media_type;
         if (event.media_permalink && !existing.mediaPermalink) existing.mediaPermalink = event.media_permalink;
         if (event.media_caption && !existing.mediaCaption) existing.mediaCaption = event.media_caption;
+        if (event.media_image_url && !existing.mediaImageUrl) existing.mediaImageUrl = event.media_image_url;
       }
     }
 
@@ -1223,6 +1227,28 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                     )}
                   </div>
                 </div>
+
+                {/* Post image/video for comment threads */}
+                {selectedConversation.type === 'media' && selectedConversation.mediaImageUrl && (
+                  <div className="px-4 pb-2 flex-shrink-0">
+                    {selectedConversation.mediaType === 'REEL' || selectedConversation.mediaType === 'VIDEO' ? (
+                      <video
+                        src={selectedConversation.mediaImageUrl}
+                        className="w-full max-h-40 rounded-lg object-cover"
+                        preload="metadata"
+                        controls
+                        muted
+                      />
+                    ) : (
+                      <img
+                        src={selectedConversation.mediaImageUrl}
+                        alt=""
+                        className="w-full max-h-40 rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                  </div>
+                )}
 
                 {/* Messages list — scrolls independently */}
                 <div className="overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30 max-h-[45vh]">
