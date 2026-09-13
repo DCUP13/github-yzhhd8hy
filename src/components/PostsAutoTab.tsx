@@ -716,12 +716,28 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     const sorted = postEvents.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
     const topLevel = sorted.filter(e => !e.parent_comment_id);
     const replies = sorted.filter(e => !!e.parent_comment_id);
+
+    // Build a lookup from comment_id → event so we can walk the parent chain
+    const byCommentId = new Map<string, CommentEvent>();
+    for (const e of sorted) {
+      if (e.comment_id) byCommentId.set(e.comment_id, e);
+    }
+
+    // Resolve each reply's parent_comment_id up to the root top-level comment,
+    // so replies-to-replies also appear indented under the top-level comment.
     const repliesByParent = new Map<string, CommentEvent[]>();
     for (const reply of replies) {
-      const parent = reply.parent_comment_id!;
-      const arr = repliesByParent.get(parent) ?? [];
+      let rootId = reply.parent_comment_id!;
+      let guard = 0;
+      while (guard < 20) {
+        const parent = byCommentId.get(rootId);
+        if (!parent || !parent.parent_comment_id) break;
+        rootId = parent.parent_comment_id;
+        guard++;
+      }
+      const arr = repliesByParent.get(rootId) ?? [];
       arr.push(reply);
-      repliesByParent.set(parent, arr);
+      repliesByParent.set(rootId, arr);
     }
     return { topLevel, repliesByParent };
   }
