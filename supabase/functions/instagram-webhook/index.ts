@@ -65,6 +65,7 @@ Deno.serve(async (req: Request) => {
               media_permalink: mediaMeta?.permalink ?? null, media_caption: mediaMeta?.caption ?? null,
               comment_id: value?.id ?? null, message_text: value?.text ?? null,
               direction: "incoming", recipient_id: null, raw_event: change, user_id: userId,
+              parent_comment_id: value?.parent_id ?? null,
             }, accessToken);
 
             // Process auto rules for this comment
@@ -1133,7 +1134,7 @@ async function storeEvent(
     sender_profile_url: string | null; media_id: string | null; media_type: string | null;
     media_permalink: string | null; media_caption: string | null; comment_id: string | null;
     message_text: string | null; direction: string; recipient_id: string | null;
-    raw_event: any; user_id: string | null;
+    raw_event: any; user_id: string | null; parent_comment_id?: string | null;
   },
   accessToken: string | null = null,
   otherPartyId: string | null = null,
@@ -1182,6 +1183,9 @@ async function storeEvent(
     direction: event.direction, recipient_id: event.recipient_id,
     raw_event: event.raw_event,
   };
+  if (event.parent_comment_id) {
+    insertData.parent_comment_id = event.parent_comment_id;
+  }
 
   let storedId: string | null = null;
   if (returnId) {

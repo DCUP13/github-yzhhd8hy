@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
 import { FlowBuilder } from './FlowBuilder';
 import { PostsAutoTab } from './PostsAutoTab';
+import { CommentsFeedTab } from './CommentsFeedTab';
 
 
 interface InstagramProps {
@@ -27,6 +28,7 @@ interface WebhookEvent {
   media_permalink: string | null;
   media_caption: string | null;
   comment_id: string | null;
+  parent_comment_id: string | null;
   created_at: string;
   processed: boolean;
   direction: string;
@@ -91,7 +93,7 @@ interface Snapshot {
   created_at: string;
 }
 
-type TabType = 'inbox' | 'posts' | 'rules' | 'flows' | 'autoresponder' | 'stats' | 'sharing';
+type TabType = 'inbox' | 'posts' | 'feed' | 'rules' | 'flows' | 'autoresponder' | 'stats' | 'sharing';
 
 export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }: InstagramProps) {
   const initialTab = (queryParams.tab as TabType) || 'inbox';
@@ -662,6 +664,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
     mediaPermalink: string | null;
     mediaCaption: string | null;
     isSelfChat: boolean;
+    lastCommentId: string | null;
   }
 
   const conversations = useMemo((): Conversation[] => {
@@ -697,8 +700,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           type = 'dm';
         }
       } else {
-        // Comments, mentions, shares, reposts: group by media_id
-        convId = `media_${event.media_id ?? event.id}`;
+        // Comments, mentions, shares, reposts: group by media_id + sender_id
+        // so each user's comment thread on a post is a separate conversation.
+        const senderKey = event.sender_id ?? 'unknown';
+        convId = `media_${event.media_id ?? event.id}_${senderKey}`;
         type = 'media';
       }
 
@@ -752,12 +757,16 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           mediaPermalink: event.media_permalink,
           mediaCaption: event.media_caption,
           isSelfChat: isSelfEvent,
+          lastCommentId: event.comment_id ?? null,
         });
       } else {
         existing.events.push(event);
         if (event.created_at > existing.lastMessageAt) {
           existing.lastMessageAt = event.created_at;
           existing.lastMessageText = event.message_text;
+        }
+        if (event.comment_id) {
+          existing.lastCommentId = event.comment_id;
         }
         if (isIncoming && (!existing.lastIncomingAt || event.created_at > existing.lastIncomingAt)) {
           existing.lastIncomingAt = event.created_at;
@@ -860,6 +869,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
+      const isComment = selectedConversation.type === 'media';
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const response = await fetch(`${supabaseUrl}/functions/v1/instagram-send-reply`, {
         method: 'POST',
@@ -872,6 +882,11 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           recipient_id: selectedConversation.otherPartyId,
           message_text: replyText.trim(),
           reply_to_event_id: selectedConversation.events.find(e => e.direction === 'incoming')?.id,
+          ...(isComment ? {
+            reply_type: 'comment',
+            comment_id: selectedConversation.lastCommentId,
+            parent_comment_id: selectedConversation.lastCommentId,
+          } : {}),
         }),
       });
 
@@ -882,7 +897,6 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       }
 
       setReplyText('');
-      // The realtime subscription or a refetch will pick up the new outgoing message
       await fetchData();
     } catch (error) {
       console.error('Error sending reply:', error);
@@ -904,12 +918,12 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           .in('id', eventIds);
         if (delErr) throw delErr;
       } else if (conv.type === 'media') {
-        const mediaId = conv.events[0]?.media_id;
-        if (mediaId) {
+        const eventIds = conv.events.map(e => e.id);
+        if (eventIds.length > 0) {
           const { error } = await supabase
             .from('instagram_webhook_events')
             .delete()
-            .eq('media_id', mediaId);
+            .in('id', eventIds);
           if (error) throw error;
         }
       }
@@ -1093,6 +1107,15 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 </div>
               </button>
               <button
+                onClick={() => handleTabChange('feed')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'feed' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  Comments
+                </div>
+              </button>
+              <button
                 onClick={() => handleTabChange('stats')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'stats' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
               >
@@ -1215,41 +1238,85 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
                 {/* Messages list — scrolls independently */}
                 <div className="overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30 max-h-[45vh]">
-                  {selectedConversation.events
-                    .slice()
-                    .reverse()
-                    .map((event) => {
-                      const isOutgoing = event.direction === 'outgoing';
-                      return (
-                        <div key={event.id} className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[75%] ${isOutgoing ? 'order-2' : 'order-1'}`}>
-                            <div className={`rounded-2xl px-4 py-2.5 ${
-                              isOutgoing
-                                ? 'bg-pink-500 text-white rounded-br-sm'
-                                : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-sm border border-gray-200 dark:border-gray-700'
-                            }`}>
-                              {event.message_text && (
-                                <p className="text-sm whitespace-pre-wrap break-words">{event.message_text}</p>
-                              )}
-                              {!event.message_text && event.event_type !== 'message' && (
-                                <p className="text-sm italic text-gray-400">{event.event_type} (no text)</p>
-                              )}
+                  {selectedConversation.type === 'media'
+                    ? /* Threaded comment view — indent replies */
+                      selectedConversation.events
+                        .slice()
+                        .reverse()
+                        .map((event) => {
+                          const isReply = !!event.parent_comment_id || event.direction === 'outgoing';
+                          return (
+                            <div key={event.id} className={`flex ${isReply ? 'ml-8' : ''}`}>
+                              <div className={`max-w-[75%] ${event.direction === 'outgoing' ? 'order-2 ml-auto' : 'order-1'}`}>
+                                {event.direction !== 'outgoing' && (
+                                  <p className="text-[10px] text-gray-500 mb-0.5 font-medium">
+                                    @{event.sender_username || 'unknown'}
+                                  </p>
+                                )}
+                                <div className={`rounded-2xl px-4 py-2.5 ${
+                                  event.direction === 'outgoing'
+                                    ? 'bg-pink-500 text-white rounded-br-sm'
+                                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-sm border border-gray-200 dark:border-gray-700'
+                                }`}>
+                                  {event.message_text && (
+                                    <p className="text-sm whitespace-pre-wrap break-words">{event.message_text}</p>
+                                  )}
+                                  {!event.message_text && event.event_type !== 'message' && (
+                                    <p className="text-sm italic text-gray-400">{event.event_type} (no text)</p>
+                                  )}
+                                </div>
+                                <div className={`flex items-center gap-1 mt-1 ${event.direction === 'outgoing' ? 'justify-end' : 'justify-start'}`}>
+                                  {event.event_type !== 'message' && (
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${eventBadgeColor(event.event_type)}`}>
+                                      {event.event_type}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-gray-400">{formatTime(event.created_at)}</span>
+                                  {event.direction === 'outgoing' && event.replied_at && (
+                                    <CheckCheck className="w-3 h-3 text-pink-400" />
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <div className={`flex items-center gap-1 mt-1 ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
-                              {event.event_type !== 'message' && (
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${eventBadgeColor(event.event_type)}`}>
-                                  {event.event_type}
-                                </span>
-                              )}
-                              <span className="text-[10px] text-gray-400">{formatTime(event.created_at)}</span>
-                              {isOutgoing && event.replied_at && (
-                                <CheckCheck className="w-3 h-3 text-pink-400" />
-                              )}
+                          );
+                        })
+                    : /* DM view — chat bubbles */
+                      selectedConversation.events
+                        .slice()
+                        .reverse()
+                        .map((event) => {
+                          const isOutgoing = event.direction === 'outgoing';
+                          return (
+                            <div key={event.id} className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`max-w-[75%] ${isOutgoing ? 'order-2' : 'order-1'}`}>
+                                <div className={`rounded-2xl px-4 py-2.5 ${
+                                  isOutgoing
+                                    ? 'bg-pink-500 text-white rounded-br-sm'
+                                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-sm border border-gray-200 dark:border-gray-700'
+                                }`}>
+                                  {event.message_text && (
+                                    <p className="text-sm whitespace-pre-wrap break-words">{event.message_text}</p>
+                                  )}
+                                  {!event.message_text && event.event_type !== 'message' && (
+                                    <p className="text-sm italic text-gray-400">{event.event_type} (no text)</p>
+                                  )}
+                                </div>
+                                <div className={`flex items-center gap-1 mt-1 ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
+                                  {event.event_type !== 'message' && (
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${eventBadgeColor(event.event_type)}`}>
+                                      {event.event_type}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-gray-400">{formatTime(event.created_at)}</span>
+                                  {isOutgoing && event.replied_at && (
+                                    <CheckCheck className="w-3 h-3 text-pink-400" />
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                          );
+                        })
+                  }
                 </div>
 
                 {/* 24-hour window warning */}
@@ -1276,16 +1343,16 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 })()}
 
                 {/* Reply box — always visible at the bottom, never scrolls */}
-                {selectedConversation.type === 'dm' && (
+                {(selectedConversation.type === 'dm' || (selectedConversation.type === 'media' && selectedConversation.lastCommentId)) && (
                   <div className="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 z-10">
-                    {selectedConversation.otherPartyId ? (
+                    {selectedConversation.otherPartyId || selectedConversation.lastCommentId ? (
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
                           value={replyText}
                           onChange={(e) => setReplyText(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
-                          placeholder="Type a reply..."
+                          placeholder={selectedConversation.type === 'media' ? 'Reply to comment...' : 'Type a reply...'}
                           className="flex-1 px-4 py-2.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                           disabled={isSendingReply}
                         />
@@ -1450,6 +1517,14 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           <PostsAutoTab
             accounts={allAccounts.map(a => ({ id: a.id, ig_user_id: a.ig_user_id, username: a.username, profile_picture_url: a.profile_picture_url, user_id: a.user_id }))}
             userId={selectedAccount?.user_id || ''}
+          />
+        )}
+
+        {/* Feed tab — all posts with their comment threads, live updating */}
+        {activeTab === 'feed' && selectedAccount && (
+          <CommentsFeedTab
+            events={events.filter(e => e.event_type !== 'message')}
+            selectedAccount={selectedAccount}
           />
         )}
 
