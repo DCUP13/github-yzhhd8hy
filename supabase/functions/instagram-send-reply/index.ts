@@ -171,6 +171,31 @@ Deno.serve(async (req: Request) => {
     const sendData = await sendRes.json();
     const messageId = sendData?.message_id ?? sendData?.id ?? null;
 
+    // For comment replies, look up the parent comment's media fields so the
+    // outgoing event is grouped with the same media conversation in the inbox.
+    let mediaId: string | null = null;
+    let mediaType: string | null = null;
+    let mediaPermalink: string | null = null;
+    let mediaCaption: string | null = null;
+    let mediaImageUrl: string | null = null;
+
+    if (isCommentReply && parent_comment_id) {
+      const { data: parentEvent } = await supabaseClient
+        .from("instagram_webhook_events")
+        .select("media_id, media_type, media_permalink, media_caption, media_image_url")
+        .eq("comment_id", parent_comment_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (parentEvent) {
+        mediaId = parentEvent.media_id ?? null;
+        mediaType = parentEvent.media_type ?? null;
+        mediaPermalink = parentEvent.media_permalink ?? null;
+        mediaCaption = parentEvent.media_caption ?? null;
+        mediaImageUrl = parentEvent.media_image_url ?? null;
+      }
+    }
+
     const insertEvent: Record<string, unknown> = {
       user_id: account.user_id,
       event_id: messageId ?? `reply_${Date.now()}`,
@@ -180,10 +205,11 @@ Deno.serve(async (req: Request) => {
       sender_username: account.username ?? null,
       sender_name: null,
       sender_profile_url: null,
-      media_id: null,
-      media_type: null,
-      media_permalink: null,
-      media_caption: null,
+      media_id: mediaId,
+      media_type: mediaType,
+      media_permalink: mediaPermalink,
+      media_caption: mediaCaption,
+      media_image_url: mediaImageUrl,
       comment_id: isCommentReply ? (sendData?.id ?? null) : null,
       message_text: message_text,
       direction: "outgoing",
