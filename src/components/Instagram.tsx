@@ -139,6 +139,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   const [replyText, setReplyText] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [inboxFilter, setInboxFilter] = useState<'all' | 'messages' | 'comments'>('all');
+  const [inboxReplyCommentId, setInboxReplyCommentId] = useState<string | null>(null);
+  const [inboxReplyText, setInboxReplyText] = useState('');
+  const [inboxReplyDialogOpen, setInboxReplyDialogOpen] = useState(false);
+  const [inboxSendingFor, setInboxSendingFor] = useState<string | null>(null);
   const [autoresponderSettings, setAutoresponderSettings] = useState<{ enabled: boolean; prompt_id: string | null; response_delay_seconds: number } | null>(null);
   const [availablePrompts, setAvailablePrompts] = useState<Array<{ id: string; title: string; reply_mode: string }>>([]);
   const [isSavingAutoresponder, setIsSavingAutoresponder] = useState(false);
@@ -671,6 +675,15 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   const conversations = useMemo((): Conversation[] => {
     const convos = new Map<string, Conversation>();
 
+    // Pre-build a map of comment_id → sender_id for resolving which commenter
+    // an outgoing reply should be grouped with.
+    const commentSenderMap = new Map<string, string>();
+    for (const ev of events) {
+      if (ev.event_type !== 'message' && ev.comment_id && ev.direction === 'incoming' && ev.sender_id) {
+        commentSenderMap.set(ev.comment_id, ev.sender_id);
+      }
+    }
+
     for (const event of events) {
       let convId: string;
       let type: 'dm' | 'media';
@@ -701,8 +714,31 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           type = 'dm';
         }
       } else {
-        // Comments, mentions, shares, reposts: group by media_id (all comments on a post together)
-        convId = `media_${event.media_id ?? event.id}`;
+        // Comments: group by commenter (sender_id) so each person's comments
+        // and the replies to them are in one conversation.
+        if (event.direction === 'incoming') {
+          const senderId = event.sender_id ?? event.id;
+          convId = `commenter_${senderId}`;
+        } else {
+          // Outgoing reply — resolve the original commenter via parent_comment_id chain
+          let rootSenderId: string | null = null;
+          if (event.parent_comment_id) {
+            rootSenderId = commentSenderMap.get(event.parent_comment_id) ?? null;
+            let parentId = event.parent_comment_id;
+            let guard = 0;
+            while (!rootSenderId && parentId && guard < 20) {
+              const parentEvent = events.find(e => e.comment_id === parentId);
+              if (!parentEvent) break;
+              if (parentEvent.direction === 'incoming' && parentEvent.sender_id) {
+                rootSenderId = parentEvent.sender_id;
+                break;
+              }
+              parentId = parentEvent.parent_comment_id ?? null;
+              guard++;
+            }
+          }
+          convId = rootSenderId ? `commenter_${rootSenderId}` : `media_${event.media_id ?? event.id}`;
+        }
         type = 'media';
       }
 
@@ -919,20 +955,68 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           .in('id', eventIds);
         if (delErr) throw delErr;
       } else if (conv.type === 'media') {
-        const mediaId = conv.events[0]?.media_id;
-        if (mediaId) {
-          const { error } = await supabase
-            .from('instagram_webhook_events')
-            .delete()
-            .eq('media_id', mediaId);
-          if (error) throw error;
-        }
+        // Comments grouped by commenter — delete by event IDs, not media_id
+        const eventIds = conv.events.map(e => e.id);
+        const { error } = await supabase
+          .from('instagram_webhook_events')
+          .delete()
+          .in('id', eventIds);
+        if (error) throw error;
       }
       setSelectedConversationId(null);
       await fetchData();
     } catch (error) {
       console.error('Error deleting conversation:', error);
       alert('Failed to delete conversation. You may not have permission to delete some messages.');
+    }
+  };
+
+  const handleInboxReplyToComment = async () => {
+    if (!inboxReplyCommentId || !inboxReplyText.trim() || !selectedAccount || !selectedConversation) return;
+    const targetEvent = selectedConversation.events.find(e => e.comment_id === inboxReplyCommentId);
+    if (!targetEvent) return;
+    const recipientId = targetEvent.direction === 'incoming'
+      ? targetEvent.sender_id
+      : selectedConversation.otherPartyId;
+    if (!recipientId) {
+      alert('Cannot reply to this comment — the commenter could not be identified.');
+      return;
+    }
+    setInboxSendingFor(inboxReplyCommentId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/instagram-send-reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          account_id: selectedAccount.id,
+          recipient_id: recipientId,
+          message_text: inboxReplyText.trim(),
+          reply_to_event_id: targetEvent.id,
+          reply_type: 'comment',
+          comment_id: targetEvent.comment_id,
+          parent_comment_id: targetEvent.comment_id,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        alert(err.error || 'Failed to send reply');
+        return;
+      }
+      setInboxReplyText('');
+      setInboxReplyDialogOpen(false);
+      setInboxReplyCommentId(null);
+      await fetchData();
+    } catch (error) {
+      console.error('Error sending comment reply:', error);
+      alert('Failed to send reply');
+    } finally {
+      setInboxSendingFor(null);
     }
   };
 
@@ -1216,7 +1300,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                     </p>
                     {selectedConversation.type === 'media' && (
                       <p className="text-xs text-gray-400">
-                        {selectedConversation.mediaType === 'REEL' ? 'Reel' : 'Post'} comment thread
+                        {selectedConversation.events.length} comment{selectedConversation.events.length !== 1 ? 's' : ''} on your {selectedConversation.mediaType === 'REEL' ? 'reel' : 'post'}
                         {selectedConversation.mediaPermalink && (
                           <a href={selectedConversation.mediaPermalink} target="_blank" rel="noopener noreferrer" className="ml-1 text-pink-500 hover:underline">View on Instagram</a>
                         )}
@@ -1253,47 +1337,124 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 {/* Messages list — scrolls independently */}
                 <div className="overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30 max-h-[45vh]">
                   {selectedConversation.type === 'media'
-                    ? /* Threaded comment view — indent replies */
-                      selectedConversation.events
-                        .slice()
-                        .reverse()
-                        .map((event) => {
-                          const isReply = !!event.parent_comment_id || event.direction === 'outgoing';
+                    ? /* Threaded comment view — group by media, show replies indented with per-comment reply buttons */
+                      (() => {
+                        const commentEvents = selectedConversation.events;
+                        const sorted = commentEvents.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+                        const topLevel = sorted.filter(e => !e.parent_comment_id);
+                        const replies = sorted.filter(e => !!e.parent_comment_id);
+                        const byCommentId = new Map<string, typeof sorted[number]>();
+                        for (const e of sorted) {
+                          if (e.comment_id) byCommentId.set(e.comment_id, e);
+                        }
+                        const repliesByParent = new Map<string, typeof sorted[number][]>();
+                        for (const reply of replies) {
+                          let rootId = reply.parent_comment_id!;
+                          let guard = 0;
+                          while (guard < 20) {
+                            const parent = byCommentId.get(rootId);
+                            if (!parent || !parent.parent_comment_id) break;
+                            rootId = parent.parent_comment_id;
+                            guard++;
+                          }
+                          const arr = repliesByParent.get(rootId) ?? [];
+                          arr.push(reply);
+                          repliesByParent.set(rootId, arr);
+                        }
+                        return topLevel.map((comment) => {
+                          const commentReplies = repliesByParent.get(comment.comment_id ?? '') ?? [];
                           return (
-                            <div key={event.id} className={`flex ${isReply ? 'ml-8' : ''}`}>
-                              <div className={`max-w-[75%] ${event.direction === 'outgoing' ? 'order-2 ml-auto' : 'order-1'}`}>
-                                {event.direction !== 'outgoing' && (
-                                  <p className="text-[10px] text-gray-500 mb-0.5 font-medium">
-                                    @{event.sender_username || 'unknown'}
-                                  </p>
+                            <div key={comment.id} className="py-1">
+                              {/* Top-level comment */}
+                              <div className="flex items-start gap-2.5">
+                                {comment.sender_profile_url ? (
+                                  <img src={comment.sender_profile_url} alt="" className="w-8 h-8 rounded-full flex-shrink-0" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
+                                    <MessageSquare className="w-3.5 h-3.5 text-pink-500" />
+                                  </div>
                                 )}
-                                <div className={`rounded-2xl px-4 py-2.5 ${
-                                  event.direction === 'outgoing'
-                                    ? 'bg-pink-500 text-white rounded-br-sm'
-                                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-sm border border-gray-200 dark:border-gray-700'
-                                }`}>
-                                  {event.message_text && (
-                                    <p className="text-sm whitespace-pre-wrap break-words">{event.message_text}</p>
-                                  )}
-                                  {!event.message_text && event.event_type !== 'message' && (
-                                    <p className="text-sm italic text-gray-400">{event.event_type} (no text)</p>
-                                  )}
-                                </div>
-                                <div className={`flex items-center gap-1 mt-1 ${event.direction === 'outgoing' ? 'justify-end' : 'justify-start'}`}>
-                                  {event.event_type !== 'message' && (
-                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${eventBadgeColor(event.event_type)}`}>
-                                      {event.event_type}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                                    @{comment.sender_username || 'unknown'}
+                                  </p>
+                                  <p className="text-sm text-gray-900 dark:text-white mt-0.5">{comment.message_text}</p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[10px] text-gray-400">
+                                      {formatTime(comment.created_at)}
                                     </span>
-                                  )}
-                                  <span className="text-[10px] text-gray-400">{formatTime(event.created_at)}</span>
-                                  {event.direction === 'outgoing' && event.replied_at && (
-                                    <CheckCheck className="w-3 h-3 text-pink-400" />
-                                  )}
+                                    <button
+                                      onClick={() => {
+                                        setInboxReplyCommentId(comment.comment_id ?? null);
+                                        setInboxReplyText('');
+                                        setInboxReplyDialogOpen(true);
+                                      }}
+                                      className="inline-flex items-center gap-0.5 text-[10px] font-medium text-gray-400 hover:text-pink-600 dark:hover:text-pink-400 transition-colors"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      Reply
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
+
+                              {/* Threaded replies — indented under top-level */}
+                              {commentReplies.length > 0 && (
+                                <div className="ml-10 mt-2 space-y-2 border-l-2 border-gray-200 dark:border-gray-700 pl-3">
+                                  {commentReplies.map((reply) => (
+                                    <div key={reply.id} className="flex items-start gap-2">
+                                      {reply.sender_profile_url ? (
+                                        <img src={reply.sender_profile_url} alt="" className="w-6 h-6 rounded-full flex-shrink-0 mt-0.5" />
+                                      ) : (
+                                        <div className="w-6 h-6 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                          {reply.direction === 'outgoing' ? (
+                                            <Bot className="w-3 h-3 text-pink-500" />
+                                          ) : (
+                                            <MessageSquare className="w-3 h-3 text-pink-500" />
+                                          )}
+                                        </div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          {reply.direction === 'outgoing' ? (
+                                            <span className="text-[10px] font-medium text-pink-600 dark:text-pink-400">You</span>
+                                          ) : (
+                                            <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">@{reply.sender_username || 'unknown'}</span>
+                                          )}
+                                          <span className="text-[10px] text-gray-400">{formatTime(reply.created_at)}</span>
+                                          {reply.direction === 'outgoing' && reply.replied_at && (
+                                            <CheckCheck className="w-3 h-3 text-pink-400" />
+                                          )}
+                                        </div>
+                                        <div className={`rounded-xl px-3 py-2 mt-0.5 inline-block ${
+                                          reply.direction === 'outgoing'
+                                            ? 'bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 text-gray-900 dark:text-white'
+                                            : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
+                                        }`}>
+                                          <p className="text-sm whitespace-pre-wrap break-words">{reply.message_text}</p>
+                                        </div>
+                                        <div className="mt-0.5">
+                                          <button
+                                            onClick={() => {
+                                              setInboxReplyCommentId(reply.comment_id ?? comment.comment_id ?? null);
+                                              setInboxReplyText('');
+                                              setInboxReplyDialogOpen(true);
+                                            }}
+                                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-gray-400 hover:text-pink-600 dark:hover:text-pink-400 transition-colors"
+                                          >
+                                            <Send className="w-3 h-3" />
+                                            Reply
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           );
-                        })
+                        });
+                      })()
                     : /* DM view — chat bubbles */
                       selectedConversation.events
                         .slice()
@@ -1356,8 +1517,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                   );
                 })()}
 
-                {/* Reply box — always visible at the bottom, never scrolls */}
-                {(selectedConversation.type === 'dm' || (selectedConversation.type === 'media' && selectedConversation.lastCommentId)) && (
+                {/* Reply box — only for DMs; comments use per-comment reply buttons */}
+                {selectedConversation.type === 'dm' && (
                   <div className="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800 z-10">
                     {selectedConversation.otherPartyId || selectedConversation.lastCommentId ? (
                       <div className="flex items-center gap-2">
@@ -1439,10 +1600,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                           <div className="w-11 h-11 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
                             {conv.type === 'dm' ? (
                               <User className="w-5 h-5 text-pink-500" />
-                            ) : conv.mediaType === 'REEL' ? (
-                              <Film className="w-5 h-5 text-pink-500" />
                             ) : (
-                              <ImageIcon className="w-5 h-5 text-pink-500" />
+                              <MessageSquare className="w-5 h-5 text-pink-500" />
                             )}
                           </div>
                         )}
@@ -1512,6 +1671,59 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Inbox per-comment reply dialog */}
+        {inboxReplyDialogOpen && selectedConversation && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setInboxReplyDialogOpen(false)}>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full mx-4 p-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Reply to comment</h3>
+                <button onClick={() => setInboxReplyDialogOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {(() => {
+                const targetEvent = selectedConversation.events.find(e => e.comment_id === inboxReplyCommentId);
+                if (targetEvent) {
+                  return (
+                    <div className="mb-3 p-2.5 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
+                        {targetEvent.direction === 'outgoing' ? 'You' : `@${targetEvent.sender_username || 'unknown'}`}
+                      </p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">{targetEvent.message_text}</p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              <textarea
+                value={inboxReplyText}
+                onChange={(e) => setInboxReplyText(e.target.value)}
+                placeholder="Type your reply..."
+                rows={3}
+                autoFocus
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500 resize-none"
+                disabled={!!inboxSendingFor}
+              />
+              <div className="flex justify-end gap-2 mt-3">
+                <button
+                  onClick={() => setInboxReplyDialogOpen(false)}
+                  className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleInboxReplyToComment}
+                  disabled={!inboxReplyText.trim() || !!inboxSendingFor}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-pink-500 hover:bg-pink-600 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {inboxSendingFor ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  {inboxSendingFor ? 'Sending...' : 'Send Reply'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

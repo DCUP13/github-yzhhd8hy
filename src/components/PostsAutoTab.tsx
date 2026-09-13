@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ChevronRight,
   Reply,
+  Bot,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -1655,24 +1656,39 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                 <div className="ml-10 mt-2 space-y-2 border-l-2 border-gray-100 dark:border-gray-700 pl-3">
                                   {commentReplies.map((reply) => (
                                     <div key={reply.id} className="flex items-start gap-2">
-                                      <div className={`max-w-[80%] ${reply.direction === 'outgoing' ? 'ml-auto' : ''}`}>
-                                        <div className={`rounded-xl px-3 py-2 ${
-                                          reply.direction === 'outgoing'
-                                            ? 'bg-pink-500 text-white'
-                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                                        }`}>
-                                          {reply.direction === 'outgoing' && (
-                                            <p className="text-[10px] font-medium text-pink-100 mb-0.5">You replied</p>
+                                      {reply.sender_profile_url ? (
+                                        <img src={reply.sender_profile_url} alt="" className="w-6 h-6 rounded-full flex-shrink-0 mt-0.5" />
+                                      ) : (
+                                        <div className="w-6 h-6 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                          {reply.direction === 'outgoing' ? (
+                                            <Bot className="w-3 h-3 text-pink-500" />
+                                          ) : (
+                                            <MessageSquare className="w-3 h-3 text-pink-500" />
                                           )}
-                                          <p className="text-sm whitespace-pre-wrap break-words">{reply.message_text}</p>
                                         </div>
-                                        <div className={`flex items-center gap-2 mt-0.5 ${reply.direction === 'outgoing' ? 'justify-end' : 'justify-start'}`}>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          {reply.direction === 'outgoing' ? (
+                                            <span className="text-[10px] font-medium text-pink-600 dark:text-pink-400">You</span>
+                                          ) : (
+                                            <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">@{reply.sender_username || 'unknown'}</span>
+                                          )}
                                           <span className="text-[10px] text-gray-400">
                                             {new Date(reply.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                           </span>
                                           {reply.direction === 'outgoing' && reply.replied_at && (
                                             <CheckCheck className="w-3 h-3 text-pink-400" />
                                           )}
+                                        </div>
+                                        <div className={`rounded-xl px-3 py-2 mt-0.5 inline-block ${
+                                          reply.direction === 'outgoing'
+                                            ? 'bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 text-gray-900 dark:text-white'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                                        }`}>
+                                          <p className="text-sm whitespace-pre-wrap break-words">{reply.message_text}</p>
+                                        </div>
+                                        <div className="mt-0.5">
                                           <button
                                             onClick={() => openReplyDialog(reply.comment_id ?? comment.comment_id ?? '')}
                                             className="inline-flex items-center gap-0.5 text-[10px] font-medium text-gray-400 hover:text-pink-600 dark:hover:text-pink-400 transition-colors"
