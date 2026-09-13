@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
 import { FlowBuilder } from './FlowBuilder';
 import { PostsAutoTab } from './PostsAutoTab';
-import { CommentsFeedTab } from './CommentsFeedTab';
 
 
 interface InstagramProps {
@@ -93,7 +92,7 @@ interface Snapshot {
   created_at: string;
 }
 
-type TabType = 'inbox' | 'posts' | 'feed' | 'rules' | 'flows' | 'autoresponder' | 'stats' | 'sharing';
+type TabType = 'inbox' | 'posts' | 'rules' | 'flows' | 'autoresponder' | 'stats' | 'sharing';
 
 export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }: InstagramProps) {
   const initialTab = (queryParams.tab as TabType) || 'inbox';
@@ -700,10 +699,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           type = 'dm';
         }
       } else {
-        // Comments, mentions, shares, reposts: group by media_id + sender_id
-        // so each user's comment thread on a post is a separate conversation.
-        const senderKey = event.sender_id ?? 'unknown';
-        convId = `media_${event.media_id ?? event.id}_${senderKey}`;
+        // Comments, mentions, shares, reposts: group by media_id (all comments on a post together)
+        convId = `media_${event.media_id ?? event.id}`;
         type = 'media';
       }
 
@@ -918,12 +915,12 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           .in('id', eventIds);
         if (delErr) throw delErr;
       } else if (conv.type === 'media') {
-        const eventIds = conv.events.map(e => e.id);
-        if (eventIds.length > 0) {
+        const mediaId = conv.events[0]?.media_id;
+        if (mediaId) {
           const { error } = await supabase
             .from('instagram_webhook_events')
             .delete()
-            .in('id', eventIds);
+            .eq('media_id', mediaId);
           if (error) throw error;
         }
       }
@@ -1104,15 +1101,6 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 <div className="flex items-center gap-2">
                   <ImageIcon className="w-4 h-4" />
                   Posts ({posts.length})
-                </div>
-              </button>
-              <button
-                onClick={() => handleTabChange('feed')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'feed' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
-              >
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  Comments
                 </div>
               </button>
               <button
@@ -1517,14 +1505,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           <PostsAutoTab
             accounts={allAccounts.map(a => ({ id: a.id, ig_user_id: a.ig_user_id, username: a.username, profile_picture_url: a.profile_picture_url, user_id: a.user_id }))}
             userId={selectedAccount?.user_id || ''}
-          />
-        )}
-
-        {/* Feed tab — all posts with their comment threads, live updating */}
-        {activeTab === 'feed' && selectedAccount && (
-          <CommentsFeedTab
-            events={events.filter(e => e.event_type !== 'message')}
-            selectedAccount={selectedAccount}
+            commentEvents={events.filter(e => e.event_type !== 'message')}
+            selectedAccount={selectedAccount ? { id: selectedAccount.id, owner_profile_id: selectedAccount.owner_profile_id ?? null, page_scoped_id: selectedAccount.page_scoped_id ?? null } : null}
           />
         )}
 
