@@ -25,6 +25,7 @@ import {
   CheckCheck,
   ChevronDown,
   ChevronRight,
+  Reply,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -184,8 +185,10 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
   // Feed state
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
-  const [feedReplyTexts, setFeedReplyTexts] = useState<Record<string, string>>({});
   const [feedSendingFor, setFeedSendingFor] = useState<string | null>(null);
+  const [replyDialogCommentId, setReplyDialogCommentId] = useState<string | null>(null);
+  const [replyDialogText, setReplyDialogText] = useState('');
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -723,8 +726,16 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     return { topLevel, repliesByParent };
   }
 
-  const handleFeedReply = async (commentId: string, text: string) => {
-    if (!text.trim() || !selectedAccount) return;
+  const openReplyDialog = (commentId: string) => {
+    setReplyDialogCommentId(commentId);
+    setReplyDialogText('');
+    setReplyDialogOpen(true);
+  };
+
+  const handleFeedReply = async () => {
+    const commentId = replyDialogCommentId;
+    const text = replyDialogText;
+    if (!text.trim() || !selectedAccount || !commentId) return;
     setFeedSendingFor(commentId);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -747,7 +758,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         toast.error(err.error || 'Failed to send reply');
         return;
       }
-      setFeedReplyTexts(prev => ({ ...prev, [commentId]: '' }));
+      setReplyDialogOpen(false);
+      setReplyDialogText('');
+      setReplyDialogCommentId(null);
       toast.success('Reply sent');
     } catch {
       toast.error('Failed to send reply');
@@ -1637,13 +1650,20 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                           )}
                                           <p className="text-sm whitespace-pre-wrap break-words">{reply.message_text}</p>
                                         </div>
-                                        <div className={`flex items-center gap-1 mt-0.5 ${reply.direction === 'outgoing' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`flex items-center gap-2 mt-0.5 ${reply.direction === 'outgoing' ? 'justify-end' : 'justify-start'}`}>
                                           <span className="text-[10px] text-gray-400">
                                             {new Date(reply.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                           </span>
                                           {reply.direction === 'outgoing' && reply.replied_at && (
                                             <CheckCheck className="w-3 h-3 text-pink-400" />
                                           )}
+                                          <button
+                                            onClick={() => openReplyDialog(reply.comment_id ?? comment.comment_id ?? '')}
+                                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-gray-400 hover:text-pink-600 dark:hover:text-pink-400 transition-colors"
+                                          >
+                                            <Reply className="w-3 h-3" />
+                                            Reply
+                                          </button>
                                         </div>
                                       </div>
                                     </div>
@@ -1651,28 +1671,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                 </div>
                               )}
 
-                              {/* Reply box */}
-                              <div className="ml-10 mt-2 flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  value={feedReplyTexts[comment.comment_id ?? ''] ?? ''}
-                                  onChange={(e) => setFeedReplyTexts(prev => ({ ...prev, [comment.comment_id ?? '']: e.target.value }))}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                      e.preventDefault();
-                                      handleFeedReply(lastReplyId ?? comment.comment_id ?? '', feedReplyTexts[comment.comment_id ?? ''] ?? '');
-                                    }
-                                  }}
-                                  placeholder="Reply to comment..."
-                                  className="flex-1 px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
-                                  disabled={feedSendingFor === (lastReplyId ?? comment.comment_id)}
-                                />
+                              {/* Reply button */}
+                              <div className="ml-10 mt-2">
                                 <button
-                                  onClick={() => handleFeedReply(lastReplyId ?? comment.comment_id ?? '', feedReplyTexts[comment.comment_id ?? ''] ?? '')}
-                                  disabled={!(feedReplyTexts[comment.comment_id ?? ''] ?? '').trim() || feedSendingFor === (lastReplyId ?? comment.comment_id)}
-                                  className="p-1.5 rounded-full bg-pink-500 text-white hover:bg-pink-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  onClick={() => openReplyDialog(lastReplyId ?? comment.comment_id ?? '')}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-500 hover:text-pink-600 dark:text-gray-400 dark:hover:text-pink-400 transition-colors"
                                 >
-                                  <Send className="w-3.5 h-3.5" />
+                                  <Reply className="w-3.5 h-3.5" />
+                                  Reply
                                 </button>
                               </div>
                             </div>
@@ -1686,6 +1692,65 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
               })}
             </div>
           )}
+        </div>
+      )}
+      {/* Reply dialog */}
+      {replyDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => { setReplyDialogOpen(false); setReplyDialogText(''); setReplyDialogCommentId(null); }}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Reply to comment</h3>
+              <button
+                onClick={() => { setReplyDialogOpen(false); setReplyDialogText(''); setReplyDialogCommentId(null); }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5">
+              <textarea
+                value={replyDialogText}
+                onChange={(e) => setReplyDialogText(e.target.value)}
+                autoFocus
+                rows={4}
+                placeholder="Type your reply..."
+                className="w-full px-4 py-3 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    handleFeedReply();
+                  }
+                }}
+              />
+              <p className="text-[11px] text-gray-400 mt-1.5">Press Cmd/Ctrl + Enter to send</p>
+              <div className="flex items-center justify-end gap-2 mt-4">
+                <button
+                  onClick={() => { setReplyDialogOpen(false); setReplyDialogText(''); setReplyDialogCommentId(null); }}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFeedReply}
+                  disabled={!replyDialogText.trim() || feedSendingFor === replyDialogCommentId}
+                  className="px-4 py-2 text-sm font-medium text-white bg-pink-500 hover:bg-pink-600 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {feedSendingFor === replyDialogCommentId ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  Send Reply
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
