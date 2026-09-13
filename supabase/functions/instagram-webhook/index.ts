@@ -470,6 +470,9 @@ async function processAutoRules(supabaseClient: any, ctx: AutoRuleContext) {
       const dmText = rule.dm_message || rule.reply_text;
       if (dmText) {
         const senderIdForDm = ctx.pageScopedId || ctx.igUserId;
+        if (!ctx.pageScopedId) {
+          console.log("processAutoRules: skipping DM for rule", rule.id, "— account has no page_scoped_id yet (comment reply will still be sent)");
+        } else {
         const result = await sendInstagramDM(
           ctx.accessToken,
           senderIdForDm!,
@@ -509,6 +512,7 @@ async function processAutoRules(supabaseClient: any, ctx: AutoRuleContext) {
             auto_replied: true,
             raw_event: { sent_from_auto_rule: true, rule_id: rule.id, message_id: result.messageId },
           });
+        }
         }
       }
     }
@@ -564,7 +568,8 @@ async function checkFlowTriggers(supabaseClient: any, ctx: AutoRuleContext) {
 
     if (existingSession) continue; // Already in this flow
 
-    // Start the flow
+    // Start the flow — the commenter's ID is the DM recipient, and
+    // comment triggers are never self-messages.
     await startFlowSession(supabaseClient, {
       flowId: flow.id,
       userId: ctx.userId,
@@ -576,6 +581,8 @@ async function checkFlowTriggers(supabaseClient: any, ctx: AutoRuleContext) {
       igUserId: ctx.igUserId,
       pageScopedId: ctx.pageScopedId,
       username: ctx.username,
+      recipientId: ctx.senderId,
+      isSelfMessage: false,
     });
   }
 }
