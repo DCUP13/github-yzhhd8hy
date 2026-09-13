@@ -675,14 +675,35 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   const conversations = useMemo((): Conversation[] => {
     const convos = new Map<string, Conversation>();
 
-    // Pre-build a map of comment_id → sender_id for resolving which commenter
-    // an outgoing reply should be grouped with.
-    const commentSenderMap = new Map<string, string>();
+    // Pre-build a map of comment_id → event for parent-chain lookups
+    const byCommentId = new Map<string, typeof events[number]>();
     for (const ev of events) {
-      if (ev.event_type !== 'message' && ev.comment_id && ev.direction === 'incoming' && ev.sender_id) {
-        commentSenderMap.set(ev.comment_id, ev.sender_id);
-      }
+      if (ev.comment_id) byCommentId.set(ev.comment_id, ev);
     }
+
+    // The account owner's sender_id (page_scoped_id or ig_user_id) — used to
+    // detect auto-replies that Instagram echoes back as "incoming" events.
+    const ownerSenderId = selectedAccount?.page_scoped_id ?? selectedAccount?.ig_user_id ?? null;
+
+    // Walk up the parent_comment_id chain to find the original commenter's
+    // sender_id — skipping auto-replies from the account owner.
+    const resolveOriginalCommenter = (event: typeof events[number]): string | null => {
+      if (event.parent_comment_id) {
+        let parentId: string | null = event.parent_comment_id;
+        let guard = 0;
+        while (parentId && guard < 20) {
+          const parent = byCommentId.get(parentId);
+          if (!parent) break;
+          // Found a real incoming comment from someone other than the account owner
+          if (parent.direction === 'incoming' && parent.sender_id && parent.sender_id !== ownerSenderId) {
+            return parent.sender_id;
+          }
+          parentId = parent.parent_comment_id ?? null;
+          guard++;
+        }
+      }
+      return null;
+    };
 
     for (const event of events) {
       let convId: string;
@@ -714,31 +735,21 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           type = 'dm';
         }
       } else {
-        // Comments: group by commenter (sender_id) so each person's comments
-        // and the replies to them are in one conversation.
-        if (event.direction === 'incoming') {
-          const senderId = event.sender_id ?? event.id;
-          convId = `commenter_${senderId}`;
+        // Comments: group by the original commenter (the person who commented
+        // on the post), not by the account owner whose auto-replies get echoed
+        // back as incoming events. Walk up the parent chain to find the real commenter.
+        let groupSenderId: string | null = null;
+
+        if (event.direction === 'incoming' && event.sender_id && event.sender_id !== ownerSenderId) {
+          // Real incoming comment from an external user
+          groupSenderId = event.sender_id;
         } else {
-          // Outgoing reply — resolve the original commenter via parent_comment_id chain
-          let rootSenderId: string | null = null;
-          if (event.parent_comment_id) {
-            rootSenderId = commentSenderMap.get(event.parent_comment_id) ?? null;
-            let parentId = event.parent_comment_id;
-            let guard = 0;
-            while (!rootSenderId && parentId && guard < 20) {
-              const parentEvent = events.find(e => e.comment_id === parentId);
-              if (!parentEvent) break;
-              if (parentEvent.direction === 'incoming' && parentEvent.sender_id) {
-                rootSenderId = parentEvent.sender_id;
-                break;
-              }
-              parentId = parentEvent.parent_comment_id ?? null;
-              guard++;
-            }
-          }
-          convId = rootSenderId ? `commenter_${rootSenderId}` : `media_${event.media_id ?? event.id}`;
+          // Outgoing reply OR auto-reply echo (incoming but sender is the owner)
+          // Resolve the original commenter via parent chain
+          groupSenderId = resolveOriginalCommenter(event);
         }
+
+        convId = groupSenderId ? `commenter_${groupSenderId}` : `media_${event.media_id ?? event.id}`;
         type = 'media';
       }
 
@@ -763,17 +774,24 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
       // For DMs, only use sender info from incoming messages to identify the other party.
       // Outgoing message sender is the account owner, not the other person.
       // For self-chats, the other party is the account owner.
+      // For comments: skip auto-reply echoes (incoming but sender is the account owner)
+      // so the conversation shows the original commenter's name/avatar, not the owner's.
+      const isAutoReplyEcho = type === 'media' && isIncoming && event.sender_id === ownerSenderId;
+      const usePartyInfo = isSelfEvent
+        ? true
+        : (type === 'dm' ? isIncoming : (isIncoming && !isAutoReplyEcho));
+
       const partyName = isSelfEvent
         ? (selectedAccount?.username || null)
-        : (isIncoming
+        : (usePartyInfo
           ? (event.sender_name || event.sender_username || null)
           : null);
       const partyUsername = isSelfEvent
         ? (selectedAccount?.username || null)
-        : (isIncoming ? (event.sender_username || null) : null);
+        : (usePartyInfo ? (event.sender_username || null) : null);
       const partyAvatar = isSelfEvent
         ? (selectedAccount?.profile_picture_url || null)
-        : (isIncoming ? (event.sender_profile_url || null) : null);
+        : (usePartyInfo ? (event.sender_profile_url || null) : null);
 
       if (!existing) {
         convos.set(convId, {
