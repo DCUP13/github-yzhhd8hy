@@ -55,10 +55,24 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { account_id, recipient_id, message_text, reply_to_event_id } = body;
+    const { account_id, recipient_id, message_text, reply_to_event_id, reply_type, comment_id, parent_comment_id } = body;
 
-    if (!account_id || !recipient_id || !message_text) {
-      return new Response(JSON.stringify({ error: "Missing required fields: account_id, recipient_id, message_text" }), {
+    if (!account_id || !message_text) {
+      return new Response(JSON.stringify({ error: "Missing required fields: account_id, message_text" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const isCommentReply = reply_type === 'comment';
+
+    if (isCommentReply && !comment_id) {
+      return new Response(JSON.stringify({ error: "Missing required field: comment_id for comment reply" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!isCommentReply && !recipient_id) {
+      return new Response(JSON.stringify({ error: "Missing required field: recipient_id for DM reply" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -100,21 +114,37 @@ Deno.serve(async (req: Request) => {
     const base = graphBase(accessToken);
     const senderId = resolveSenderId(accountRec);
 
-    if (!senderId) {
+    if (!senderId && !isCommentReply) {
       return new Response(JSON.stringify({ error: "No valid sender ID for this account (page_scoped_id and ig_user_id are both null)" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const sendUrl = graphUrl(`${base}/v26.0/${senderId}/messages`, accessToken);
+    let sendUrl: string;
+    let sendBody: Record<string, unknown>;
+
+    if (isCommentReply) {
+      // Comment reply: POST /{comment_id}/replies
+      sendUrl = graphUrl(`${base}/v26.0/${comment_id}/replies`, accessToken);
+      sendBody = { message: message_text };
+    } else {
+      // DM reply: POST /{senderId}/messages
+      if (!senderId) {
+        return new Response(JSON.stringify({ error: "No valid sender ID for this account (page_scoped_id and ig_user_id are both null)" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      sendUrl = graphUrl(`${base}/v26.0/${senderId}/messages`, accessToken);
+      sendBody = {
+        recipient: { id: recipient_id },
+        message: { text: message_text },
+      };
+    }
+
     const sendRes = await fetch(sendUrl, {
       method: "POST",
       headers: { ...authHeaders(accessToken), "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recipient: { id: recipient_id },
-        message: { text: message_text },
-        ...(accessToken.startsWith("IGA") ? {} : {}),
-      }),
+      body: JSON.stringify(sendBody),
     });
 
     if (!sendRes.ok) {
@@ -139,29 +169,61 @@ Deno.serve(async (req: Request) => {
     }
 
     const sendData = await sendRes.json();
-    const messageId = sendData?.message_id ?? null;
+    const messageId = sendData?.message_id ?? sendData?.id ?? null;
 
-    await supabaseClient.from("instagram_webhook_events").insert({
+    // For comment replies, look up the parent comment's media fields so the
+    // outgoing event is grouped with the same media conversation in the inbox.
+    let mediaId: string | null = null;
+    let mediaType: string | null = null;
+    let mediaPermalink: string | null = null;
+    let mediaCaption: string | null = null;
+    let mediaImageUrl: string | null = null;
+
+    if (isCommentReply && parent_comment_id) {
+      const { data: parentEvent } = await supabaseClient
+        .from("instagram_webhook_events")
+        .select("media_id, media_type, media_permalink, media_caption, media_image_url")
+        .eq("comment_id", parent_comment_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (parentEvent) {
+        mediaId = parentEvent.media_id ?? null;
+        mediaType = parentEvent.media_type ?? null;
+        mediaPermalink = parentEvent.media_permalink ?? null;
+        mediaCaption = parentEvent.media_caption ?? null;
+        mediaImageUrl = parentEvent.media_image_url ?? null;
+      }
+    }
+
+    const insertEvent: Record<string, unknown> = {
       user_id: account.user_id,
       event_id: messageId ?? `reply_${Date.now()}`,
-      event_type: "message",
+      event_type: isCommentReply ? "comment" : "message",
       ig_user_id: account.page_scoped_id ?? account.ig_user_id,
       sender_id: account.page_scoped_id ?? account.ig_user_id,
       sender_username: account.username ?? null,
       sender_name: null,
       sender_profile_url: null,
-      media_id: null,
-      media_type: null,
-      media_permalink: null,
-      media_caption: null,
-      comment_id: null,
+      media_id: mediaId,
+      media_type: mediaType,
+      media_permalink: mediaPermalink,
+      media_caption: mediaCaption,
+      media_image_url: mediaImageUrl,
+      comment_id: isCommentReply ? (sendData?.id ?? null) : null,
       message_text: message_text,
       direction: "outgoing",
-      recipient_id: recipient_id,
+      recipient_id: isCommentReply ? null : recipient_id,
       reply_text: message_text,
       replied_at: new Date().toISOString(),
-      raw_event: { sent_from_app: true, message_id: messageId, recipient_id },
-    });
+      raw_event: { sent_from_app: true, message_id: messageId, recipient_id, reply_type: isCommentReply ? "comment" : "dm" },
+    };
+
+    if (isCommentReply && parent_comment_id) {
+      insertEvent.parent_comment_id = parent_comment_id;
+    }
+
+    await supabaseClient.from("instagram_webhook_events").insert(insertEvent);
 
     if (reply_to_event_id) {
       await supabaseClient

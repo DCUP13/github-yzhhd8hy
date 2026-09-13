@@ -63,8 +63,10 @@ Deno.serve(async (req: Request) => {
               sender_name: null, sender_profile_url: null,
               media_id: mediaId, media_type: mediaMeta?.media_type ?? value?.media?.media_type ?? null,
               media_permalink: mediaMeta?.permalink ?? null, media_caption: mediaMeta?.caption ?? null,
+              media_image_url: mediaMeta?.media_image_url ?? null,
               comment_id: value?.id ?? null, message_text: value?.text ?? null,
               direction: "incoming", recipient_id: null, raw_event: change, user_id: userId,
+              parent_comment_id: value?.parent_id ?? null,
             }, accessToken);
 
             // Process auto rules for this comment
@@ -100,7 +102,7 @@ Deno.serve(async (req: Request) => {
           const storedEventId = await storeEvent(supabaseClient, {
             event_id: msg?.message?.mid ?? null, event_type: "message", ig_user_id: igUserId,
             sender_id: senderId, sender_username: null, sender_name: null, sender_profile_url: null,
-            media_id: null, media_type: null, media_permalink: null, media_caption: null,
+            media_id: null, media_type: null, media_permalink: null, media_caption: null, media_image_url: null,
             comment_id: null, message_text: messageText,
             direction: isSelfMessage ? "incoming" : (isEcho ? "outgoing" : "incoming"), recipient_id: recipientId,
             raw_event: msg, user_id: userId,
@@ -171,6 +173,7 @@ Deno.serve(async (req: Request) => {
               sender_name: null, sender_profile_url: null,
               media_id: mediaId, media_type: mediaMeta?.media_type ?? null,
               media_permalink: mediaMeta?.permalink ?? null, media_caption: mediaMeta?.caption ?? null,
+              media_image_url: mediaMeta?.media_image_url ?? null,
               comment_id: value?.comment_id ?? null, message_text: value?.text ?? null,
               direction: "incoming", recipient_id: null, raw_event: change, user_id: userId,
             }, accessToken);
@@ -181,7 +184,7 @@ Deno.serve(async (req: Request) => {
               event_id: value?.id ?? null, event_type: "share", ig_user_id: igUserId,
               sender_id: value?.from?.id ?? null, sender_username: value?.from?.username ?? null,
               sender_name: null, sender_profile_url: null,
-              media_id: value?.media?.id ?? null, media_type: null, media_permalink: null, media_caption: null,
+              media_id: value?.media?.id ?? null, media_type: null, media_permalink: null, media_caption: null, media_image_url: null,
               comment_id: null, message_text: value?.text ?? null,
               direction: "incoming", recipient_id: null, raw_event: change, user_id: userId,
             }, accessToken);
@@ -192,7 +195,7 @@ Deno.serve(async (req: Request) => {
               event_id: value?.id ?? null, event_type: "repost", ig_user_id: igUserId,
               sender_id: value?.from?.id ?? null, sender_username: value?.from?.username ?? null,
               sender_name: null, sender_profile_url: null,
-              media_id: value?.media?.id ?? null, media_type: null, media_permalink: null, media_caption: null,
+              media_id: value?.media?.id ?? null, media_type: null, media_permalink: null, media_caption: null, media_image_url: null,
               comment_id: null, message_text: value?.text ?? null,
               direction: "incoming", recipient_id: null, raw_event: change, user_id: userId,
             }, accessToken);
@@ -265,10 +268,10 @@ async function resolveAccount(
   return null;
 }
 
-async function fetchMediaMeta(mediaId: string, accessToken: string): Promise<{ media_type: string; permalink: string; caption: string } | null> {
+async function fetchMediaMeta(mediaId: string, accessToken: string): Promise<{ media_type: string; permalink: string; caption: string; media_image_url: string | null } | null> {
   try {
     const apiBase = getApiBase(accessToken);
-    const url = `${apiBase}/v26.0/${mediaId}?fields=media_type,permalink,caption&access_token=${accessToken}`;
+    const url = `${apiBase}/v26.0/${mediaId}?fields=media_type,permalink,caption,media_url,thumbnail_url&access_token=${accessToken}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
@@ -276,6 +279,7 @@ async function fetchMediaMeta(mediaId: string, accessToken: string): Promise<{ m
       media_type: data.media_type ?? null,
       permalink: data.permalink ?? null,
       caption: data.caption ?? null,
+      media_image_url: data.media_url ?? data.thumbnail_url ?? null,
     };
   } catch {
     return null;
@@ -470,6 +474,9 @@ async function processAutoRules(supabaseClient: any, ctx: AutoRuleContext) {
       const dmText = rule.dm_message || rule.reply_text;
       if (dmText) {
         const senderIdForDm = ctx.pageScopedId || ctx.igUserId;
+        if (!ctx.pageScopedId) {
+          console.log("processAutoRules: skipping DM for rule", rule.id, "— account has no page_scoped_id yet (comment reply will still be sent)");
+        } else {
         const result = await sendInstagramDM(
           ctx.accessToken,
           senderIdForDm!,
@@ -509,6 +516,7 @@ async function processAutoRules(supabaseClient: any, ctx: AutoRuleContext) {
             auto_replied: true,
             raw_event: { sent_from_auto_rule: true, rule_id: rule.id, message_id: result.messageId },
           });
+        }
         }
       }
     }
@@ -564,7 +572,8 @@ async function checkFlowTriggers(supabaseClient: any, ctx: AutoRuleContext) {
 
     if (existingSession) continue; // Already in this flow
 
-    // Start the flow
+    // Start the flow — the commenter's ID is the DM recipient, and
+    // comment triggers are never self-messages.
     await startFlowSession(supabaseClient, {
       flowId: flow.id,
       userId: ctx.userId,
@@ -576,6 +585,8 @@ async function checkFlowTriggers(supabaseClient: any, ctx: AutoRuleContext) {
       igUserId: ctx.igUserId,
       pageScopedId: ctx.pageScopedId,
       username: ctx.username,
+      recipientId: ctx.senderId,
+      isSelfMessage: false,
     });
   }
 }
@@ -1124,9 +1135,10 @@ async function storeEvent(
     event_id: string | null; event_type: string; ig_user_id: string | null;
     sender_id: string | null; sender_username: string | null; sender_name: string | null;
     sender_profile_url: string | null; media_id: string | null; media_type: string | null;
-    media_permalink: string | null; media_caption: string | null; comment_id: string | null;
+    media_permalink: string | null; media_caption: string | null; media_image_url: string | null;
+    comment_id: string | null;
     message_text: string | null; direction: string; recipient_id: string | null;
-    raw_event: any; user_id: string | null;
+    raw_event: any; user_id: string | null; parent_comment_id?: string | null;
   },
   accessToken: string | null = null,
   otherPartyId: string | null = null,
@@ -1171,10 +1183,14 @@ async function storeEvent(
     sender_username: senderUsername, sender_name: senderName, sender_profile_url: senderProfileUrl,
     media_id: event.media_id, media_type: event.media_type,
     media_permalink: event.media_permalink, media_caption: event.media_caption,
+    media_image_url: event.media_image_url ?? null,
     comment_id: event.comment_id, message_text: event.message_text,
     direction: event.direction, recipient_id: event.recipient_id,
     raw_event: event.raw_event,
   };
+  if (event.parent_comment_id) {
+    insertData.parent_comment_id = event.parent_comment_id;
+  }
 
   let storedId: string | null = null;
   if (returnId) {

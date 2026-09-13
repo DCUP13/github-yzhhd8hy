@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Image as ImageIcon,
   Video as VideoIcon,
@@ -21,6 +21,12 @@ import {
   Send,
   Zap,
   Layers,
+  MessageSquare,
+  CheckCheck,
+  ChevronDown,
+  ChevronRight,
+  Reply,
+  Bot,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -101,14 +107,37 @@ interface PostingSchedule {
   carousel_size: number;
 }
 
+interface CommentEvent {
+  id: string;
+  event_type: string;
+  sender_id: string | null;
+  sender_username: string | null;
+  sender_name: string | null;
+  sender_profile_url: string | null;
+  message_text: string | null;
+  media_id: string | null;
+  media_type: string | null;
+  media_permalink: string | null;
+  media_caption: string | null;
+  media_image_url: string | null;
+  comment_id: string | null;
+  parent_comment_id: string | null;
+  created_at: string;
+  direction: string;
+  reply_text: string | null;
+  replied_at: string | null;
+}
+
 interface PostsAutoTabProps {
   accounts: IgAccount[];
   userId: string;
+  commentEvents?: CommentEvent[];
+  selectedAccount?: { id: string; owner_profile_id: string | null; page_scoped_id: string | null } | null;
 }
 
-type SubView = 'library' | 'create' | 'staging' | 'schedules';
+type SubView = 'library' | 'create' | 'staging' | 'schedules' | 'feed';
 
-export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
+export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAccount }: PostsAutoTabProps) {
   const [subView, setSubView] = useState<SubView>('library');
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
@@ -154,6 +183,13 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
   const [testPostAccountId, setTestPostAccountId] = useState<string>('');
   const [testPostCaption, setTestPostCaption] = useState<string>('');
   const [isPostingTest, setIsPostingTest] = useState(false);
+
+  // Feed state
+  const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
+  const [feedSendingFor, setFeedSendingFor] = useState<string | null>(null);
+  const [replyDialogCommentId, setReplyDialogCommentId] = useState<string | null>(null);
+  const [replyDialogText, setReplyDialogText] = useState('');
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -632,6 +668,7 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
     { id: 'create', label: 'Create Posts', icon: Wand2 },
     { id: 'staging', label: 'Staging', icon: Eye },
     { id: 'schedules', label: 'Schedules', icon: Clock },
+    { id: 'feed', label: 'Feed', icon: MessageSquare },
   ];
 
   const updateCarouselTextLine = (index: number, value: string) => {
@@ -655,6 +692,99 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
       return newArr;
     });
   }, [carouselSize]);
+
+  // Feed: group comment events by post (media_id)
+  const feedPosts = useMemo(() => {
+    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; events: CommentEvent[] }>();
+    for (const event of commentEvents) {
+      const key = event.media_id ?? event.id;
+      const existing = postMap.get(key);
+      if (existing) {
+        existing.events.push(event);
+        if (event.media_image_url && !existing.mediaImageUrl) existing.mediaImageUrl = event.media_image_url;
+      } else {
+        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, events: [event] });
+      }
+    }
+    return Array.from(postMap.values()).sort((a, b) => {
+      const aLast = a.events.reduce((max, e) => e.created_at > max ? e.created_at : max, '');
+      const bLast = b.events.reduce((max, e) => e.created_at > max ? e.created_at : max, '');
+      return bLast.localeCompare(aLast);
+    });
+  }, [commentEvents]);
+
+  function buildCommentThread(postEvents: CommentEvent[]) {
+    const sorted = postEvents.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const topLevel = sorted.filter(e => !e.parent_comment_id);
+    const replies = sorted.filter(e => !!e.parent_comment_id);
+
+    // Build a lookup from comment_id → event so we can walk the parent chain
+    const byCommentId = new Map<string, CommentEvent>();
+    for (const e of sorted) {
+      if (e.comment_id) byCommentId.set(e.comment_id, e);
+    }
+
+    // Resolve each reply's parent_comment_id up to the root top-level comment,
+    // so replies-to-replies also appear indented under the top-level comment.
+    const repliesByParent = new Map<string, CommentEvent[]>();
+    for (const reply of replies) {
+      let rootId = reply.parent_comment_id!;
+      let guard = 0;
+      while (guard < 20) {
+        const parent = byCommentId.get(rootId);
+        if (!parent || !parent.parent_comment_id) break;
+        rootId = parent.parent_comment_id;
+        guard++;
+      }
+      const arr = repliesByParent.get(rootId) ?? [];
+      arr.push(reply);
+      repliesByParent.set(rootId, arr);
+    }
+    return { topLevel, repliesByParent };
+  }
+
+  const openReplyDialog = (commentId: string) => {
+    setReplyDialogCommentId(commentId);
+    setReplyDialogText('');
+    setReplyDialogOpen(true);
+  };
+
+  const handleFeedReply = async () => {
+    const commentId = replyDialogCommentId;
+    const text = replyDialogText;
+    if (!text.trim() || !selectedAccount || !commentId) return;
+    setFeedSendingFor(commentId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/instagram-send-reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          account_id: selectedAccount.id,
+          recipient_id: selectedAccount.owner_profile_id ?? selectedAccount.page_scoped_id,
+          message_text: text.trim(),
+          reply_type: 'comment',
+          comment_id: commentId,
+          parent_comment_id: commentId,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to send reply');
+        return;
+      }
+      setReplyDialogOpen(false);
+      setReplyDialogText('');
+      setReplyDialogCommentId(null);
+      toast.success('Reply sent');
+    } catch {
+      toast.error('Failed to send reply');
+    } finally {
+      setFeedSendingFor(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -1401,6 +1531,258 @@ export function PostsAutoTab({ accounts, userId }: PostsAutoTabProps) {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Feed — all posts with comment threads */}
+      {subView === 'feed' && (
+        <div>
+          {feedPosts.length === 0 ? (
+            <div className="text-center py-12">
+              <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No posts with comments yet</h3>
+              <p className="text-gray-500 dark:text-gray-400">
+                Comments on your posts and reels will appear here automatically. Click a post to expand and reply to comments.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {feedPosts.map((post) => {
+                const isExpanded = expandedPostId === post.mediaId;
+                const { topLevel, repliesByParent } = buildCommentThread(post.events);
+                return (
+                  <div key={post.mediaId} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                    {/* Post header — click to expand */}
+                    <button
+                      onClick={() => setExpandedPostId(isExpanded ? null : post.mediaId)}
+                      className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {post.mediaImageUrl ? (
+                          post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
+                            <video src={post.mediaImageUrl} className="w-full h-full object-cover" preload="metadata" muted />
+                          ) : (
+                            <img src={post.mediaImageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          )
+                        ) : post.mediaType === 'REEL' ? (
+                          <VideoIcon className="w-5 h-5 text-pink-500" />
+                        ) : (
+                          <ImageIcon className="w-5 h-5 text-pink-500" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            {post.mediaType === 'REEL' ? 'Reel' : 'Post'}
+                          </span>
+                          <span className="text-xs text-gray-400">{post.events.length} comment{post.events.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        {post.mediaCaption && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{post.mediaCaption}</p>
+                        )}
+                      </div>
+                      {post.mediaPermalink && (
+                        <a
+                          href={post.mediaPermalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs text-pink-500 hover:underline flex-shrink-0"
+                        >
+                          View on Instagram
+                        </a>
+                      )}
+                      {isExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      )}
+                    </button>
+
+                    {/* Expanded comment threads */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-200 dark:border-gray-700">
+                        {/* Post image/video preview */}
+                        {post.mediaImageUrl && (
+                          <div className="px-4 pt-3 pb-2">
+                            {post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
+                              <video
+                                src={post.mediaImageUrl}
+                                className="w-full max-h-64 rounded-lg object-cover"
+                                controls
+                                preload="metadata"
+                              />
+                            ) : (
+                              <img
+                                src={post.mediaImageUrl}
+                                alt=""
+                                className="w-full max-h-64 rounded-lg object-cover"
+                                loading="lazy"
+                              />
+                            )}
+                          </div>
+                        )}
+                        <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                        {topLevel.map((comment) => {
+                          const commentReplies = repliesByParent.get(comment.comment_id ?? '') ?? [];
+                          const lastReplyId = commentReplies.length > 0
+                            ? commentReplies[commentReplies.length - 1].comment_id
+                            : comment.comment_id;
+
+                          return (
+                            <div key={comment.id} className="px-4 py-3">
+                              {/* Top-level comment */}
+                              <div className="flex items-start gap-2.5">
+                                {comment.sender_profile_url ? (
+                                  <img src={comment.sender_profile_url} alt="" className="w-8 h-8 rounded-full flex-shrink-0" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0">
+                                    <MessageSquare className="w-3.5 h-3.5 text-pink-500" />
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                                    @{comment.sender_username || 'unknown'}
+                                  </p>
+                                  <p className="text-sm text-gray-900 dark:text-white mt-0.5">{comment.message_text}</p>
+                                  <p className="text-[10px] text-gray-400 mt-0.5">
+                                    {new Date(comment.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Threaded replies — indented */}
+                              {commentReplies.length > 0 && (
+                                <div className="ml-10 mt-2 space-y-2 border-l-2 border-gray-100 dark:border-gray-700 pl-3">
+                                  {commentReplies.map((reply) => (
+                                    <div key={reply.id} className="flex items-start gap-2">
+                                      {reply.sender_profile_url ? (
+                                        <img src={reply.sender_profile_url} alt="" className="w-6 h-6 rounded-full flex-shrink-0 mt-0.5" />
+                                      ) : (
+                                        <div className="w-6 h-6 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                          {reply.direction === 'outgoing' ? (
+                                            <Bot className="w-3 h-3 text-pink-500" />
+                                          ) : (
+                                            <MessageSquare className="w-3 h-3 text-pink-500" />
+                                          )}
+                                        </div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          {reply.direction === 'outgoing' ? (
+                                            <span className="text-[10px] font-medium text-pink-600 dark:text-pink-400">You</span>
+                                          ) : (
+                                            <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">@{reply.sender_username || 'unknown'}</span>
+                                          )}
+                                          <span className="text-[10px] text-gray-400">
+                                            {new Date(reply.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                          </span>
+                                          {reply.direction === 'outgoing' && reply.replied_at && (
+                                            <CheckCheck className="w-3 h-3 text-pink-400" />
+                                          )}
+                                        </div>
+                                        <div className={`rounded-xl px-3 py-2 mt-0.5 inline-block ${
+                                          reply.direction === 'outgoing'
+                                            ? 'bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 text-gray-900 dark:text-white'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                                        }`}>
+                                          <p className="text-sm whitespace-pre-wrap break-words">{reply.message_text}</p>
+                                        </div>
+                                        <div className="mt-0.5">
+                                          <button
+                                            onClick={() => openReplyDialog(reply.comment_id ?? comment.comment_id ?? '')}
+                                            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-gray-400 hover:text-pink-600 dark:hover:text-pink-400 transition-colors"
+                                          >
+                                            <Reply className="w-3 h-3" />
+                                            Reply
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Reply button */}
+                              <div className="ml-10 mt-2">
+                                <button
+                                  onClick={() => openReplyDialog(lastReplyId ?? comment.comment_id ?? '')}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-500 hover:text-pink-600 dark:text-gray-400 dark:hover:text-pink-400 transition-colors"
+                                >
+                                  <Reply className="w-3.5 h-3.5" />
+                                  Reply
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Reply dialog */}
+      {replyDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => { setReplyDialogOpen(false); setReplyDialogText(''); setReplyDialogCommentId(null); }}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Reply to comment</h3>
+              <button
+                onClick={() => { setReplyDialogOpen(false); setReplyDialogText(''); setReplyDialogCommentId(null); }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5">
+              <textarea
+                value={replyDialogText}
+                onChange={(e) => setReplyDialogText(e.target.value)}
+                autoFocus
+                rows={4}
+                placeholder="Type your reply..."
+                className="w-full px-4 py-3 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    handleFeedReply();
+                  }
+                }}
+              />
+              <p className="text-[11px] text-gray-400 mt-1.5">Press Cmd/Ctrl + Enter to send</p>
+              <div className="flex items-center justify-end gap-2 mt-4">
+                <button
+                  onClick={() => { setReplyDialogOpen(false); setReplyDialogText(''); setReplyDialogCommentId(null); }}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFeedReply}
+                  disabled={!replyDialogText.trim() || feedSendingFor === replyDialogCommentId}
+                  className="px-4 py-2 text-sm font-medium text-white bg-pink-500 hover:bg-pink-600 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {feedSendingFor === replyDialogCommentId ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  Send Reply
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
