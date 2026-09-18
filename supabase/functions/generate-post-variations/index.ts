@@ -9,6 +9,161 @@ const corsHeaders = {
 
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 const FONTS = ['Inter', 'Georgia', 'Courier', 'Impact', 'Palatino', 'Arial', 'Verdana', 'Trebuchet'];
+const MAX_DIM = 1080;
+
+function sniffImageMime(bytes: Uint8Array): string {
+  if (bytes.length >= 8 &&
+      bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 &&
+      bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+    return "image/webp";
+  }
+  throw new Error("Unsupported image type.");
+}
+
+function wrapText(text: string, maxCharsPerLine: number): string[] {
+  const words = text.trim().split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    if ((current + ' ' + word).trim().length <= maxCharsPerLine) {
+      current = (current + ' ' + word).trim();
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Array> {
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
+  const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
+  const mimeType = sniffImageMime(imageBuffer);
+  const bitmap = await createImageBitmap(new Blob([imageBuffer], { type: mimeType }));
+
+  let w = bitmap.width;
+  let h = bitmap.height;
+  if (w > MAX_DIM || h > MAX_DIM) {
+    const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+  }
+
+  const canvas = new OffscreenCanvas(w, h);
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(bitmap, 0, 0, w, h);
+
+  const fontSize = Math.round(w * 0.06);
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
+  const lines = wrapText(text, maxCharsPerLine);
+
+  const lineHeight = fontSize * 1.3;
+  const totalTextHeight = lines.length * lineHeight;
+  const startY = h - totalTextHeight - Math.round(h * 0.08);
+  const bgPadding = Math.round(fontSize * 0.4);
+  const bgRectY = startY - bgPadding;
+  const bgRectHeight = totalTextHeight + bgPadding * 2;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillRect(0, bgRectY, w, bgRectHeight);
+
+  ctx.fillStyle = 'white';
+  for (let i = 0; i < lines.length; i++) {
+    const y = startY + (i * lineHeight) + fontSize * 0.65;
+    ctx.fillText(lines[i], w / 2, y);
+  }
+
+  const blob = await canvas.convertToBlob({ type: 'image/png' });
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+async function uploadOverlayToS3(
+  pngData: Uint8Array,
+  bucket: string,
+  userId: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+): Promise<{ s3Key: string; cloudfrontUrl: string }> {
+  const uniqueName = `${crypto.randomUUID()}.png`;
+  const s3Key = `instagram/text-overlay/${userId}/${uniqueName}`;
+
+  const method = 'PUT';
+  const service = 's3';
+  const host = `${bucket}.s3.${region}.amazonaws.com`;
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const payloadHash = 'UNSIGNED-PAYLOAD';
+
+  const headers: Record<string, string> = {
+    'content-type': 'image/png',
+    'host': host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  };
+  const sortedHeaderKeys = Object.keys(headers).sort();
+  const canonicalHeaders = sortedHeaderKeys.map(k => `${k}:${headers[k]}\n`).join('');
+  const signedHeaders = sortedHeaderKeys.join(';');
+  const canonicalUri = '/' + s3Key.split('/').map(p => encodeURIComponent(p)).join('/');
+  const canonicalRequest = [method, canonicalUri, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+
+  const encoder = new TextEncoder();
+  const canonicalHashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(canonicalRequest));
+  const canonicalRequestHash = Array.from(new Uint8Array(canonicalHashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, canonicalRequestHash].join('\n');
+
+  const kDateKey = await (async () => {
+    const keyObj = await crypto.subtle.importKey('raw', encoder.encode('AWS4' + secretAccessKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', keyObj, encoder.encode(dateStamp)));
+  })();
+  const kRegionKey = await (async () => {
+    const keyObj = await crypto.subtle.importKey('raw', kDateKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', keyObj, encoder.encode(region)));
+  })();
+  const kServiceKey = await (async () => {
+    const keyObj = await crypto.subtle.importKey('raw', kRegionKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', keyObj, encoder.encode(service)));
+  })();
+  const signingKey = await (async () => {
+    const keyObj = await crypto.subtle.importKey('raw', kServiceKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', keyObj, encoder.encode('aws4_request')));
+  })();
+
+  const signatureBuffer = await crypto.subtle.sign('HMAC',
+    await crypto.subtle.importKey('raw', signingKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']),
+    encoder.encode(stringToSign));
+  const signature = Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const authorizationHeader = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const s3Url = `https://${host}${canonicalUri}`;
+  const s3Response = await fetch(s3Url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/png', 'x-amz-content-sha256': payloadHash, 'x-amz-date': amzDate, 'Authorization': authorizationHeader },
+    body: pngData,
+  });
+  if (!s3Response.ok) {
+    const errText = await s3Response.text();
+    throw new Error(`S3 overlay upload failed (${s3Response.status}): ${errText.slice(0, 200)}`);
+  }
+
+  return { s3Key, cloudfrontUrl: `https://${CLOUDFRONT_DOMAIN}/${s3Key}` };
+}
 
 function fillPlaceholders(content: string, vars: Record<string, string>): string {
   let result = content;
@@ -389,6 +544,8 @@ Deno.serve(async (req: Request) => {
 
         const targetFolder = contentType === 'reel' ? 'reels' : 'posts';
         const assetContentType = asset.mime_type || (asset.file_type === 'video' ? 'video/mp4' : 'image/jpeg');
+        const slideText = (cTextLines[j] || '').trim();
+        const isVideo = asset.file_type === 'video' || assetContentType.startsWith('video/');
 
         try {
           if (BUCKET_NAME && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
@@ -402,8 +559,26 @@ Deno.serve(async (req: Request) => {
               AWS_SECRET_ACCESS_KEY,
               AWS_REGION,
             );
-            carouselUrls.push(copied.cloudfrontUrl);
-            carouselS3Keys.push(copied.s3Key);
+
+            // Apply text overlay server-side if text is specified and it's an image
+            if (slideText && !isVideo) {
+              try {
+                const overlayPng = await createOverlayPng(copied.cloudfrontUrl, slideText);
+                const overlayResult = await uploadOverlayToS3(
+                  overlayPng, BUCKET_NAME, user.id,
+                  AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION,
+                );
+                carouselUrls.push(overlayResult.cloudfrontUrl);
+                carouselS3Keys.push(overlayResult.s3Key);
+              } catch (overlayErr) {
+                console.error(`Overlay failed for slide ${j}, using original:`, overlayErr);
+                carouselUrls.push(copied.cloudfrontUrl);
+                carouselS3Keys.push(copied.s3Key);
+              }
+            } else {
+              carouselUrls.push(copied.cloudfrontUrl);
+              carouselS3Keys.push(copied.s3Key);
+            }
           } else {
             carouselUrls.push(asset.cloudfront_url);
             carouselS3Keys.push(asset.s3_key);

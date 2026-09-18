@@ -637,29 +637,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       const result = await response.json();
 
-      // Fetch the newly created variations and apply text overlays in-browser
-      const { data: newVariations } = await supabase
-        .from('instagram_post_variations')
-        .select('*')
-        .eq('batch_id', batch.id);
-      const varList = newVariations || [];
-
-      let overlayCount = 0;
-      for (const varRow of varList) {
-        const { urls, changed } = await applyOverlaysToVariation(varRow as PostVariation);
-        if (changed) {
-          await supabase
-            .from('instagram_post_variations')
-            .update({
-              cloudfront_url: urls[0],
-              carousel_urls: urls,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', varRow.id);
-          overlayCount++;
-        }
-      }
-
       if (postNow && result.publish_variation_ids?.length > 0) {
         toast.success(`${result.variations_created} variations generated. Publishing now...`);
 
@@ -874,61 +851,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       console.error('Retry error:', error);
       toast.error('Retry failed');
     }
-  };
-
-  const applyOverlaysToVariation = async (variation: PostVariation): Promise<{ urls: string[]; changed: boolean }> => {
-    const carouselTexts = variation.carousel_texts || [];
-    const hasTextOverlay = carouselTexts.some(t => t && t.trim());
-    if (!hasTextOverlay) return { urls: [], changed: false };
-
-    const carouselUrls = variation.carousel_urls?.length
-      ? variation.carousel_urls
-      : [variation.cloudfront_url];
-
-    const overlayedUrls: string[] = [];
-    let anyOverlayed = false;
-
-    for (let i = 0; i < carouselUrls.length; i++) {
-      const url = carouselUrls[i];
-      const text = carouselTexts[i]?.trim() || '';
-      const isVideo = url.endsWith('.mp4') || url.endsWith('.mov');
-
-      if (text && !isVideo) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const overlayResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overlay-text-on-image`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session?.access_token}`,
-              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-            },
-            body: JSON.stringify({
-              source_url: url,
-              text: text,
-              target_folder: 'text-overlay',
-            }),
-          });
-
-          if (overlayResponse.ok) {
-            const result = await overlayResponse.json();
-            overlayedUrls.push(result.cloudfront_url);
-            anyOverlayed = true;
-          } else {
-            const err = await overlayResponse.json().catch(() => ({}));
-            console.error(`Overlay failed for slide ${i}:`, err.error);
-            overlayedUrls.push(url);
-          }
-        } catch (e) {
-          console.error(`Overlay failed for slide ${i}:`, e);
-          overlayedUrls.push(url);
-        }
-      } else {
-        overlayedUrls.push(url);
-      }
-    }
-
-    return { urls: overlayedUrls, changed: anyOverlayed };
   };
 
   const handleTestPost = async () => {
