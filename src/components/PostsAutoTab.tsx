@@ -1010,14 +1010,29 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     setOverlayLoadingFor(variation.id);
     try {
       const blob = await generateOverlayBlob(imageUrl, text);
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
+
+      const formData = new FormData();
+      formData.append('file', blob, `${crypto.randomUUID()}.png`);
+      formData.append('file_name', `${crypto.randomUUID()}.png`);
+      formData.append('content_type', 'image/png');
+      formData.append('folder', 'text-overlay');
+
+      const uploadResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: formData,
       });
-      setOverlayPreview(prev => ({ ...prev, [variation.id]: dataUrl }));
-      toast.success('Text overlay preview generated');
+
+      if (!uploadResponse.ok) {
+        const err = await uploadResponse.json().catch(() => ({}));
+        throw new Error(err.error || 'Upload failed');
+      }
+
+      const { cloudfront_url } = await uploadResponse.json();
+      setOverlayPreview(prev => ({ ...prev, [variation.id]: cloudfront_url }));
+      toast.success('Text overlay generated and uploaded to S3');
     } catch (error) {
       console.error('Overlay preview error:', error);
       toast.error(`Preview failed: ${error.message}`);
