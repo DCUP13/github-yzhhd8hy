@@ -634,7 +634,41 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       const result = await response.json();
 
-      if (postNow) {
+      if (postNow && result.publish_variation_ids?.length > 0) {
+        toast.success(`${result.variations_created} variations generated. Publishing now...`);
+        let successCount = 0;
+        let failCount = 0;
+        for (const varId of result.publish_variation_ids) {
+          try {
+            const pubResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+              },
+              body: JSON.stringify({ variation_id: varId, action: 'publish' }),
+            });
+            if (pubResponse.ok) {
+              successCount++;
+            } else {
+              failCount++;
+              const err = await pubResponse.json().catch(() => ({}));
+              console.error(`Publish failed for ${varId}:`, err.error);
+            }
+          } catch (e) {
+            failCount++;
+            console.error(`Publish failed for ${varId}:`, e);
+          }
+        }
+        if (failCount === 0) {
+          toast.success(`${successCount} posts published immediately!`);
+        } else if (successCount === 0) {
+          toast.error('All posts failed to publish');
+        } else {
+          toast.error(`${successCount} published, ${failCount} failed`);
+        }
+      } else if (postNow) {
         toast.success(`${result.variations_created} posts published immediately!`);
       } else {
         toast.success('Variations generated! Review them in Staging.');

@@ -418,7 +418,7 @@ Deno.serve(async (req: Request) => {
       const primaryUrl = carouselUrls[0] || '';
       const primaryS3Key = carouselS3Keys[0] || '';
 
-      const variationStatus = batchPostNow ? 'publishing' : (accountScheduledFor ? 'scheduled' : 'staged');
+      const variationStatus = batchPostNow ? 'staged' : (accountScheduledFor ? 'scheduled' : 'staged');
 
       variations.push({
         batch_id: batch_id,
@@ -446,41 +446,27 @@ Deno.serve(async (req: Request) => {
     }
 
     // Update batch status
-    const anyPostNow = variations.some(v => v.status === 'publishing');
     const anyScheduled = variations.some(v => v.status === 'scheduled');
-    const finalBatchStatus = anyPostNow ? 'scheduled' : (anyScheduled ? 'scheduled' : 'ready');
+    const finalBatchStatus = anyScheduled ? 'scheduled' : 'ready';
     await supabase
       .from("instagram_post_batches")
       .update({ status: finalBatchStatus, updated_at: new Date().toISOString() })
       .eq("id", batch_id);
 
-    // For variations with post_now, trigger immediate publishing
-    const publishNowVariations = variations.filter(v => v.status === 'publishing');
-    if (publishNowVariations.length > 0) {
-      const insertedVariations = await supabase
+    // Return the inserted variation IDs so the client can publish them directly.
+    // Publishing from within this function via server-to-server fetch was unreliable
+    // and left variations stuck in 'publishing' forever.
+    let publishedVariationIds: string[] = [];
+    if (batchPostNow) {
+      const inserted = await supabase
         .from("instagram_post_variations")
-        .select("id")
+        .select("id, account_id")
         .eq("batch_id", batch_id);
-
-      if (insertedVariations.data) {
-        const publishIds = new Set(publishNowVariations.map(v => v.account_id));
-        for (const v of insertedVariations.data) {
-          const variation = variations.find(varr => varr.account_id === v.account_id);
-          if (!variation || !publishIds.has(v.account_id)) continue;
-          try {
-            await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/publish-instagram-post`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                'apikey': Deno.env.get("SUPABASE_ANON_KEY")!,
-              },
-              body: JSON.stringify({ variation_id: v.id, action: 'publish' }),
-            });
-          } catch (e) {
-            console.error(`Immediate publish failed for ${v.id}:`, e);
-          }
-        }
+      if (inserted.data) {
+        const publishSet = new Set(variations.map(v => v.account_id));
+        publishedVariationIds = inserted.data
+          .filter(v => publishSet.has(v.account_id))
+          .map(v => v.id);
       }
     }
 
@@ -515,7 +501,8 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({
       success: true,
       variations_created: variations.length,
-      posted_immediately: publishNowVariations.length,
+      posted_immediately: 0,
+      publish_variation_ids: publishedVariationIds,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
