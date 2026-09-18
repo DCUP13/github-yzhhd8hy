@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
-import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.0.1";
+import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,25 +9,26 @@ const corsHeaders = {
 
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 
-const SVG_FONTS: Record<string, string> = {
-  'Inter': 'sans-serif',
-  'Georgia': 'serif',
-  'Courier': 'monospace',
-  'Impact': 'sans-serif',
-  'Palatino': 'serif',
-  'Arial': 'sans-serif',
-  'Verdana': 'sans-serif',
-  'Trebuchet': 'sans-serif',
-};
-
 let wasmInitialized = false;
+let cachedFontBuffer: Uint8Array | null = null;
+
 async function ensureWasmInit() {
   if (wasmInitialized) return;
-  const wasmUrl = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.0.1/index_bg.wasm";
+  const wasmUrl = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.6.2/index_bg.wasm";
   const wasmResponse = await fetch(wasmUrl);
+  if (!wasmResponse.ok) throw new Error(`Failed to download WASM: ${wasmResponse.status}`);
   const wasmBuffer = await wasmResponse.arrayBuffer();
   await initWasm(new Uint8Array(wasmBuffer));
   wasmInitialized = true;
+}
+
+async function ensureFont(): Promise<Uint8Array> {
+  if (cachedFontBuffer) return cachedFontBuffer;
+  const fontUrl = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.woff2";
+  const fontResp = await fetch(fontUrl);
+  if (!fontResp.ok) throw new Error(`Failed to download font: ${fontResp.status}`);
+  cachedFontBuffer = new Uint8Array(await fontResp.arrayBuffer());
+  return cachedFontBuffer;
 }
 
 function escapeXml(s: string): string {
@@ -50,7 +51,50 @@ function wrapText(text: string, maxChars: number): string[] {
   return lines;
 }
 
-function detectImageDimensions(buf: Uint8Array): { width: number; height: number } {
+function getExifOrientation(buf: Uint8Array): number {
+  if (buf.length < 4 || buf[0] !== 0xFF || buf[1] !== 0xD8) return 1;
+  let i = 2;
+  while (i < buf.length - 1) {
+    if (buf[i] !== 0xFF) { i++; continue; }
+    const marker = buf[i + 1];
+    if (marker === 0x00 || marker === 0xFF) { i++; continue; }
+    if (marker === 0xD9 || marker === 0xDA) break;
+    if (marker === 0xE1) {
+      const segLen = (buf[i + 2] << 8) | buf[i + 3];
+      const exifStart = i + 4;
+      if (buf.length < exifStart + 6) return 1;
+      if (buf[exifStart] === 0x45 && buf[exifStart + 1] === 0x78 &&
+          buf[exifStart + 2] === 0x69 && buf[exifStart + 3] === 0x66 &&
+          buf[exifStart + 4] === 0x00 && buf[exifStart + 5] === 0x00) {
+        const tiffStart = exifStart + 6;
+        if (buf.length < tiffStart + 8) return 1;
+        const bigEndian = buf[tiffStart] === 0x4D;
+        const read16 = (off: number) => bigEndian
+          ? (buf[tiffStart + off] << 8) | buf[tiffStart + off + 1]
+          : (buf[tiffStart + off + 1] << 8) | buf[tiffStart + off];
+        const ifdOffset = read16(4);
+        if (buf.length < tiffStart + ifdOffset + 2) return 1;
+        const entryCount = read16(ifdOffset);
+        for (let e = 0; e < entryCount; e++) {
+          const entryOff = ifdOffset + 2 + e * 12;
+          if (buf.length < tiffStart + entryOff + 12) return 1;
+          const tag = read16(entryOff);
+          if (tag === 0x0112) return read16(entryOff + 8);
+        }
+        return 1;
+      }
+      i += 2 + segLen;
+    } else if (marker >= 0xD0 && marker <= 0xD7) {
+      i += 2;
+    } else {
+      const segLen = (buf[i + 2] << 8) | buf[i + 3];
+      i += 2 + segLen;
+    }
+  }
+  return 1;
+}
+
+function detectStoredDimensions(buf: Uint8Array): { width: number; height: number } {
   let width = 1080;
   let height = 1080;
   if (buf.length >= 24) {
@@ -68,6 +112,30 @@ function detectImageDimensions(buf: Uint8Array): { width: number; height: number
     }
   }
   return { width, height };
+}
+
+function getImageTransform(orientation: number, storedW: number, storedH: number): { transform: string; displayW: number; displayH: number } {
+  switch (orientation) {
+    case 1: return { transform: '', displayW: storedW, displayH: storedH };
+    case 2: return { transform: `scale(-1,1) translate(${-storedW},0)`, displayW: storedW, displayH: storedH };
+    case 3: return { transform: `rotate(180) translate(${storedW},${storedH})`, displayW: storedW, displayH: storedH };
+    case 4: return { transform: `scale(1,-1) translate(0,${-storedH})`, displayW: storedW, displayH: storedH };
+    case 5: return { transform: `matrix(0 1 1 0 0 0)`, displayW: storedH, displayH: storedW };
+    case 6: return { transform: `rotate(90) translate(${storedH},0)`, displayW: storedH, displayH: storedW };
+    case 7: return { transform: `matrix(0 -1 -1 0 ${storedH} ${storedW})`, displayW: storedH, displayH: storedW };
+    case 8: return { transform: `rotate(-90) translate(0,${storedW})`, displayW: storedH, displayH: storedW };
+    default: return { transform: '', displayW: storedW, displayH: storedH };
+  }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
 }
 
 async function uploadToS3Signed(
@@ -153,7 +221,6 @@ Deno.serve(async (req: Request) => {
       { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } },
     );
 
-    // Allow service role key for server-to-server calls
     const authHeader = req.headers.get("Authorization") || "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const isServiceRole = serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
@@ -167,7 +234,6 @@ Deno.serve(async (req: Request) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      // Re-parse body since we already consumed it
       const { source_url, text, font_name, target_folder } = body;
       return await processOverlay(source_url, text, font_name, target_folder, userId);
     } else {
@@ -219,48 +285,55 @@ async function processOverlay(
     });
   }
 
-  const selectedFont = font_name || 'Impact';
-  const fontFamily = SVG_FONTS[selectedFont] || 'sans-serif';
+  const selectedFont = font_name || 'Inter';
 
   await ensureWasmInit();
+  const fontBuffer = await ensureFont();
 
   const imageResponse = await fetch(source_url);
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
-  const { width, height } = detectImageDimensions(imageBuffer);
+
+  const orientation = getExifOrientation(imageBuffer);
+  const { width: storedW, height: storedH } = detectStoredDimensions(imageBuffer);
+  const { transform: imageTransform, displayW, displayH } = getImageTransform(orientation, storedW, storedH);
 
   const mimeType = source_url.match(/\.(png)$/i) ? 'image/png' : 'image/jpeg';
+  const base64Image = bytesToBase64(imageBuffer);
 
-  let base64Image = '';
-  const chunkSize = 8190; // must be divisible by 3 to avoid mid-string base64 padding
-  for (let i = 0; i < imageBuffer.length; i += chunkSize) {
-    const chunk = imageBuffer.subarray(i, Math.min(i + chunkSize, imageBuffer.length));
-    base64Image += btoa(String.fromCharCode(...chunk));
-  }
-
-  const fontSize = Math.round(width * 0.06);
-  const maxCharsPerLine = Math.floor(width / (fontSize * 0.55));
+  const fontSize = Math.round(displayW * 0.06);
+  const maxCharsPerLine = Math.floor(displayW / (fontSize * 0.55));
   const textLines = wrapText(text.trim(), maxCharsPerLine);
 
   const lineHeight = fontSize * 1.3;
   const totalTextHeight = textLines.length * lineHeight;
-  const startY = height - totalTextHeight - (height * 0.08);
+  const startY = displayH - totalTextHeight - (displayH * 0.08);
   const bgPadding = fontSize * 0.4;
   const bgRectY = startY - bgPadding;
   const bgRectHeight = totalTextHeight + bgPadding * 2;
 
   const textElements = textLines.map((line, i) => {
     const y = startY + (i * lineHeight) + fontSize;
-    return `<text x="${width / 2}" y="${y}" font-family="${escapeXml(fontFamily)}" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`;
+    return `<text x="${displayW / 2}" y="${y}" font-family="Inter" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`;
   }).join('\n');
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <image href="data:${mimeType};base64,${base64Image}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice"/>
-  <rect x="0" y="${bgRectY}" width="${width}" height="${bgRectHeight}" fill="rgba(0,0,0,0.45)"/>
+  const imageElement = imageTransform
+    ? `<g transform="${imageTransform}"><image href="data:${mimeType};base64,${base64Image}" width="${storedW}" height="${storedH}" preserveAspectRatio="xMidYMid slice"/></g>`
+    : `<image href="data:${mimeType};base64,${base64Image}" width="${displayW}" height="${displayH}" preserveAspectRatio="xMidYMid slice"/>`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${displayW}" height="${displayH}" viewBox="0 0 ${displayW} ${displayH}">
+  ${imageElement}
+  <rect x="0" y="${bgRectY}" width="${displayW}" height="${bgRectHeight}" fill="rgba(0,0,0,0.45)"/>
   ${textElements}
 </svg>`;
 
-  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: width } });
+  const resvg = new Resvg(svg, {
+    font: {
+      fontBuffers: [fontBuffer],
+      defaultFontFamily: 'Inter',
+      loadSystemFonts: false,
+    },
+  });
   const pngBuffer = new Uint8Array(resvg.render().asPng());
 
   const folder = target_folder || 'posts';
@@ -274,6 +347,7 @@ async function processOverlay(
     cloudfront_url: cloudfrontUrl,
     s3_key: s3Key,
     font_used: selectedFont,
+    orientation_corrected: orientation !== 1,
   }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
