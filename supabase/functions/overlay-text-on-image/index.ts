@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
 import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
 import jpeg from "npm:jpeg-js@0.4.4";
+import { PNG } from "npm:pngjs@7.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -123,24 +124,9 @@ function applyOrientation(
 }
 
 function rgbaToPng(data: Uint8Array, width: number, height: number): Uint8Array {
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext('2d')!;
-  const imageData = ctx.createImageData(width, height);
-  imageData.data.set(data);
-  ctx.putImageData(imageData, 0, 0);
-  // convertToBlob is synchronous-compatible for PNG in Deno
-  // but we need to handle it properly
-  throw new Error('Use async version');
-}
-
-async function rgbaToPngAsync(data: Uint8Array, width: number, height: number): Promise<Uint8Array> {
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext('2d')!;
-  const imageData = ctx.createImageData(width, height);
-  imageData.data.set(data);
-  ctx.putImageData(imageData, 0, 0);
-  const pngBlob = await canvas.convertToBlob({ type: 'image/png' });
-  return new Uint8Array(await pngBlob.arrayBuffer());
+  const png = new PNG({ width, height });
+  png.data = Buffer.from(data);
+  return PNG.sync.write(png);
 }
 
 async function uploadToS3Signed(
@@ -314,7 +300,7 @@ async function processOverlay(
     const decoded = jpeg.decode(imageBuffer, { useTArray: true });
     if (!decoded) throw new Error('Failed to decode JPEG');
     const oriented = applyOrientation(decoded.data as Uint8Array, decoded.width, decoded.height, orientation);
-    const pngBytes = await rgbaToPngAsync(oriented.data, oriented.width, oriented.height);
+    const pngBytes = rgbaToPng(oriented.data, oriented.width, oriented.height);
     base64Image = bytesToBase64(pngBytes);
     width = oriented.width;
     height = oriented.height;
