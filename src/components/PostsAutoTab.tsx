@@ -650,10 +650,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         let failCount = 0;
         for (const varId of result.publish_variation_ids) {
           try {
-            const varData = varMap.get(varId);
-            if (varData) {
-              await processTextOverlayBeforePublish(varData as PostVariation);
-            }
             const pubResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
               method: 'POST',
               headers: {
@@ -705,99 +701,18 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
-  const overlayTextOnImageServer = async (
-    imageUrl: string,
-    text: string,
-    fontName: string,
-  ): Promise<{ s3Key: string; cloudfrontUrl: string }> => {
-    const session = (await supabase.auth.getSession()).data.session;
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overlay-text-on-image`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.access_token}`,
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({
-        source_url: imageUrl,
-        text,
-        font_name: fontName,
-        target_folder: 'posts',
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || `Overlay failed (${response.status})`);
-    }
-
-    const result = await response.json();
-    return { s3Key: result.s3_key, cloudfrontUrl: result.cloudfront_url };
-  };
-
   const handleApproveVariation = async (variationId: string) => {
     const variation = variations.find(v => v.id === variationId);
     if (!variation) return;
 
-    const hasTextOverlay = variation.carousel_texts?.some(t => t?.trim());
-    const carouselUrls = variation.carousel_urls?.length > 0
-      ? variation.carousel_urls
-      : [variation.cloudfront_url];
-
     try {
-      if (hasTextOverlay) {
-        toast.success('Baking text onto images...');
-
-        const newUrls: string[] = [];
-        const newS3Keys: string[] = [];
-        const fontName = variation.font_used || 'Impact';
-
-        for (let i = 0; i < carouselUrls.length; i++) {
-          const url = carouselUrls[i];
-          const text = variation.carousel_texts[i]?.trim() || '';
-          const isVideo = url.endsWith('.mp4') || url.endsWith('.mov');
-
-          if (text && !isVideo) {
-            try {
-              const uploaded = await overlayTextOnImageServer(url, text, fontName);
-              newUrls.push(uploaded.cloudfrontUrl);
-              newS3Keys.push(uploaded.s3Key);
-            } catch (err) {
-              console.error(`Text overlay failed for slide ${i}:`, err);
-              newUrls.push(url);
-              newS3Keys.push(variation.s3_key);
-            }
-          } else {
-            newUrls.push(url);
-            newS3Keys.push(variation.s3_key);
-          }
-        }
-
-        const { error: updateError } = await supabase
-          .from('instagram_post_variations')
-          .update({
-            status: 'approved',
-            cloudfront_url: newUrls[0],
-            s3_key: newS3Keys[0],
-            carousel_urls: newUrls,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', variationId);
-        if (updateError) throw updateError;
-
-        setVariations(prev => prev.map(v => v.id === variationId
-          ? { ...v, status: 'approved', cloudfront_url: newUrls[0], s3_key: newS3Keys[0], carousel_urls: newUrls }
-          : v));
-        toast.success('Variation approved — text baked into images');
-      } else {
-        const { error } = await supabase
-          .from('instagram_post_variations')
-          .update({ status: 'approved', updated_at: new Date().toISOString() })
-          .eq('id', variationId);
-        if (error) throw error;
-        setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'approved' } : v));
-        toast.success('Variation approved');
-      }
+      const { error } = await supabase
+        .from('instagram_post_variations')
+        .update({ status: 'approved', updated_at: new Date().toISOString() })
+        .eq('id', variationId);
+      if (error) throw error;
+      setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'approved' } : v));
+      toast.success('Variation approved');
     } catch (error) {
       console.error('Error approving variation:', error);
       toast.error('Failed to approve');
@@ -830,7 +745,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       const now = new Date();
       for (let i = 0; i < approved.length; i++) {
         const variation = approved[i];
-        await processTextOverlayBeforePublish(variation);
         const scheduleTime = new Date(now.getTime() + (i + 1) * 3 * 60 * 60 * 1000);
 
         await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
@@ -857,60 +771,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
-  const processTextOverlayBeforePublish = async (variation: PostVariation): Promise<void> => {
-    const hasTextOverlay = variation.carousel_texts?.some(t => t?.trim());
-    if (!hasTextOverlay) return;
-
-    const carouselUrls = variation.carousel_urls?.length > 0
-      ? variation.carousel_urls
-      : [variation.cloudfront_url];
-    const fontName = variation.font_used || 'Impact';
-
-    const newUrls: string[] = [];
-    const newS3Keys: string[] = [];
-
-    for (let i = 0; i < carouselUrls.length; i++) {
-      const url = carouselUrls[i];
-      const text = variation.carousel_texts[i]?.trim() || '';
-      const isVideo = url.endsWith('.mp4') || url.endsWith('.mov');
-
-      if (text && !isVideo) {
-        try {
-          const uploaded = await overlayTextOnImageServer(url, text, fontName);
-          newUrls.push(uploaded.cloudfrontUrl);
-          newS3Keys.push(uploaded.s3Key);
-        } catch (err) {
-          console.error(`Text overlay failed for slide ${i}:`, err);
-          newUrls.push(url);
-          newS3Keys.push(variation.s3_key);
-        }
-      } else {
-        newUrls.push(url);
-        newS3Keys.push(variation.s3_key);
-      }
-    }
-
-    await supabase
-      .from('instagram_post_variations')
-      .update({
-        cloudfront_url: newUrls[0],
-        s3_key: newS3Keys[0],
-        carousel_urls: newUrls,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', variation.id);
-
-    setVariations(prev => prev.map(v => v.id === variation.id
-      ? { ...v, cloudfront_url: newUrls[0], s3_key: newS3Keys[0], carousel_urls: newUrls }
-      : v));
-  };
-
   const handlePublishNow = async (variationId: string) => {
     try {
-      const variation = variations.find(v => v.id === variationId);
-      if (variation) {
-        await processTextOverlayBeforePublish(variation);
-      }
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
         method: 'POST',
         headers: {
@@ -944,7 +806,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     let failCount = 0;
     for (const variation of approved) {
       try {
-        await processTextOverlayBeforePublish(variation);
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
           method: 'POST',
           headers: {
