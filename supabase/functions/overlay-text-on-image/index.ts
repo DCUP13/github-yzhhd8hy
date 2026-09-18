@@ -40,12 +40,22 @@ async function ensureMagickInit() {
 
 async function ensureFont() {
   if (fontRegistered) return;
-  const fontUrl = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.woff2";
+  const fontUrl = "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf";
   const fontResp = await fetch(fontUrl);
   if (!fontResp.ok) throw new Error(`Failed to download font: ${fontResp.status}`);
   const fontData = new Uint8Array(await fontResp.arrayBuffer());
-  Magick.addFont('Inter-Bold.woff2', fontData);
+  Magick.addFont('DejaVuSans-Bold.ttf', fontData);
   fontRegistered = true;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
 }
 
 function wrapText(text: string, maxCharsPerLine: number): string[] {
@@ -160,8 +170,8 @@ Deno.serve(async (req: Request) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const { source_url, text, font_name, target_folder } = body;
-      return await processOverlay(source_url, text, font_name, target_folder, userId);
+      const { source_url, text, font_name, target_folder, preview_only } = body;
+      return await processOverlay(source_url, text, font_name, target_folder, userId, preview_only);
     } else {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
@@ -171,8 +181,8 @@ Deno.serve(async (req: Request) => {
       }
       userId = user.id;
       const body = await req.json().catch(() => ({}));
-      const { source_url, text, font_name, target_folder } = body;
-      return await processOverlay(source_url, text, font_name, target_folder, userId);
+      const { source_url, text, font_name, target_folder, preview_only } = body;
+      return await processOverlay(source_url, text, font_name, target_folder, userId, preview_only);
     }
   } catch (error) {
     console.error("overlay-text-on-image error:", error);
@@ -188,6 +198,7 @@ async function processOverlay(
   font_name?: string,
   target_folder?: string,
   userId?: string,
+  preview_only?: boolean,
 ): Promise<Response> {
   if (!source_url) {
     return new Response(JSON.stringify({ error: "Missing source_url" }), {
@@ -257,7 +268,7 @@ async function processOverlay(
       new DrawableRectangle(0, bgRectY, w, bgRectY + bgRectHeight),
       // Text settings
       new DrawableFillColor(white),
-      new DrawableFont('Inter-Bold.woff2'),
+      new DrawableFont('DejaVuSans-Bold.ttf'),
       new DrawableFontPointSize(fontSize),
       new DrawableTextAlignment(TextAlignment.Center),
     ];
@@ -274,7 +285,17 @@ async function processOverlay(
     return img.write(MagickFormat.Png, (data) => new Uint8Array(data));
   });
 
-  // Step 4: Upload to S3 in text-overlay folder
+  // Step 4: Upload to S3 in text-overlay folder (or return base64 for preview)
+  if (preview_only) {
+    const base64 = bytesToBase64(new Uint8Array(resultPng));
+    return new Response(JSON.stringify({
+      preview_image: `data:image/png;base64,${base64}`,
+      font_used: selectedFont,
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const folder = target_folder || 'text-overlay';
   const uniqueName = `${crypto.randomUUID()}.png`;
   const s3Key = `instagram/${folder}/${userId}/${uniqueName}`;

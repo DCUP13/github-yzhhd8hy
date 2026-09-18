@@ -240,6 +240,10 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [replyDialogText, setReplyDialogText] = useState('');
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
 
+  // Overlay preview state
+  const [overlayPreview, setOverlayPreview] = useState<Record<string, string>>({});
+  const [overlayLoadingFor, setOverlayLoadingFor] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAssets = useCallback(async () => {
@@ -859,6 +863,51 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     } catch (error) {
       console.error('Retry error:', error);
       toast.error('Retry failed');
+    }
+  };
+
+  const handleGenerateOverlayPreview = async (variation: PostVariation) => {
+    const carouselUrls = variation.carousel_urls && variation.carousel_urls.length > 0
+      ? variation.carousel_urls
+      : [variation.cloudfront_url];
+    const carouselIndex = carouselImageIndex[variation.id] ?? 0;
+    const imageUrl = carouselUrls[carouselIndex] || carouselUrls[0];
+    const text = variation.carousel_texts?.[carouselIndex]?.trim() || '';
+
+    if (!text) {
+      toast.error('No text to overlay for this slide');
+      return;
+    }
+
+    setOverlayLoadingFor(variation.id);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overlay-text-on-image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          source_url: imageUrl,
+          text,
+          preview_only: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Overlay preview failed');
+      }
+
+      const { preview_image } = await response.json();
+      setOverlayPreview(prev => ({ ...prev, [variation.id]: preview_image }));
+      toast.success('Text overlay preview generated');
+    } catch (error) {
+      console.error('Overlay preview error:', error);
+      toast.error(`Preview failed: ${error.message}`);
+    } finally {
+      setOverlayLoadingFor(null);
     }
   };
 
@@ -1886,6 +1935,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         </div>
                       )}
 
+                      {/* Text overlay preview */}
+                      {overlayPreview[variation.id] && (
+                        <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-100 dark:border-gray-700">
+                          <p className="text-[10px] text-blue-600 dark:text-blue-400 mb-1 font-medium">Text overlay preview:</p>
+                          <img src={overlayPreview[variation.id]} alt="Overlay preview" className="w-full rounded-lg" />
+                        </div>
+                      )}
+
                       <div className="p-3">
                         <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">{variation.caption}</p>
                         {variation.hashtags.length > 0 && (
@@ -1919,6 +1976,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
                           {variation.status === 'staged' && (
                             <>
+                              <button
+                                onClick={() => handleGenerateOverlayPreview(variation)}
+                                disabled={overlayLoadingFor === variation.id}
+                                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center justify-center gap-1 disabled:opacity-50"
+                              >
+                                {overlayLoadingFor === variation.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+                                Preview Overlay
+                              </button>
                               <button
                                 onClick={() => handleApproveVariation(variation.id)}
                                 className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center justify-center gap-1"
