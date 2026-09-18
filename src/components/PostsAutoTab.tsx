@@ -877,7 +877,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   };
 
   const generateOverlayBlob = async (imageUrl: string, text: string): Promise<Blob> => {
-    const imgRes = await fetch(imageUrl);
+    const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+    const imgRes = await fetch(proxyUrl);
     if (!imgRes.ok) throw new Error(`Failed to download image: ${imgRes.status}`);
     const blob = await imgRes.blob();
     const objectUrl = URL.createObjectURL(blob);
