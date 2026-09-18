@@ -1,6 +1,20 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
-import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
-import { ImageMagick, initializeImageMagick, MagickFormat } from "npm:@imagemagick/magick-wasm@0.0.29";
+import {
+  ImageMagick,
+  initializeImageMagick,
+  MagickFormat,
+  MagickColors,
+  DrawableFillColor,
+  DrawableFillOpacity,
+  DrawableFontPointSize,
+  DrawableFont,
+  DrawableText,
+  DrawableTextAlignment,
+  DrawableRectangle,
+  TextAlignment,
+  Percentage,
+  Magick,
+} from "npm:@imagemagick/magick-wasm@0.0.29";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,8 +26,7 @@ const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 const MAX_DIM = 1080;
 
 let magickInitialized = false;
-let wasmInitialized = false;
-let cachedFontBuffer: Uint8Array | null = null;
+let fontRegistered = false;
 
 async function ensureMagickInit() {
   if (magickInitialized) return;
@@ -25,55 +38,30 @@ async function ensureMagickInit() {
   magickInitialized = true;
 }
 
-async function ensureResvgInit() {
-  if (wasmInitialized) return;
-  const wasmUrl = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.6.2/index_bg.wasm";
-  const wasmResponse = await fetch(wasmUrl);
-  if (!wasmResponse.ok) throw new Error(`Failed to download resvg WASM: ${wasmResponse.status}`);
-  const wasmBuffer = await wasmResponse.arrayBuffer();
-  await initWasm(new Uint8Array(wasmBuffer));
-  wasmInitialized = true;
-}
-
-async function ensureFont(): Promise<Uint8Array> {
-  if (cachedFontBuffer) return cachedFontBuffer;
+async function ensureFont() {
+  if (fontRegistered) return;
   const fontUrl = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.woff2";
   const fontResp = await fetch(fontUrl);
   if (!fontResp.ok) throw new Error(`Failed to download font: ${fontResp.status}`);
-  cachedFontBuffer = new Uint8Array(await fontResp.arrayBuffer());
-  return cachedFontBuffer;
+  const fontData = new Uint8Array(await fontResp.arrayBuffer());
+  Magick.addFont('Inter-Bold.woff2', fontData);
+  fontRegistered = true;
 }
 
-function escapeXml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
-}
-
-function resizeImageWithMagick(imageBuffer: Uint8Array): { jpeg: Uint8Array; width: number; height: number } {
-  return ImageMagick.read(imageBuffer, (img): { jpeg: Uint8Array; width: number; height: number } => {
-    img.autoOrient();
-
-    let w = img.width;
-    let h = img.height;
-    if (w > MAX_DIM || h > MAX_DIM) {
-      const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
-      w = Math.round(w * scale);
-      h = Math.round(h * scale);
-      img.resize(w, h);
+function wrapText(text: string, maxCharsPerLine: number): string[] {
+  const words = text.trim().split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    if ((current + ' ' + word).trim().length <= maxCharsPerLine) {
+      current = (current + ' ' + word).trim();
+    } else {
+      if (current) lines.push(current);
+      current = word;
     }
-
-    const jpeg = img.write(MagickFormat.Jpeg, (data) => new Uint8Array(data));
-    return { jpeg, width: w, height: h };
-  });
+  }
+  if (current) lines.push(current);
+  return lines;
 }
 
 async function uploadToS3Signed(
@@ -230,65 +218,68 @@ async function processOverlay(
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
 
-  // Step 2: Use ImageMagick WASM to decode, auto-orient, resize to 1080px, re-encode as JPEG
-  // All heavy image processing happens inside WASM — no giant pixel arrays in JS memory
+  // Step 2: Initialize magick-wasm (single WASM module — no resvg needed)
   await ensureMagickInit();
-  const { jpeg: smallJpeg, width, height } = resizeImageWithMagick(imageBuffer);
+  await ensureFont();
 
-  // Step 3: Embed the small JPEG in an SVG with text overlay
-  await ensureResvgInit();
-  const fontBuffer = await ensureFont();
-  const base64Image = bytesToBase64(smallJpeg);
+  // Step 3: All image processing in one magick-wasm pass:
+  //   decode → auto-orient → resize → draw text overlay → encode PNG
+  const resultPng = ImageMagick.read(imageBuffer, (img): Uint8Array => {
+    img.autoOrient();
 
-  const fontSize = Math.round(width * 0.06);
-  const maxCharsPerLine = Math.floor((width * 0.85) / (fontSize * 0.55));
-  const words = text.trim().split(/\s+/);
-  const lines: string[] = [];
-  let current = '';
-  for (const word of words) {
-    if ((current + ' ' + word).trim().length <= maxCharsPerLine) {
-      current = (current + ' ' + word).trim();
-    } else {
-      if (current) lines.push(current);
-      current = word;
+    let w = img.width;
+    let h = img.height;
+    if (w > MAX_DIM || h > MAX_DIM) {
+      const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+      img.resize(w, h);
     }
-  }
-  if (current) lines.push(current);
 
-  const lineHeight = fontSize * 1.3;
-  const totalTextHeight = lines.length * lineHeight;
-  const startY = height - totalTextHeight - (height * 0.08);
-  const bgPadding = fontSize * 0.4;
-  const bgRectY = startY - bgPadding;
-  const bgRectHeight = totalTextHeight + bgPadding * 2;
+    const fontSize = Math.round(w * 0.06);
+    const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
+    const lines = wrapText(text!, maxCharsPerLine);
 
-  const textElements = lines.map((line, i) => {
-    const y = startY + (i * lineHeight) + fontSize;
-    return `<text x="${width / 2}" y="${y}" font-family="Inter" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`;
-  }).join('\n');
+    const lineHeight = fontSize * 1.3;
+    const totalTextHeight = lines.length * lineHeight;
+    const startY = h - totalTextHeight - Math.round(h * 0.08);
+    const bgPadding = Math.round(fontSize * 0.4);
+    const bgRectY = startY - bgPadding;
+    const bgRectHeight = totalTextHeight + bgPadding * 2;
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <image href="data:image/jpeg;base64,${base64Image}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice"/>
-  <rect x="0" y="${bgRectY}" width="${width}" height="${bgRectHeight}" fill="rgba(0,0,0,0.45)"/>
-  ${textElements}
-</svg>`;
+    const black = MagickColors.Black;
+    const white = MagickColors.White;
 
-  // Step 4: Render with resvg (small 1080px image → fast WASM render)
-  const resvg = new Resvg(svg, {
-    font: {
-      fontBuffers: [fontBuffer],
-      defaultFontFamily: 'Inter',
-      loadSystemFonts: false,
-    },
+    const drawables: any[] = [
+      // Semi-transparent black background bar
+      new DrawableFillColor(black),
+      new DrawableFillOpacity(new Percentage(45)),
+      new DrawableRectangle(0, bgRectY, w, bgRectY + bgRectHeight),
+      // Text settings
+      new DrawableFillColor(white),
+      new DrawableFont('Inter-Bold.woff2'),
+      new DrawableFontPointSize(fontSize),
+      new DrawableTextAlignment(TextAlignment.Center),
+    ];
+
+    // Draw each line of text
+    for (let i = 0; i < lines.length; i++) {
+      const y = startY + (i * lineHeight) + fontSize;
+      const x = Math.round(w / 2);
+      drawables.push(new DrawableText(x, y, lines[i]));
+    }
+
+    img.draw(drawables);
+
+    return img.write(MagickFormat.Png, (data) => new Uint8Array(data));
   });
-  const finalPng = new Uint8Array(resvg.render().asPng());
 
-  // Step 5: Upload
-  const folder = target_folder || 'posts';
+  // Step 4: Upload to S3 in text-overlay folder
+  const folder = target_folder || 'text-overlay';
   const uniqueName = `${crypto.randomUUID()}.png`;
   const s3Key = `instagram/${folder}/${userId}/${uniqueName}`;
 
-  await uploadToS3Signed(BUCKET_NAME, s3Key, finalPng, 'image/png', AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
+  await uploadToS3Signed(BUCKET_NAME, s3Key, new Uint8Array(resultPng), 'image/png', AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
   const cloudfrontUrl = `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;
 
   return new Response(JSON.stringify({
