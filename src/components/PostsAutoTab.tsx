@@ -718,6 +718,73 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
+  const handlePublishNow = async (variationId: string) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ variation_id: variationId, action: 'publish' }),
+      });
+      if (response.ok) {
+        toast.success('Post published successfully!');
+      } else {
+        const err = await response.json().catch(() => ({}));
+        toast.error(`Publish failed: ${err.error || 'Unknown error'}`);
+      }
+      if (activeBatchId) fetchVariations(activeBatchId);
+    } catch (error) {
+      console.error('Publish now error:', error);
+      toast.error(`Publish failed: ${error.message}`);
+    }
+  };
+
+  const handlePublishApprovedNow = async () => {
+    const approved = variations.filter(v => v.status === 'approved');
+    if (approved.length === 0) {
+      toast.error('No approved variations to publish');
+      return;
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+    for (const variation of approved) {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ variation_id: variation.id, action: 'publish' }),
+        });
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          const err = await response.json().catch(() => ({}));
+          console.error(`Publish failed for ${variation.id}:`, err.error);
+        }
+      } catch (error) {
+        failCount++;
+        console.error(`Publish failed for ${variation.id}:`, error);
+      }
+    }
+
+    if (failCount === 0) {
+      toast.success(`${successCount} posts published!`);
+    } else if (successCount === 0) {
+      toast.error('All posts failed to publish');
+    } else {
+      toast.error(`${successCount} published, ${failCount} failed`);
+    }
+    if (activeBatchId) fetchVariations(activeBatchId);
+  };
+
   const handleRetryVariation = async (variationId: string) => {
     try {
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
@@ -1655,7 +1722,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           ) : (
             <>
               {variations.some(v => v.status === 'approved') && (
-                <div className="flex justify-end mb-4">
+                <div className="flex justify-end gap-2 mb-4">
+                  <button
+                    onClick={handlePublishApprovedNow}
+                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center gap-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    Publish All Approved Now ({variations.filter(v => v.status === 'approved').length})
+                  </button>
                   <button
                     onClick={handleScheduleApproved}
                     className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center gap-2"
@@ -1744,7 +1818,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           </a>
                         )}
 
-                        <div className="flex items-center gap-2 mt-3">
+                        <div className="flex items-center gap-2 mt-3 flex-wrap">
                           {(variation.status === 'staged' || variation.status === 'rejected') && (
                             <>
                               <button
@@ -1760,6 +1834,22 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                 <X className="w-3 h-3" /> Reject
                               </button>
                             </>
+                          )}
+                          {variation.status === 'approved' && (
+                            <button
+                              onClick={() => handlePublishNow(variation.id)}
+                              className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center justify-center gap-1"
+                            >
+                              <Send className="w-3 h-3" /> Publish Now
+                            </button>
+                          )}
+                          {variation.status === 'scheduled' && (
+                            <button
+                              onClick={() => handlePublishNow(variation.id)}
+                              className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center justify-center gap-1"
+                            >
+                              <Send className="w-3 h-3" /> Publish Now
+                            </button>
                           )}
                           {variation.status === 'failed' && (
                             <button
