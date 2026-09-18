@@ -11,6 +11,7 @@ const corsHeaders = {
 };
 
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
+const MAX_DIM = 1080;
 
 let wasmInitialized = false;
 let cachedFontBuffer: Uint8Array | null = null;
@@ -36,6 +37,16 @@ async function ensureFont(): Promise<Uint8Array> {
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
 }
 
 function getExifOrientation(buf: Uint8Array): number {
@@ -111,43 +122,52 @@ function applyOrientation(
   return { data: dst, width: dstW, height: dstH };
 }
 
-function decodeImage(buf: Uint8Array): { data: Uint8Array; width: number; height: number } {
-  const isPng = buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50;
-  if (isPng) {
-    const png = PNG.sync.read(Buffer.from(buf));
-    return { data: new Uint8Array(png.data), width: png.width, height: png.height };
-  }
-  const orientation = getExifOrientation(buf);
-  const decoded = jpeg.decode(buf, { useTArray: true });
-  if (!decoded) throw new Error('Failed to decode JPEG');
-  return applyOrientation(decoded.data as Uint8Array, decoded.width, decoded.height, orientation);
-}
-
-function encodePng(data: Uint8Array, width: number, height: number): Uint8Array {
-  const png = new PNG({ width, height });
-  png.data = Buffer.from(data);
-  return new Uint8Array(PNG.sync.write(png));
-}
-
-function compositeTextOntoImage(
-  imageRgba: Uint8Array, textRgba: Uint8Array, width: number, height: number
-): Uint8Array {
-  const result = new Uint8Array(width * height * 4);
-  for (let i = 0; i < width * height * 4; i += 4) {
-    const ta = textRgba[i + 3] / 255;
-    if (ta === 0) {
-      result[i] = imageRgba[i];
-      result[i + 1] = imageRgba[i + 1];
-      result[i + 2] = imageRgba[i + 2];
-      result[i + 3] = 255;
-    } else {
-      result[i] = Math.round(textRgba[i] * ta + imageRgba[i] * (1 - ta));
-      result[i + 1] = Math.round(textRgba[i + 1] * ta + imageRgba[i + 1] * (1 - ta));
-      result[i + 2] = Math.round(textRgba[i + 2] * ta + imageRgba[i + 2] * (1 - ta));
-      result[i + 3] = 255;
+function downscale(
+  src: Uint8Array, srcW: number, srcH: number, maxDim: number
+): { data: Uint8Array; width: number; height: number } {
+  if (srcW <= maxDim && srcH <= maxDim) return { data: src, width: srcW, height: srcH };
+  const scale = Math.min(maxDim / srcW, maxDim / srcH);
+  const dstW = Math.round(srcW * scale);
+  const dstH = Math.round(srcH * scale);
+  const dst = new Uint8Array(dstW * dstH * 4);
+  for (let dy = 0; dy < dstH; dy++) {
+    const sy = Math.min(Math.floor(dy / scale), srcH - 1);
+    for (let dx = 0; dx < dstW; dx++) {
+      const sx = Math.min(Math.floor(dx / scale), srcW - 1);
+      const si = (sy * srcW + sx) * 4;
+      const di = (dy * dstW + dx) * 4;
+      dst[di] = src[si];
+      dst[di + 1] = src[si + 1];
+      dst[di + 2] = src[si + 2];
+      dst[di + 3] = src[si + 3];
     }
   }
-  return result;
+  return { data: dst, width: dstW, height: dstH };
+}
+
+function decodeAndDownscale(buf: Uint8Array): { data: Uint8Array; width: number; height: number } {
+  const isPng = buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50;
+  let rgba: Uint8Array, w: number, h: number;
+  if (isPng) {
+    const png = PNG.sync.read(Buffer.from(buf));
+    rgba = new Uint8Array(png.data);
+    w = png.width;
+    h = png.height;
+  } else {
+    const orientation = getExifOrientation(buf);
+    const decoded = jpeg.decode(buf, { useTArray: true });
+    if (!decoded) throw new Error('Failed to decode JPEG');
+    const oriented = applyOrientation(decoded.data as Uint8Array, decoded.width, decoded.height, orientation);
+    rgba = oriented.data;
+    w = oriented.width;
+    h = oriented.height;
+  }
+  return downscale(rgba, w, h, MAX_DIM);
+}
+
+function encodeJpeg(data: Uint8Array, width: number, height: number, quality: number = 85): Uint8Array {
+  const result = jpeg.encode({ data: Buffer.from(data), width, height, quality });
+  return new Uint8Array(result.data);
 }
 
 async function uploadToS3Signed(
@@ -304,11 +324,14 @@ async function processOverlay(
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
 
-  // Step 2: Decode to RGBA (jpeg-js for JPEG, pngjs for PNG, with EXIF rotation)
-  const decoded = decodeImage(imageBuffer);
-  const { data: imageRgba, width, height } = decoded;
+  // Step 2: Decode + downscale to max 1080px (reduces memory ~90%)
+  const { data: smallRgba, width, height } = decodeAndDownscale(imageBuffer);
 
-  // Step 3: Build a text-only SVG (transparent background, just text + semi-transparent rect)
+  // Step 3: Re-encode as small JPEG for embedding in SVG
+  const smallJpeg = encodeJpeg(smallRgba, width, height, 85);
+  const base64Image = bytesToBase64(smallJpeg);
+
+  // Step 4: Build SVG with small embedded image + text overlay
   await ensureWasmInit();
   const fontBuffer = await ensureFont();
 
@@ -339,32 +362,23 @@ async function processOverlay(
     return `<text x="${width / 2}" y="${y}" font-family="Inter" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`;
   }).join('\n');
 
-  const textSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <image href="data:image/jpeg;base64,${base64Image}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice"/>
   <rect x="0" y="${bgRectY}" width="${width}" height="${bgRectHeight}" fill="rgba(0,0,0,0.45)"/>
   ${textElements}
 </svg>`;
 
-  // Step 4: Render text-only SVG to PNG (tiny SVG, no image data — very fast)
-  const resvg = new Resvg(textSvg, {
+  // Step 5: Render with resvg (small image → fast WASM render)
+  const resvg = new Resvg(svg, {
     font: {
       fontBuffers: [fontBuffer],
       defaultFontFamily: 'Inter',
       loadSystemFonts: false,
     },
   });
-  const textPngBytes = new Uint8Array(resvg.render().asPng());
+  const finalPng = new Uint8Array(resvg.render().asPng());
 
-  // Step 5: Decode text PNG back to RGBA
-  const textPng = PNG.sync.read(Buffer.from(textPngBytes));
-  const textRgba = new Uint8Array(textPng.data);
-
-  // Step 6: Composite text layer onto image (alpha blend)
-  const finalRgba = compositeTextOntoImage(imageRgba, textRgba, width, height);
-
-  // Step 7: Encode final image to PNG
-  const finalPng = encodePng(finalRgba, width, height);
-
-  // Step 8: Upload
+  // Step 6: Upload
   const folder = target_folder || 'posts';
   const uniqueName = `${crypto.randomUUID()}.png`;
   const s3Key = `instagram/${folder}/${userId}/${uniqueName}`;
