@@ -358,82 +358,12 @@ Deno.serve(async (req: Request) => {
 
     const actionType = action || 'publish';
 
-    // --- Server-side text overlay: bake carousel_texts onto images before any publish/schedule ---
-    const carouselTexts: string[] = variation.carousel_texts || [];
-    const hasTextOverlay = carouselTexts.some((t: string) => t && t.trim());
+    // --- Text overlay is now applied at approve time (client-side canvas + S3 upload) ---
+    // The variation's cloudfront_url / carousel_urls already point to the overlayed images.
     let effectiveUrls: string[] = variation.carousel_urls?.length
       ? variation.carousel_urls
       : [variation.cloudfront_url];
     let effectiveS3Key: string = variation.s3_key;
-
-    if (hasTextOverlay) {
-      const fontName = variation.font_used || 'Impact';
-      const overlayedUrls: string[] = [];
-      const overlayedKeys: string[] = [];
-      let anyOverlayed = false;
-
-      for (let i = 0; i < effectiveUrls.length; i++) {
-        const url = effectiveUrls[i];
-        const text = carouselTexts[i]?.trim() || '';
-        const isVideo = url.endsWith('.mp4') || url.endsWith('.mov');
-
-        if (text && !isVideo && BUCKET_NAME && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
-          try {
-            const overlayResponse = await fetch(
-              `${Deno.env.get("SUPABASE_URL")}/functions/v1/overlay-text-on-image`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                  'apikey': Deno.env.get("SUPABASE_ANON_KEY")!,
-                },
-                body: JSON.stringify({
-                  source_url: url,
-                  text,
-                  font_name: fontName,
-                  target_folder: 'text-overlay',
-                  user_id: variation.user_id,
-                }),
-              },
-            );
-            if (overlayResponse.ok) {
-              const result = await overlayResponse.json();
-              overlayedUrls.push(result.cloudfront_url);
-              overlayedKeys.push(result.s3_key);
-              anyOverlayed = true;
-              console.log(`Text overlay succeeded for slide ${i}: ${result.cloudfront_url}`);
-            } else {
-              const errText = await overlayResponse.text();
-              console.error(`Text overlay failed for slide ${i}: ${errText.slice(0, 200)}`);
-              overlayedUrls.push(url);
-              overlayedKeys.push(effectiveS3Key);
-            }
-          } catch (e) {
-            console.error(`Text overlay error for slide ${i}:`, e);
-            overlayedUrls.push(url);
-            overlayedKeys.push(effectiveS3Key);
-          }
-        } else {
-          overlayedUrls.push(url);
-          overlayedKeys.push(effectiveS3Key);
-        }
-      }
-
-      if (anyOverlayed) {
-        effectiveUrls = overlayedUrls;
-        effectiveS3Key = overlayedKeys[0] || effectiveS3Key;
-        await supabase.from("instagram_post_variations")
-          .update({
-            cloudfront_url: overlayedUrls[0],
-            s3_key: overlayedKeys[0],
-            carousel_urls: overlayedUrls,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", variation_id);
-        console.log(`Updated variation ${variation_id} with text-overlay image URLs`);
-      }
-    }
 
     // Schedule action: move content to scheduled folder
     if (actionType === 'schedule') {
