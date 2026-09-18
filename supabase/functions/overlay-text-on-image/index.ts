@@ -1,8 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
 import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
-import jpeg from "npm:jpeg-js@0.4.4";
-import { PNG } from "npm:pngjs@7.0.0";
-import { Buffer } from "node:buffer";
+import { ImageMagick, initializeImageMagick, MagickFormat } from "npm:@imagemagick/magick-wasm@0.0.29";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,14 +11,25 @@ const corsHeaders = {
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 const MAX_DIM = 1080;
 
+let magickInitialized = false;
 let wasmInitialized = false;
 let cachedFontBuffer: Uint8Array | null = null;
 
-async function ensureWasmInit() {
+async function ensureMagickInit() {
+  if (magickInitialized) return;
+  const wasmUrl = "https://cdn.jsdelivr.net/npm/@imagemagick/magick-wasm@0.0.29/dist/magick.wasm";
+  const wasmResp = await fetch(wasmUrl);
+  if (!wasmResp.ok) throw new Error(`Failed to download magick.wasm: ${wasmResp.status}`);
+  const wasmBuffer = await wasmResp.arrayBuffer();
+  await initializeImageMagick(new Uint8Array(wasmBuffer));
+  magickInitialized = true;
+}
+
+async function ensureResvgInit() {
   if (wasmInitialized) return;
   const wasmUrl = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.6.2/index_bg.wasm";
   const wasmResponse = await fetch(wasmUrl);
-  if (!wasmResponse.ok) throw new Error(`Failed to download WASM: ${wasmResponse.status}`);
+  if (!wasmResponse.ok) throw new Error(`Failed to download resvg WASM: ${wasmResponse.status}`);
   const wasmBuffer = await wasmResponse.arrayBuffer();
   await initWasm(new Uint8Array(wasmBuffer));
   wasmInitialized = true;
@@ -49,125 +58,22 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function getExifOrientation(buf: Uint8Array): number {
-  if (buf.length < 4 || buf[0] !== 0xFF || buf[1] !== 0xD8) return 1;
-  let i = 2;
-  while (i < buf.length - 1) {
-    if (buf[i] !== 0xFF) { i++; continue; }
-    const marker = buf[i + 1];
-    if (marker === 0x00 || marker === 0xFF) { i++; continue; }
-    if (marker === 0xD9 || marker === 0xDA) break;
-    if (marker === 0xE1) {
-      const segLen = (buf[i + 2] << 8) | buf[i + 3];
-      const exifStart = i + 4;
-      if (buf.length < exifStart + 6) return 1;
-      if (buf[exifStart] === 0x45 && buf[exifStart + 1] === 0x78 &&
-          buf[exifStart + 2] === 0x69 && buf[exifStart + 3] === 0x66 &&
-          buf[exifStart + 4] === 0x00 && buf[exifStart + 5] === 0x00) {
-        const tiffStart = exifStart + 6;
-        if (buf.length < tiffStart + 8) return 1;
-        const bigEndian = buf[tiffStart] === 0x4D;
-        const read16 = (off: number) => bigEndian
-          ? (buf[tiffStart + off] << 8) | buf[tiffStart + off + 1]
-          : (buf[tiffStart + off + 1] << 8) | buf[tiffStart + off];
-        const ifdOffset = read16(4);
-        if (buf.length < tiffStart + ifdOffset + 2) return 1;
-        const entryCount = read16(ifdOffset);
-        for (let e = 0; e < entryCount; e++) {
-          const entryOff = ifdOffset + 2 + e * 12;
-          if (buf.length < tiffStart + entryOff + 12) return 1;
-          const tag = read16(entryOff);
-          if (tag === 0x0112) return read16(entryOff + 8);
-        }
-        return 1;
-      }
-      i += 2 + segLen;
-    } else if (marker >= 0xD0 && marker <= 0xD7) {
-      i += 2;
-    } else {
-      const segLen = (buf[i + 2] << 8) | buf[i + 3];
-      i += 2 + segLen;
+function resizeImageWithMagick(imageBuffer: Uint8Array): { jpeg: Uint8Array; width: number; height: number } {
+  return ImageMagick.read(imageBuffer, (img): { jpeg: Uint8Array; width: number; height: number } => {
+    img.autoOrient();
+
+    let w = img.width;
+    let h = img.height;
+    if (w > MAX_DIM || h > MAX_DIM) {
+      const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+      img.resize(w, h);
     }
-  }
-  return 1;
-}
 
-function applyOrientation(
-  src: Uint8Array, srcW: number, srcH: number, orientation: number
-): { data: Uint8Array; width: number; height: number } {
-  if (orientation === 1) return { data: src, width: srcW, height: srcH };
-  let dstW = srcW, dstH = srcH;
-  if (orientation >= 5 && orientation <= 8) { dstW = srcH; dstH = srcW; }
-  const dst = new Uint8Array(dstW * dstH * 4);
-  for (let y = 0; y < srcH; y++) {
-    for (let x = 0; x < srcW; x++) {
-      const srcIdx = (y * srcW + x) * 4;
-      let dx = x, dy = y;
-      switch (orientation) {
-        case 2: dx = srcW - 1 - x; break;
-        case 3: dx = srcW - 1 - x; dy = srcH - 1 - y; break;
-        case 4: dy = srcH - 1 - y; break;
-        case 5: dx = y; dy = x; break;
-        case 6: dx = srcH - 1 - y; dy = x; break;
-        case 7: dx = srcH - 1 - y; dy = srcW - 1 - x; break;
-        case 8: dx = y; dy = srcW - 1 - x; break;
-      }
-      const dstIdx = (dy * dstW + dx) * 4;
-      dst[dstIdx] = src[srcIdx];
-      dst[dstIdx + 1] = src[srcIdx + 1];
-      dst[dstIdx + 2] = src[srcIdx + 2];
-      dst[dstIdx + 3] = src[srcIdx + 3];
-    }
-  }
-  return { data: dst, width: dstW, height: dstH };
-}
-
-function downscale(
-  src: Uint8Array, srcW: number, srcH: number, maxDim: number
-): { data: Uint8Array; width: number; height: number } {
-  if (srcW <= maxDim && srcH <= maxDim) return { data: src, width: srcW, height: srcH };
-  const scale = Math.min(maxDim / srcW, maxDim / srcH);
-  const dstW = Math.round(srcW * scale);
-  const dstH = Math.round(srcH * scale);
-  const dst = new Uint8Array(dstW * dstH * 4);
-  for (let dy = 0; dy < dstH; dy++) {
-    const sy = Math.min(Math.floor(dy / scale), srcH - 1);
-    for (let dx = 0; dx < dstW; dx++) {
-      const sx = Math.min(Math.floor(dx / scale), srcW - 1);
-      const si = (sy * srcW + sx) * 4;
-      const di = (dy * dstW + dx) * 4;
-      dst[di] = src[si];
-      dst[di + 1] = src[si + 1];
-      dst[di + 2] = src[si + 2];
-      dst[di + 3] = src[si + 3];
-    }
-  }
-  return { data: dst, width: dstW, height: dstH };
-}
-
-function decodeAndDownscale(buf: Uint8Array): { data: Uint8Array; width: number; height: number } {
-  const isPng = buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50;
-  let rgba: Uint8Array, w: number, h: number;
-  if (isPng) {
-    const png = PNG.sync.read(Buffer.from(buf));
-    rgba = new Uint8Array(png.data);
-    w = png.width;
-    h = png.height;
-  } else {
-    const orientation = getExifOrientation(buf);
-    const decoded = jpeg.decode(buf, { useTArray: true });
-    if (!decoded) throw new Error('Failed to decode JPEG');
-    const oriented = applyOrientation(decoded.data as Uint8Array, decoded.width, decoded.height, orientation);
-    rgba = oriented.data;
-    w = oriented.width;
-    h = oriented.height;
-  }
-  return downscale(rgba, w, h, MAX_DIM);
-}
-
-function encodeJpeg(data: Uint8Array, width: number, height: number, quality: number = 85): Uint8Array {
-  const result = jpeg.encode({ data: Buffer.from(data), width, height, quality });
-  return new Uint8Array(result.data);
+    const jpeg = img.write(MagickFormat.Jpeg, (data) => new Uint8Array(data));
+    return { jpeg, width: w, height: h };
+  });
 }
 
 async function uploadToS3Signed(
@@ -324,16 +230,15 @@ async function processOverlay(
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
 
-  // Step 2: Decode + downscale to max 1080px (reduces memory ~90%)
-  const { data: smallRgba, width, height } = decodeAndDownscale(imageBuffer);
+  // Step 2: Use ImageMagick WASM to decode, auto-orient, resize to 1080px, re-encode as JPEG
+  // All heavy image processing happens inside WASM — no giant pixel arrays in JS memory
+  await ensureMagickInit();
+  const { jpeg: smallJpeg, width, height } = resizeImageWithMagick(imageBuffer);
 
-  // Step 3: Re-encode as small JPEG for embedding in SVG
-  const smallJpeg = encodeJpeg(smallRgba, width, height, 85);
-  const base64Image = bytesToBase64(smallJpeg);
-
-  // Step 4: Build SVG with small embedded image + text overlay
-  await ensureWasmInit();
+  // Step 3: Embed the small JPEG in an SVG with text overlay
+  await ensureResvgInit();
   const fontBuffer = await ensureFont();
+  const base64Image = bytesToBase64(smallJpeg);
 
   const fontSize = Math.round(width * 0.06);
   const maxCharsPerLine = Math.floor((width * 0.85) / (fontSize * 0.55));
@@ -368,7 +273,7 @@ async function processOverlay(
   ${textElements}
 </svg>`;
 
-  // Step 5: Render with resvg (small image → fast WASM render)
+  // Step 4: Render with resvg (small 1080px image → fast WASM render)
   const resvg = new Resvg(svg, {
     font: {
       fontBuffers: [fontBuffer],
@@ -378,7 +283,7 @@ async function processOverlay(
   });
   const finalPng = new Uint8Array(resvg.render().asPng());
 
-  // Step 6: Upload
+  // Step 5: Upload
   const folder = target_folder || 'posts';
   const uniqueName = `${crypto.randomUUID()}.png`;
   const s3Key = `instagram/${folder}/${userId}/${uniqueName}`;
