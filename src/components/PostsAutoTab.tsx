@@ -240,9 +240,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [replyDialogText, setReplyDialogText] = useState('');
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
 
-  // Overlay preview state
-  const [overlayPreview, setOverlayPreview] = useState<Record<string, string>>({});
-  const [overlayLoadingFor, setOverlayLoadingFor] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -640,15 +637,31 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       const result = await response.json();
 
+      // Fetch the newly created variations and apply text overlays in-browser
+      const { data: newVariations } = await supabase
+        .from('instagram_post_variations')
+        .select('*')
+        .eq('batch_id', batch.id);
+      const varList = newVariations || [];
+
+      let overlayCount = 0;
+      for (const varRow of varList) {
+        const { urls, changed } = await applyOverlaysToVariation(varRow as PostVariation);
+        if (changed) {
+          await supabase
+            .from('instagram_post_variations')
+            .update({
+              cloudfront_url: urls[0],
+              carousel_urls: urls,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', varRow.id);
+          overlayCount++;
+        }
+      }
+
       if (postNow && result.publish_variation_ids?.length > 0) {
         toast.success(`${result.variations_created} variations generated. Publishing now...`);
-
-        // Fetch the newly created variations so we can overlay text before publishing
-        const { data: newVariations } = await supabase
-          .from('instagram_post_variations')
-          .select('*')
-          .in('id', result.publish_variation_ids);
-        const varMap = new Map((newVariations || []).map(v => [v.id, v] as const));
 
         let successCount = 0;
         let failCount = 0;
@@ -706,83 +719,12 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   };
 
   const handleApproveVariation = async (variationId: string) => {
-    const variation = variations.find(v => v.id === variationId);
-    if (!variation) return;
-
-    const carouselTexts = variation.carousel_texts || [];
-    const hasTextOverlay = carouselTexts.some(t => t && t.trim());
-
     try {
-      if (hasTextOverlay) {
-        const carouselUrls = variation.carousel_urls?.length
-          ? variation.carousel_urls
-          : [variation.cloudfront_url];
-
-        const overlayedUrls: string[] = [];
-        let anyOverlayed = false;
-
-        for (let i = 0; i < carouselUrls.length; i++) {
-          const url = carouselUrls[i];
-          const text = carouselTexts[i]?.trim() || '';
-          const isVideo = url.endsWith('.mp4') || url.endsWith('.mov');
-
-          if (text && !isVideo) {
-            try {
-              const blob = await generateOverlayBlob(url, text);
-              const formData = new FormData();
-              formData.append('file', blob, `${crypto.randomUUID()}.png`);
-              formData.append('file_name', `${crypto.randomUUID()}.png`);
-              formData.append('content_type', 'image/png');
-              formData.append('folder', 'text-overlay');
-
-              const uploadResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-                },
-                body: formData,
-              });
-
-              if (uploadResponse.ok) {
-                const result = await uploadResponse.json();
-                overlayedUrls.push(result.cloudfront_url);
-                anyOverlayed = true;
-              } else {
-                overlayedUrls.push(url);
-              }
-            } catch (e) {
-              console.error(`Overlay failed for slide ${i}:`, e);
-              overlayedUrls.push(url);
-            }
-          } else {
-            overlayedUrls.push(url);
-          }
-        }
-
-        if (anyOverlayed) {
-          await supabase
-            .from('instagram_post_variations')
-            .update({
-              status: 'approved',
-              cloudfront_url: overlayedUrls[0],
-              carousel_urls: overlayedUrls,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', variationId);
-        } else {
-          await supabase
-            .from('instagram_post_variations')
-            .update({ status: 'approved', updated_at: new Date().toISOString() })
-            .eq('id', variationId);
-        }
-      } else {
-        const { error } = await supabase
-          .from('instagram_post_variations')
-          .update({ status: 'approved', updated_at: new Date().toISOString() })
-          .eq('id', variationId);
-        if (error) throw error;
-      }
-
+      const { error } = await supabase
+        .from('instagram_post_variations')
+        .update({ status: 'approved', updated_at: new Date().toISOString() })
+        .eq('id', variationId);
+      if (error) throw error;
       setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'approved' } : v));
       toast.success('Variation approved');
     } catch (error) {
@@ -935,110 +877,124 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   };
 
   const generateOverlayBlob = async (imageUrl: string, text: string): Promise<Blob> => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = imageUrl;
-    await img.decode();
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) throw new Error(`Failed to download image: ${imgRes.status}`);
+    const blob = await imgRes.blob();
+    const objectUrl = URL.createObjectURL(blob);
 
-    const MAX_DIM = 1080;
-    let w = img.naturalWidth;
-    let h = img.naturalHeight;
-    if (w > MAX_DIM || h > MAX_DIM) {
-      const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
-      w = Math.round(w * scale);
-      h = Math.round(h * scale);
-    }
+    try {
+      const img = new Image();
+      img.src = objectUrl;
+      await img.decode();
 
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d')!;
-
-    ctx.drawImage(img, 0, 0, w, h);
-
-    const fontSize = Math.round(w * 0.06);
-    ctx.font = `bold ${fontSize}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
-    const words = text.trim().split(/\s+/);
-    const lines: string[] = [];
-    let current = '';
-    for (const word of words) {
-      if ((current + ' ' + word).trim().length <= maxCharsPerLine) {
-        current = (current + ' ' + word).trim();
-      } else {
-        if (current) lines.push(current);
-        current = word;
+      const MAX_DIM = 1080;
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > MAX_DIM || h > MAX_DIM) {
+        const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
       }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const fontSize = Math.round(w * 0.06);
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
+      const words = text.trim().split(/\s+/);
+      const lines: string[] = [];
+      let current = '';
+      for (const word of words) {
+        if ((current + ' ' + word).trim().length <= maxCharsPerLine) {
+          current = (current + ' ' + word).trim();
+        } else {
+          if (current) lines.push(current);
+          current = word;
+        }
+      }
+      if (current) lines.push(current);
+
+      const lineHeight = fontSize * 1.3;
+      const totalTextHeight = lines.length * lineHeight;
+      const startY = h - totalTextHeight - Math.round(h * 0.08);
+      const bgPadding = Math.round(fontSize * 0.4);
+      const bgRectY = startY - bgPadding;
+      const bgRectHeight = totalTextHeight + bgPadding * 2;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.fillRect(0, bgRectY, w, bgRectHeight);
+
+      ctx.fillStyle = 'white';
+      for (let i = 0; i < lines.length; i++) {
+        const y = startY + (i * lineHeight) + fontSize * 0.65;
+        ctx.fillText(lines[i], w / 2, y);
+      }
+
+      return await canvas.toBlob({ type: 'image/png' })!;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
     }
-    if (current) lines.push(current);
-
-    const lineHeight = fontSize * 1.3;
-    const totalTextHeight = lines.length * lineHeight;
-    const startY = h - totalTextHeight - Math.round(h * 0.08);
-    const bgPadding = Math.round(fontSize * 0.4);
-    const bgRectY = startY - bgPadding;
-    const bgRectHeight = totalTextHeight + bgPadding * 2;
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.fillRect(0, bgRectY, w, bgRectHeight);
-
-    ctx.fillStyle = 'white';
-    for (let i = 0; i < lines.length; i++) {
-      const y = startY + (i * lineHeight) + fontSize * 0.65;
-      ctx.fillText(lines[i], w / 2, y);
-    }
-
-    return canvas.toBlob({ type: 'image/png' })!;
   };
 
-  const handleGenerateOverlayPreview = async (variation: PostVariation) => {
-    const carouselUrls = variation.carousel_urls && variation.carousel_urls.length > 0
+  const applyOverlaysToVariation = async (variation: PostVariation): Promise<{ urls: string[]; changed: boolean }> => {
+    const carouselTexts = variation.carousel_texts || [];
+    const hasTextOverlay = carouselTexts.some(t => t && t.trim());
+    if (!hasTextOverlay) return { urls: [], changed: false };
+
+    const carouselUrls = variation.carousel_urls?.length
       ? variation.carousel_urls
       : [variation.cloudfront_url];
-    const carouselIndex = carouselImageIndex[variation.id] ?? 0;
-    const imageUrl = carouselUrls[carouselIndex] || carouselUrls[0];
-    const text = variation.carousel_texts?.[carouselIndex]?.trim() || '';
 
-    if (!text) {
-      toast.error('No text to overlay for this slide');
-      return;
-    }
+    const overlayedUrls: string[] = [];
+    let anyOverlayed = false;
 
-    setOverlayLoadingFor(variation.id);
-    try {
-      const blob = await generateOverlayBlob(imageUrl, text);
+    for (let i = 0; i < carouselUrls.length; i++) {
+      const url = carouselUrls[i];
+      const text = carouselTexts[i]?.trim() || '';
+      const isVideo = url.endsWith('.mp4') || url.endsWith('.mov');
 
-      const formData = new FormData();
-      formData.append('file', blob, `${crypto.randomUUID()}.png`);
-      formData.append('file_name', `${crypto.randomUUID()}.png`);
-      formData.append('content_type', 'image/png');
-      formData.append('folder', 'text-overlay');
+      if (text && !isVideo) {
+        try {
+          const overlayBlob = await generateOverlayBlob(url, text);
+          const formData = new FormData();
+          formData.append('file', overlayBlob, `${crypto.randomUUID()}.png`);
+          formData.append('file_name', `${crypto.randomUUID()}.png`);
+          formData.append('content_type', 'image/png');
+          formData.append('folder', 'text-overlay');
 
-      const uploadResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-        body: formData,
-      });
+          const uploadResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            },
+            body: formData,
+          });
 
-      if (!uploadResponse.ok) {
-        const err = await uploadResponse.json().catch(() => ({}));
-        throw new Error(err.error || 'Upload failed');
+          if (uploadResponse.ok) {
+            const result = await uploadResponse.json();
+            overlayedUrls.push(result.cloudfront_url);
+            anyOverlayed = true;
+          } else {
+            overlayedUrls.push(url);
+          }
+        } catch (e) {
+          console.error(`Overlay failed for slide ${i}:`, e);
+          overlayedUrls.push(url);
+        }
+      } else {
+        overlayedUrls.push(url);
       }
-
-      const { cloudfront_url } = await uploadResponse.json();
-      setOverlayPreview(prev => ({ ...prev, [variation.id]: cloudfront_url }));
-      toast.success('Text overlay generated and uploaded to S3');
-    } catch (error) {
-      console.error('Overlay preview error:', error);
-      toast.error(`Preview failed: ${error.message}`);
-    } finally {
-      setOverlayLoadingFor(null);
     }
+
+    return { urls: overlayedUrls, changed: anyOverlayed };
   };
 
   const handleTestPost = async () => {
@@ -2065,14 +2021,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         </div>
                       )}
 
-                      {/* Text overlay preview */}
-                      {overlayPreview[variation.id] && (
-                        <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-100 dark:border-gray-700">
-                          <p className="text-[10px] text-blue-600 dark:text-blue-400 mb-1 font-medium">Text overlay preview:</p>
-                          <img src={overlayPreview[variation.id]} alt="Overlay preview" className="w-full rounded-lg" />
-                        </div>
-                      )}
-
                       <div className="p-3">
                         <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">{variation.caption}</p>
                         {variation.hashtags.length > 0 && (
@@ -2106,14 +2054,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
                           {variation.status === 'staged' && (
                             <>
-                              <button
-                                onClick={() => handleGenerateOverlayPreview(variation)}
-                                disabled={overlayLoadingFor === variation.id}
-                                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center justify-center gap-1 disabled:opacity-50"
-                              >
-                                {overlayLoadingFor === variation.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-                                Preview Overlay
-                              </button>
                               <button
                                 onClick={() => handleApproveVariation(variation.id)}
                                 className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center justify-center gap-1"
