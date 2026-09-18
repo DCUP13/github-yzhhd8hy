@@ -232,7 +232,7 @@ async function processOverlay(
   const mimeType = source_url.match(/\.(png)$/i) ? 'image/png' : 'image/jpeg';
 
   let base64Image = '';
-  const chunkSize = 8192;
+  const chunkSize = 8190; // must be divisible by 3 to avoid mid-string base64 padding
   for (let i = 0; i < imageBuffer.length; i += chunkSize) {
     const chunk = imageBuffer.subarray(i, Math.min(i + chunkSize, imageBuffer.length));
     base64Image += btoa(String.fromCharCode(...chunk));
