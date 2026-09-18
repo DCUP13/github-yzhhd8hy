@@ -26,7 +26,7 @@ async function ensureWasmInit() {
   const wasmUrl = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.0.1/index_bg.wasm";
   const wasmResponse = await fetch(wasmUrl);
   const wasmBuffer = await wasmResponse.arrayBuffer();
-  await (Resvg as any).init(new Uint8Array(wasmBuffer));
+  await (Resvg as any).initWasm(new Uint8Array(wasmBuffer));
   wasmInitialized = true;
 }
 
