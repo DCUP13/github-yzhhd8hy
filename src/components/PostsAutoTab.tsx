@@ -1813,16 +1813,16 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       </div>
 
                       {/* Carousel preview with navigation */}
-                      <div className="aspect-square bg-gray-100 dark:bg-gray-900 relative group">
+                      <div className="aspect-square bg-gray-100 dark:bg-gray-900 relative group overflow-hidden">
                         {carouselUrls.length > 1 && (
                           <>
-                            <div className="absolute top-2 right-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <div className="absolute top-2 right-2 z-20 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
                               <Layers className="w-3 h-3" /> {carouselIndex + 1}/{carouselUrls.length}
                             </div>
                             {carouselIndex > 0 && (
                               <button
                                 onClick={() => setCarouselImageIndex(prev => ({ ...prev, [variation.id]: carouselIndex - 1 }))}
-                                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
                               >
                                 <ChevronLeft className="w-5 h-5" />
                               </button>
@@ -1830,12 +1830,12 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                             {carouselIndex < carouselUrls.length - 1 && (
                               <button
                                 onClick={() => setCarouselImageIndex(prev => ({ ...prev, [variation.id]: carouselIndex + 1 }))}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
                               >
                                 <ChevronRight className="w-5 h-5" />
                               </button>
                             )}
-                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1">
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1">
                               {carouselUrls.map((_, idx) => (
                                 <div
                                   key={idx}
@@ -1850,14 +1850,25 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         ) : (
                           <img src={currentUrl} alt="" className="w-full h-full object-cover" />
                         )}
+                        {/* Text overlay on preview — shows carousel text for the current slide */}
+                        {!isVideo && variation.carousel_texts && variation.carousel_texts[carouselIndex]?.trim() && (
+                          <div className="absolute bottom-0 left-0 right-0 z-10 bg-black/45 px-4 py-3">
+                            <p
+                              className="text-white text-center font-bold leading-snug"
+                              style={{ fontSize: 'clamp(11px, 3.5vw, 16px)' }}
+                            >
+                              {variation.carousel_texts[carouselIndex].trim()}
+                            </p>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Carousel text preview */}
-                      {variation.carousel_texts && variation.carousel_texts.length > 0 && (
+                      {/* Carousel text list */}
+                      {variation.carousel_texts && variation.carousel_texts.some(t => t?.trim()) && (
                         <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
                           <p className="text-[10px] text-gray-400 mb-1">Text on photos:</p>
                           {variation.carousel_texts.map((text, i) => (
-                            <p key={i} className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            <p key={i} className={`text-xs truncate ${i === carouselIndex ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
                               <span className="text-gray-400">{i + 1}.</span> {text}
                             </p>
                           ))}
