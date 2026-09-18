@@ -107,6 +107,7 @@ interface PostingSchedule {
   active_days: number[];
   min_gap_minutes: number;
   carousel_size: number;
+  default_process_id: string | null;
 }
 
 interface PostProcess {
@@ -130,7 +131,6 @@ interface AccountAssignment {
   account_id: string;
   process_id: string | null;
   scheduled_for: string | null;
-  post_now: boolean;
 }
 
 interface CommentEvent {
@@ -162,6 +162,16 @@ interface PostsAutoTabProps {
 }
 
 type SubView = 'library' | 'create' | 'staging' | 'schedules' | 'feed';
+
+function toLocalDatetimeInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalDatetimeInput(local: string): string {
+  return new Date(local).toISOString();
+}
 
 export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAccount }: PostsAutoTabProps) {
   const [subView, setSubView] = useState<SubView>('library');
@@ -555,14 +565,13 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       const textLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
 
       // Build account_assignments: each selected account gets its process
-      // assignment, schedule time, and post-now flag.
+      // assignment and schedule time. post_now is global (batch-level).
       const assignments = selectedAccountIds.map(accId => {
         const existing = accountAssignments.find(a => a.account_id === accId);
         return {
           account_id: accId,
           process_id: existing?.process_id ?? null,
           scheduled_for: existing?.scheduled_for ?? null,
-          post_now: existing?.post_now ?? postNow,
         };
       });
 
@@ -1392,7 +1401,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                   account_id: a.id,
                                   process_id: null,
                                   scheduled_for: null,
-                                  post_now: postNow,
                                 }]);
                               } else {
                                 setSelectedAccountIds(prev => prev.filter(id => id !== a.id));
@@ -1413,7 +1421,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
                         {/* Per-account process & schedule */}
                         {isChecked && (
-                          <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                               <label className="block text-[10px] text-gray-500 mb-1">Process</label>
                               <select
@@ -1436,31 +1444,15 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                               <label className="block text-[10px] text-gray-500 mb-1">Schedule</label>
                               <input
                                 type="datetime-local"
-                                value={assignment?.scheduled_for ? new Date(assignment.scheduled_for).toISOString().slice(0, 16) : ''}
+                                value={assignment?.scheduled_for ? toLocalDatetimeInput(assignment.scheduled_for) : ''}
                                 onChange={(e) => {
-                                  const val = e.target.value ? new Date(e.target.value).toISOString() : null;
+                                  const val = e.target.value ? fromLocalDatetimeInput(e.target.value) : null;
                                   setAccountAssignments(prev => prev.map(asg =>
                                     asg.account_id === a.id ? { ...asg, scheduled_for: val } : asg
                                   ));
                                 }}
                                 className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                               />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] text-gray-500 mb-1">Post Mode</label>
-                              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 py-1.5">
-                                <input
-                                  type="checkbox"
-                                  checked={assignment?.post_now ?? postNow}
-                                  onChange={(e) => {
-                                    setAccountAssignments(prev => prev.map(asg =>
-                                      asg.account_id === a.id ? { ...asg, post_now: e.target.checked } : asg
-                                    ));
-                                  }}
-                                  className="rounded border-gray-300 text-pink-600"
-                                />
-                                Post immediately
-                              </label>
                             </div>
                           </div>
                         )}
@@ -1867,6 +1859,21 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         />
                       </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <label className="block text-xs text-gray-500 mb-1">Post Process</label>
+                      <select
+                        value={schedule.default_process_id || ''}
+                        onChange={(e) => handleScheduleUpdate(schedule.id, { default_process_id: e.target.value || null })}
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">No process (use defaults)</option>
+                        {postProcesses.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-gray-400 mt-1">This process will be used for automated daily posts on this account.</p>
                     </div>
 
                     <div className="mt-3">

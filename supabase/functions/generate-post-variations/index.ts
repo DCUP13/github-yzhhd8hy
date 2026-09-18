@@ -239,7 +239,6 @@ Deno.serve(async (req: Request) => {
       account_id: string;
       process_id: string | null;
       scheduled_for: string | null;
-      post_now: boolean;
     }> = batch.account_assignments || [];
 
     // If account_assignments is populated, only use those accounts; otherwise fall
@@ -311,7 +310,7 @@ Deno.serve(async (req: Request) => {
       let shuffleHashtags = batchSettings.hashtags !== false;
       let varyFontFlag = batchSettings.font !== false;
       let promptContent = batchPromptContent;
-      let accountPostNow = batch.post_now || false;
+      const batchPostNow = batch.post_now || false;
       let accountScheduledFor: string | null = null;
 
       if (process) {
@@ -342,9 +341,8 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Per-account post_now and schedule override batch-level
+      // Per-account schedule from assignment; post_now is batch-level
       if (assignment) {
-        accountPostNow = assignment.post_now;
         accountScheduledFor = assignment.scheduled_for;
       }
 
@@ -420,7 +418,7 @@ Deno.serve(async (req: Request) => {
       const primaryUrl = carouselUrls[0] || '';
       const primaryS3Key = carouselS3Keys[0] || '';
 
-      const variationStatus = accountPostNow ? 'publishing' : (accountScheduledFor ? 'scheduled' : 'staged');
+      const variationStatus = batchPostNow ? 'publishing' : (accountScheduledFor ? 'scheduled' : 'staged');
 
       variations.push({
         batch_id: batch_id,
