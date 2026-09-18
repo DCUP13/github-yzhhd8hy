@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
 import OpenAI from "npm:openai@4.28.0";
+import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +11,44 @@ const corsHeaders = {
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 const FONTS = ['Inter', 'Georgia', 'Courier', 'Impact', 'Palatino', 'Arial', 'Verdana', 'Trebuchet'];
 const MAX_DIM = 1080;
+
+let wasmInitialized = false;
+async function ensureWasmInit() {
+  if (wasmInitialized) return;
+  const wasmUrl = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.6.2/index_bg.wasm";
+  const wasmResponse = await fetch(wasmUrl);
+  const wasmBytes = new Uint8Array(await wasmResponse.arrayBuffer());
+  await initWasm(wasmBytes);
+  wasmInitialized = true;
+}
+
+let cachedFont: Uint8Array | null = null;
+async function ensureFont(): Promise<Uint8Array> {
+  if (cachedFont) return cachedFont;
+  const fontUrl = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.woff";
+  const fontResponse = await fetch(fontUrl);
+  cachedFont = new Uint8Array(await fontResponse.arrayBuffer());
+  return cachedFont;
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
 
 function sniffImageMime(bytes: Uint8Array): string {
   if (bytes.length >= 8 &&
@@ -26,6 +65,29 @@ function sniffImageMime(bytes: Uint8Array): string {
     return "image/webp";
   }
   throw new Error("Unsupported image type.");
+}
+
+function getImageDimensions(bytes: Uint8Array, mime: string): { w: number; h: number } {
+  if (mime === 'image/png') {
+    const w = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+    const h = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+    return { w, h };
+  }
+  if (mime === 'image/jpeg') {
+    let i = 2;
+    while (i < bytes.length) {
+      if (bytes[i] !== 0xff) { i++; continue; }
+      const marker = bytes[i + 1];
+      if (marker === 0xc0 || marker === 0xc2) {
+        const h = (bytes[i + 5] << 8) | bytes[i + 6];
+        const w = (bytes[i + 7] << 8) | bytes[i + 8];
+        return { w, h };
+      }
+      const len = (bytes[i + 2] << 8) | bytes[i + 3];
+      i += 2 + len;
+    }
+  }
+  return { w: 1080, h: 1080 };
 }
 
 function wrapText(text: string, maxCharsPerLine: number): string[] {
@@ -45,29 +107,23 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
 }
 
 async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Array> {
+  await ensureWasmInit();
+  const fontData = await ensureFont();
+
   const imageResponse = await fetch(imageUrl);
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
   const mimeType = sniffImageMime(imageBuffer);
-  const bitmap = await createImageBitmap(new Blob([imageBuffer], { type: mimeType }));
+  const base64Image = bytesToBase64(imageBuffer);
 
-  let w = bitmap.width;
-  let h = bitmap.height;
+  let { w, h } = getImageDimensions(imageBuffer, mimeType);
   if (w > MAX_DIM || h > MAX_DIM) {
     const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
     w = Math.round(w * scale);
     h = Math.round(h * scale);
   }
 
-  const canvas = new OffscreenCanvas(w, h);
-  const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(bitmap, 0, 0, w, h);
-
   const fontSize = Math.round(w * 0.06);
-  ctx.font = `bold ${fontSize}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
   const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
   const lines = wrapText(text, maxCharsPerLine);
 
@@ -78,17 +134,25 @@ async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Ar
   const bgRectY = startY - bgPadding;
   const bgRectHeight = totalTextHeight + bgPadding * 2;
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.fillRect(0, bgRectY, w, bgRectHeight);
+  const textElements = lines.map((line, i) => {
+    const y = Math.round(startY + (i * lineHeight) + fontSize * 0.65);
+    return `<text x="${Math.round(w / 2)}" y="${y}" font-family="Inter" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`;
+  }).join('\n  ');
 
-  ctx.fillStyle = 'white';
-  for (let i = 0; i < lines.length; i++) {
-    const y = startY + (i * lineHeight) + fontSize * 0.65;
-    ctx.fillText(lines[i], w / 2, y);
-  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <image href="data:${mimeType};base64,${base64Image}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid meet"/>
+  <rect x="0" y="${Math.round(bgRectY)}" width="${w}" height="${Math.round(bgRectHeight)}" fill="black" fill-opacity="0.45"/>
+  ${textElements}
+</svg>`;
 
-  const blob = await canvas.convertToBlob({ type: 'image/png' });
-  return new Uint8Array(await blob.arrayBuffer());
+  const resvg = new Resvg(svg, {
+    font: {
+      fontFiles: [fontData],
+      loadSystemFonts: false,
+    },
+  });
+  const pngBuffer = resvg.render().asPng();
+  return pngBuffer;
 }
 
 async function uploadOverlayToS3(
