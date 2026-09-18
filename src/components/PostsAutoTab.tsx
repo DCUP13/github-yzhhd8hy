@@ -638,10 +638,22 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       if (postNow && result.publish_variation_ids?.length > 0) {
         toast.success(`${result.variations_created} variations generated. Publishing now...`);
+
+        // Fetch the newly created variations so we can overlay text before publishing
+        const { data: newVariations } = await supabase
+          .from('instagram_post_variations')
+          .select('*')
+          .in('id', result.publish_variation_ids);
+        const varMap = new Map((newVariations || []).map(v => [v.id, v] as const));
+
         let successCount = 0;
         let failCount = 0;
         for (const varId of result.publish_variation_ids) {
           try {
+            const varData = varMap.get(varId);
+            if (varData) {
+              await processTextOverlayBeforePublish(varData as PostVariation);
+            }
             const pubResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
               method: 'POST',
               headers: {
@@ -693,15 +705,173 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
-  const handleApproveVariation = async (variationId: string) => {
+  const overlayTextOnImageCanvas = async (imageUrl: string, text: string, fontName: string): Promise<Blob> => {
+    // Fetch as blob to avoid canvas CORS tainting
+    const fetchResponse = await fetch(imageUrl);
+    if (!fetchResponse.ok) throw new Error(`Failed to fetch image: ${fetchResponse.status}`);
+    const imageBlob = await fetchResponse.blob();
+    const objectUrl = URL.createObjectURL(imageBlob);
+
     try {
-      const { error } = await supabase
-        .from('instagram_post_variations')
-        .update({ status: 'approved', updated_at: new Date().toISOString() })
-        .eq('id', variationId);
-      if (error) throw error;
-      setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'approved' } : v));
-      toast.success('Variation approved');
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = objectUrl;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+
+      const width = canvas.width;
+      const height = canvas.height;
+      const fontSize = Math.round(width * 0.06);
+      const fontFamily = fontName === 'Georgia' || fontName === 'Palatino'
+        ? `${fontName}, serif`
+        : fontName === 'Courier'
+          ? '"Courier New", monospace'
+          : fontName === 'Impact'
+            ? 'Impact, "Arial Black", sans-serif'
+            : `${fontName}, sans-serif`;
+
+      ctx.font = `bold ${fontSize}px ${fontFamily}`;
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+
+      const maxCharsPerLine = Math.floor(width / (fontSize * 0.55));
+      const words = text.split(' ');
+      const lines: string[] = [];
+      let current = '';
+      for (const word of words) {
+        if ((current + ' ' + word).trim().length <= maxCharsPerLine) {
+          current = (current + ' ' + word).trim();
+        } else {
+          if (current) lines.push(current);
+          current = word;
+        }
+      }
+      if (current) lines.push(current);
+
+      const lineHeight = fontSize * 1.3;
+      const totalTextHeight = lines.length * lineHeight;
+      const startY = height - totalTextHeight - (height * 0.08);
+      const bgPadding = fontSize * 0.4;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.fillRect(0, startY - bgPadding, width, totalTextHeight + bgPadding * 2);
+
+      ctx.fillStyle = 'white';
+      ctx.font = `bold ${fontSize}px ${fontFamily}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], width / 2, startY + (i * lineHeight) + fontSize);
+      }
+
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Failed to create blob from canvas'));
+        }, 'image/png');
+      });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
+  const uploadOverlayedImage = async (blob: Blob, userId: string): Promise<{ s3Key: string; cloudfrontUrl: string }> => {
+    const formData = new FormData();
+    formData.append('file', blob);
+    formData.append('file_name', `${crypto.randomUUID()}.png`);
+    formData.append('content_type', 'image/png');
+    formData.append('folder', 'posts');
+
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || `Upload failed (${response.status})`);
+    }
+
+    const result = await response.json();
+    return { s3Key: result.s3_key, cloudfrontUrl: result.cloudfront_url };
+  };
+
+  const handleApproveVariation = async (variationId: string) => {
+    const variation = variations.find(v => v.id === variationId);
+    if (!variation) return;
+
+    const hasTextOverlay = variation.carousel_texts?.some(t => t?.trim());
+    const carouselUrls = variation.carousel_urls?.length > 0
+      ? variation.carousel_urls
+      : [variation.cloudfront_url];
+
+    try {
+      if (hasTextOverlay) {
+        toast.success('Baking text onto images...');
+
+        const newUrls: string[] = [];
+        const newS3Keys: string[] = [];
+        const fontName = variation.font_used || 'Impact';
+
+        for (let i = 0; i < carouselUrls.length; i++) {
+          const url = carouselUrls[i];
+          const text = variation.carousel_texts[i]?.trim() || '';
+          const isVideo = url.endsWith('.mp4') || url.endsWith('.mov');
+
+          if (text && !isVideo) {
+            try {
+              const blob = await overlayTextOnImageCanvas(url, text, fontName);
+              const uploaded = await uploadOverlayedImage(blob, userId);
+              newUrls.push(uploaded.cloudfrontUrl);
+              newS3Keys.push(uploaded.s3Key);
+            } catch (err) {
+              console.error(`Text overlay failed for slide ${i}:`, err);
+              newUrls.push(url);
+              newS3Keys.push(variation.s3_key);
+            }
+          } else {
+            newUrls.push(url);
+            newS3Keys.push(variation.s3_key);
+          }
+        }
+
+        const { error: updateError } = await supabase
+          .from('instagram_post_variations')
+          .update({
+            status: 'approved',
+            cloudfront_url: newUrls[0],
+            s3_key: newS3Keys[0],
+            carousel_urls: newUrls,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', variationId);
+        if (updateError) throw updateError;
+
+        setVariations(prev => prev.map(v => v.id === variationId
+          ? { ...v, status: 'approved', cloudfront_url: newUrls[0], s3_key: newS3Keys[0], carousel_urls: newUrls }
+          : v));
+        toast.success('Variation approved — text baked into images');
+      } else {
+        const { error } = await supabase
+          .from('instagram_post_variations')
+          .update({ status: 'approved', updated_at: new Date().toISOString() })
+          .eq('id', variationId);
+        if (error) throw error;
+        setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'approved' } : v));
+        toast.success('Variation approved');
+      }
     } catch (error) {
       console.error('Error approving variation:', error);
       toast.error('Failed to approve');
@@ -734,6 +904,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       const now = new Date();
       for (let i = 0; i < approved.length; i++) {
         const variation = approved[i];
+        await processTextOverlayBeforePublish(variation);
         const scheduleTime = new Date(now.getTime() + (i + 1) * 3 * 60 * 60 * 1000);
 
         await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
@@ -760,8 +931,61 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
+  const processTextOverlayBeforePublish = async (variation: PostVariation): Promise<void> => {
+    const hasTextOverlay = variation.carousel_texts?.some(t => t?.trim());
+    if (!hasTextOverlay) return;
+
+    const carouselUrls = variation.carousel_urls?.length > 0
+      ? variation.carousel_urls
+      : [variation.cloudfront_url];
+    const fontName = variation.font_used || 'Impact';
+
+    const newUrls: string[] = [];
+    const newS3Keys: string[] = [];
+
+    for (let i = 0; i < carouselUrls.length; i++) {
+      const url = carouselUrls[i];
+      const text = variation.carousel_texts[i]?.trim() || '';
+      const isVideo = url.endsWith('.mp4') || url.endsWith('.mov');
+
+      if (text && !isVideo) {
+        try {
+          const blob = await overlayTextOnImageCanvas(url, text, fontName);
+          const uploaded = await uploadOverlayedImage(blob, userId);
+          newUrls.push(uploaded.cloudfrontUrl);
+          newS3Keys.push(uploaded.s3Key);
+        } catch (err) {
+          console.error(`Text overlay failed for slide ${i}:`, err);
+          newUrls.push(url);
+          newS3Keys.push(variation.s3_key);
+        }
+      } else {
+        newUrls.push(url);
+        newS3Keys.push(variation.s3_key);
+      }
+    }
+
+    await supabase
+      .from('instagram_post_variations')
+      .update({
+        cloudfront_url: newUrls[0],
+        s3_key: newS3Keys[0],
+        carousel_urls: newUrls,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', variation.id);
+
+    setVariations(prev => prev.map(v => v.id === variation.id
+      ? { ...v, cloudfront_url: newUrls[0], s3_key: newS3Keys[0], carousel_urls: newUrls }
+      : v));
+  };
+
   const handlePublishNow = async (variationId: string) => {
     try {
+      const variation = variations.find(v => v.id === variationId);
+      if (variation) {
+        await processTextOverlayBeforePublish(variation);
+      }
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
         method: 'POST',
         headers: {
@@ -795,6 +1019,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     let failCount = 0;
     for (const variation of approved) {
       try {
+        await processTextOverlayBeforePublish(variation);
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
           method: 'POST',
           headers: {
