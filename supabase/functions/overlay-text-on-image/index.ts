@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
-import { Resvg } from "npm:@resvg/resvg-wasm@2.0.1";
+import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.0.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,7 +26,7 @@ async function ensureWasmInit() {
   const wasmUrl = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.0.1/index_bg.wasm";
   const wasmResponse = await fetch(wasmUrl);
   const wasmBuffer = await wasmResponse.arrayBuffer();
-  await (Resvg as any).initWasm(new Uint8Array(wasmBuffer));
+  await initWasm(new Uint8Array(wasmBuffer));
   wasmInitialized = true;
 }
 
