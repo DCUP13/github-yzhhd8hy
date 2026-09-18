@@ -27,6 +27,8 @@ import {
   ChevronRight,
   Reply,
   Bot,
+  Save,
+  Pencil,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -107,6 +109,30 @@ interface PostingSchedule {
   carousel_size: number;
 }
 
+interface PostProcess {
+  id: string;
+  name: string;
+  content_type: string;
+  carousel_size: number;
+  carousel_text_lines: string[];
+  base_caption: string;
+  hashtags: string[];
+  variation_settings: Record<string, boolean>;
+  randomize_content: boolean;
+  prompt_mode: string;
+  prompt_id: string | null;
+  custom_prompt: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AccountAssignment {
+  account_id: string;
+  process_id: string | null;
+  scheduled_for: string | null;
+  post_now: boolean;
+}
+
 interface CommentEvent {
   id: string;
   event_type: string;
@@ -180,9 +206,20 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
   // Test post state
   const [testPostAssetId, setTestPostAssetId] = useState<string | null>(null);
-  const [testPostAccountId, setTestPostAccountId] = useState<string>('');
+  const [testPostAccountIds, setTestPostAccountIds] = useState<string[]>([]);
   const [testPostCaption, setTestPostCaption] = useState<string>('');
   const [isPostingTest, setIsPostingTest] = useState(false);
+
+  // Post processes state
+  const [postProcesses, setPostProcesses] = useState<PostProcess[]>([]);
+  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
+  const [showSaveProcessDialog, setShowSaveProcessDialog] = useState(false);
+  const [processNameInput, setProcessNameInput] = useState('');
+  const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
+
+  // Account selection state
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+  const [accountAssignments, setAccountAssignments] = useState<AccountAssignment[]>([]);
 
   // Feed state
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
@@ -272,11 +309,112 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   }, []);
 
+  const fetchPostProcesses = useCallback(async () => {
+    setIsLoadingProcesses(true);
+    try {
+      const { data, error } = await supabase
+        .from('instagram_post_processes')
+        .select('*')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      setPostProcesses(data || []);
+    } catch (error) {
+      console.error('Error fetching post processes:', error);
+    } finally {
+      setIsLoadingProcesses(false);
+    }
+  }, [userId]);
+
+  const handleSaveProcess = async () => {
+    if (!processNameInput.trim()) {
+      toast.error('Enter a name for this process');
+      return;
+    }
+    const hashtags = hashtagsText
+      .split(/[,\n\s]+/)
+      .map(h => h.trim().replace(/^#/, ''))
+      .filter(h => h.length > 0)
+      .map(h => `#${h}`);
+    const textLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
+
+    const processData = {
+      name: processNameInput.trim(),
+      content_type: contentType,
+      carousel_size: carouselSize,
+      carousel_text_lines: textLines,
+      base_caption: baseCaption,
+      hashtags,
+      variation_settings: { caption: varyCaption, hashtags: varyHashtags, font: varyFont },
+      randomize_content: randomizeContent,
+      prompt_mode: promptMode,
+      prompt_id: promptMode === 'select' ? selectedPromptId : null,
+      custom_prompt: promptMode === 'custom' ? customPrompt.trim() : null,
+    };
+
+    try {
+      if (editingProcessId) {
+        const { error } = await supabase
+          .from('instagram_post_processes')
+          .update({ ...processData, updated_at: new Date().toISOString() })
+          .eq('id', editingProcessId);
+        if (error) throw error;
+        toast.success('Process updated');
+      } else {
+        const { error } = await supabase
+          .from('instagram_post_processes')
+          .insert({ ...processData, user_id: userId });
+        if (error) throw error;
+        toast.success('Process saved');
+      }
+      setShowSaveProcessDialog(false);
+      setProcessNameInput('');
+      setEditingProcessId(null);
+      fetchPostProcesses();
+    } catch (error) {
+      console.error('Error saving process:', error);
+      toast.error(`Failed to save process: ${error.message}`);
+    }
+  };
+
+  const handleLoadProcess = (process: PostProcess) => {
+    setContentType(process.content_type as 'post' | 'reel');
+    setCarouselSize(process.carousel_size);
+    setCarouselTextLines(process.carousel_text_lines?.length ? process.carousel_text_lines : ['']);
+    setBaseCaption(process.base_caption);
+    setHashtagsText((process.hashtags || []).join(' '));
+    const vs = process.variation_settings || {};
+    setVaryCaption(vs.caption !== false);
+    setVaryHashtags(vs.hashtags !== false);
+    setVaryFont(vs.font !== false);
+    setRandomizeContent(process.randomize_content);
+    setPromptMode(process.prompt_mode as 'none' | 'select' | 'custom');
+    setSelectedPromptId(process.prompt_id || null);
+    setCustomPrompt(process.custom_prompt || '');
+    toast.success(`Loaded process: ${process.name}`);
+  };
+
+  const handleDeleteProcess = async (processId: string) => {
+    try {
+      const { error } = await supabase
+        .from('instagram_post_processes')
+        .delete()
+        .eq('id', processId);
+      if (error) throw error;
+      setPostProcesses(prev => prev.filter(p => p.id !== processId));
+      toast.success('Process deleted');
+    } catch (error) {
+      console.error('Error deleting process:', error);
+      toast.error('Failed to delete process');
+    }
+  };
+
   useEffect(() => {
     fetchAssets();
     fetchBatches();
     fetchSchedules();
-  }, [fetchAssets, fetchBatches, fetchSchedules]);
+    fetchPostProcesses();
+  }, [fetchAssets, fetchBatches, fetchSchedules, fetchPostProcesses]);
 
   useEffect(() => {
     const fetchPrompts = async () => {
@@ -401,6 +539,10 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       toast.error('Enter a base caption');
       return;
     }
+    if (selectedAccountIds.length === 0) {
+      toast.error('Select at least one account to post to');
+      return;
+    }
 
     setIsGenerating(true);
     try {
@@ -410,8 +552,19 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         .filter(h => h.length > 0)
         .map(h => `#${h}`);
 
-      // Filter out empty carousel text lines
       const textLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
+
+      // Build account_assignments: each selected account gets its process
+      // assignment, schedule time, and post-now flag.
+      const assignments = selectedAccountIds.map(accId => {
+        const existing = accountAssignments.find(a => a.account_id === accId);
+        return {
+          account_id: accId,
+          process_id: existing?.process_id ?? null,
+          scheduled_for: existing?.scheduled_for ?? null,
+          post_now: existing?.post_now ?? postNow,
+        };
+      });
 
       const batchInsert: Record<string, unknown> = {
         user_id: userId,
@@ -421,11 +574,12 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         selected_asset_ids: [],
         variation_settings: { caption: varyCaption, hashtags: varyHashtags, font: varyFont },
         randomize_content: randomizeContent,
-        preview_count: previewCount,
+        preview_count: selectedAccountIds.length,
         carousel_size: carouselSize,
         carousel_text_lines: textLines,
         post_now: postNow,
         use_whole_library: useWholeLibrary,
+        account_assignments: assignments,
         status: 'draft',
       };
 
@@ -474,6 +628,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       setBaseCaption('');
       setHashtagsText('');
       setCarouselTextLines(['']);
+      setSelectedAccountIds([]);
+      setAccountAssignments([]);
       fetchBatches();
       setActiveBatchId(batch.id);
       setSubView('staging');
@@ -578,37 +734,50 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   };
 
   const handleTestPost = async () => {
-    if (!testPostAssetId || !testPostAccountId) {
-      toast.error('Select an asset and an account for the test post');
+    if (!testPostAssetId || testPostAccountIds.length === 0) {
+      toast.error('Select an asset and at least one account for the test post');
       return;
     }
 
     setIsPostingTest(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          action: 'test_post',
-          asset_id: testPostAssetId,
-          account_id: testPostAccountId,
-          caption: testPostCaption,
-        }),
-      });
+      let successCount = 0;
+      let failCount = 0;
+      for (const accId of testPostAccountIds) {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            action: 'test_post',
+            asset_id: testPostAssetId,
+            account_id: accId,
+            caption: testPostCaption,
+          }),
+        });
 
-      if (response.ok) {
-        const result = await response.json();
-        toast.success(`Test post published! Media ID: ${result.media_id}`);
-        setTestPostAssetId(null);
-        setTestPostCaption('');
-      } else {
-        const err = await response.json().catch(() => ({}));
-        toast.error(`Test post failed: ${err.error || 'Unknown error'}`);
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          const err = await response.json().catch(() => ({}));
+          console.error(`Test post failed for account ${accId}:`, err.error);
+        }
       }
+
+      if (failCount === 0) {
+        toast.success(`${successCount} test post${successCount !== 1 ? 's' : ''} published!`);
+      } else if (successCount === 0) {
+        toast.error('All test posts failed');
+      } else {
+        toast.error(`${successCount} succeeded, ${failCount} failed`);
+      }
+      setTestPostAssetId(null);
+      setTestPostAccountIds([]);
+      setTestPostCaption('');
     } catch (error) {
       console.error('Test post error:', error);
       toast.error(`Test post failed: ${error.message}`);
@@ -909,16 +1078,35 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       <option key={a.id} value={a.id}>{a.file_name}</option>
                     ))}
                   </select>
-                  <select
-                    value={testPostAccountId}
-                    onChange={(e) => setTestPostAccountId(e.target.value)}
-                    className="sm:w-auto px-3 py-2.5 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">Select account...</option>
+                </div>
+                <div>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">Select accounts to test post to:</p>
+                  <div className="flex flex-wrap gap-2">
                     {accounts.map(a => (
-                      <option key={a.id} value={a.id}>@{a.username || 'Unknown'}</option>
+                      <label key={a.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                        testPostAccountIds.includes(a.id)
+                          ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/30'
+                          : 'border-amber-300 dark:border-amber-600 bg-white dark:bg-gray-700'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={testPostAccountIds.includes(a.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setTestPostAccountIds(prev => [...prev, a.id]);
+                            } else {
+                              setTestPostAccountIds(prev => prev.filter(id => id !== a.id));
+                            }
+                          }}
+                          className="rounded border-amber-300 text-amber-600"
+                        />
+                        {a.profile_picture_url ? (
+                          <img src={a.profile_picture_url} alt="" className="w-5 h-5 rounded-full" />
+                        ) : null}
+                        <span className="text-sm text-gray-700 dark:text-gray-300">@{a.username || 'Unknown'}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
                 <textarea
                   value={testPostCaption}
@@ -929,11 +1117,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 />
                 <button
                   onClick={handleTestPost}
-                  disabled={!testPostAssetId || !testPostAccountId || isPostingTest}
+                  disabled={!testPostAssetId || testPostAccountIds.length === 0 || isPostingTest}
                   className="px-4 py-2.5 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
                 >
                   {isPostingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Post Test
+                  Post Test ({testPostAccountIds.length} account{testPostAccountIds.length !== 1 ? 's' : ''})
                 </button>
               </div>
             </div>
@@ -1132,20 +1320,154 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 <p className="mt-1 text-xs text-gray-500">Separate with spaces or commas</p>
               </div>
 
-              {/* Preview count */}
+              {/* Saved Processes */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Saved Post Processes</h4>
+                  <button
+                    onClick={() => { setEditingProcessId(null); setProcessNameInput(''); setShowSaveProcessDialog(true); }}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg flex items-center gap-1"
+                  >
+                    <Save className="w-3 h-3" /> Save Current as Process
+                  </button>
+                </div>
+                {isLoadingProcesses ? (
+                  <p className="text-xs text-gray-400">Loading...</p>
+                ) : postProcesses.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No saved processes yet. Configure your settings above and click "Save Current as Process" to create a reusable template.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {postProcesses.map(proc => (
+                      <div key={proc.id} className="flex items-center gap-1 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 px-2 py-1">
+                        <button
+                          onClick={() => handleLoadProcess(proc)}
+                          className="text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-pink-600 dark:hover:text-pink-400"
+                        >
+                          {proc.name}
+                        </button>
+                        <button
+                          onClick={() => { setEditingProcessId(proc.id); setProcessNameInput(proc.name); setShowSaveProcessDialog(true); }}
+                          className="text-gray-400 hover:text-blue-500"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProcess(proc.id)}
+                          className="text-gray-400 hover:text-red-500"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Account Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Number of Posts to Preview: {previewCount}
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Accounts to Post To
                 </label>
-                <input
-                  type="range"
-                  min="1"
-                  max={Math.max(1, accounts.length)}
-                  value={previewCount}
-                  onChange={(e) => setPreviewCount(parseInt(e.target.value))}
-                  className="w-full accent-pink-500"
-                />
-                <p className="text-xs text-gray-500">One variation per account (max {accounts.length})</p>
+                <p className="text-xs text-gray-500 mb-3">
+                  Check the accounts you want to create posts for. Each account can use a different saved process and schedule.
+                </p>
+                <div className="space-y-2">
+                  {accounts.map(a => {
+                    const isChecked = selectedAccountIds.includes(a.id);
+                    const assignment = accountAssignments.find(asg => asg.account_id === a.id);
+                    return (
+                      <div key={a.id} className={`rounded-lg border transition-colors ${
+                        isChecked ? 'border-pink-300 bg-pink-50/50 dark:bg-pink-900/10' : 'border-gray-200 dark:border-gray-700'
+                      }`}>
+                        <label className="flex items-center gap-3 p-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAccountIds(prev => [...prev, a.id]);
+                                setAccountAssignments(prev => [...prev, {
+                                  account_id: a.id,
+                                  process_id: null,
+                                  scheduled_for: null,
+                                  post_now: postNow,
+                                }]);
+                              } else {
+                                setSelectedAccountIds(prev => prev.filter(id => id !== a.id));
+                                setAccountAssignments(prev => prev.filter(asg => asg.account_id !== a.id));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-pink-600"
+                          />
+                          {a.profile_picture_url ? (
+                            <img src={a.profile_picture_url} alt="" className="w-8 h-8 rounded-full" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                              <ImageIcon className="w-4 h-4 text-gray-400" />
+                            </div>
+                          )}
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">@{a.username || 'Unknown'}</span>
+                        </label>
+
+                        {/* Per-account process & schedule */}
+                        {isChecked && (
+                          <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-1">Process</label>
+                              <select
+                                value={assignment?.process_id ?? ''}
+                                onChange={(e) => {
+                                  const pid = e.target.value || null;
+                                  setAccountAssignments(prev => prev.map(asg =>
+                                    asg.account_id === a.id ? { ...asg, process_id: pid } : asg
+                                  ));
+                                }}
+                                className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              >
+                                <option value="">Use form settings</option>
+                                {postProcesses.map(p => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-1">Schedule</label>
+                              <input
+                                type="datetime-local"
+                                value={assignment?.scheduled_for ? new Date(assignment.scheduled_for).toISOString().slice(0, 16) : ''}
+                                onChange={(e) => {
+                                  const val = e.target.value ? new Date(e.target.value).toISOString() : null;
+                                  setAccountAssignments(prev => prev.map(asg =>
+                                    asg.account_id === a.id ? { ...asg, scheduled_for: val } : asg
+                                  ));
+                                }}
+                                className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-1">Post Mode</label>
+                              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 py-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={assignment?.post_now ?? postNow}
+                                  onChange={(e) => {
+                                    setAccountAssignments(prev => prev.map(asg =>
+                                      asg.account_id === a.id ? { ...asg, post_now: e.target.checked } : asg
+                                    ));
+                                  }}
+                                  className="rounded border-gray-300 text-pink-600"
+                                />
+                                Post immediately
+                              </label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Variation settings */}
@@ -1261,6 +1583,48 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* Save Process Dialog */}
+      {showSaveProcessDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSaveProcessDialog(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-sm w-full mx-4 p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                {editingProcessId ? 'Rename Process' : 'Save Post Process'}
+              </h3>
+              <button onClick={() => setShowSaveProcessDialog(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              This saves all current settings (content type, carousel, caption, hashtags, variation toggles, AI prompt) as a reusable template.
+            </p>
+            <input
+              type="text"
+              value={processNameInput}
+              onChange={(e) => setProcessNameInput(e.target.value)}
+              placeholder="Process name (e.g. Reels with quotes)"
+              autoFocus
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                onClick={() => setShowSaveProcessDialog(false)}
+                className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProcess}
+                disabled={!processNameInput.trim()}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-40"
+              >
+                {editingProcessId ? 'Update' : 'Save'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

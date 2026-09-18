@@ -234,10 +234,45 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Determine the AI prompt source: custom_prompt takes precedence over prompt_id
-    let promptContent: string | null = null;
+    // Load account_assignments from the batch (per-account process + schedule)
+    const accountAssignments: Array<{
+      account_id: string;
+      process_id: string | null;
+      scheduled_for: string | null;
+      post_now: boolean;
+    }> = batch.account_assignments || [];
+
+    // If account_assignments is populated, only use those accounts; otherwise fall
+    // back to the old behavior of slicing all accounts by preview_count.
+    const assignedAccountIds = accountAssignments.map(a => a.account_id);
+    let targetAccounts: typeof accounts;
+    if (assignedAccountIds.length > 0) {
+      targetAccounts = accounts.filter(a => assignedAccountIds.includes(a.id));
+    } else {
+      const previewCount = Math.min(batch.preview_count || accounts.length, accounts.length);
+      targetAccounts = accounts.slice(0, previewCount);
+    }
+
+    // Load any referenced post processes in one query
+    const processIds = accountAssignments
+      .map(a => a.process_id)
+      .filter((id): id is string => id !== null);
+    let postProcessesMap = new Map<string, Record<string, unknown>>();
+    if (processIds.length > 0) {
+      const { data: processes } = await supabase
+        .from("instagram_post_processes")
+        .select("*")
+        .in("id", processIds)
+        .eq("user_id", user.id);
+      for (const p of processes || []) {
+        postProcessesMap.set(p.id, p);
+      }
+    }
+
+    // Determine the batch-level AI prompt source (fallback when no process assigned)
+    let batchPromptContent: string | null = null;
     if (batch.custom_prompt && batch.custom_prompt.trim()) {
-      promptContent = batch.custom_prompt;
+      batchPromptContent = batch.custom_prompt;
     } else if (batch.prompt_id) {
       const { data: promptRow } = await supabase
         .from("prompts")
@@ -245,17 +280,10 @@ Deno.serve(async (req: Request) => {
         .eq("id", batch.prompt_id)
         .eq("user_id", user.id)
         .maybeSingle();
-      promptContent = promptRow?.content || null;
+      batchPromptContent = promptRow?.content || null;
     }
 
-    const settings = batch.variation_settings || {};
-    const useAICaption = settings.caption !== false;
-    const shuffleHashtags = settings.hashtags !== false;
-    const varyFont = settings.font !== false;
-    const carouselSize = batch.carousel_size || 1;
-    const carouselTextLines = batch.carousel_text_lines || [];
-    const postNow = batch.post_now || false;
-
+    const batchSettings = batch.variation_settings || {};
     const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
     const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
     const AWS_REGION = Deno.env.get("AWS_REGION") || "us-east-1";
@@ -264,25 +292,73 @@ Deno.serve(async (req: Request) => {
     // Delete existing variations for this batch
     await supabase.from("instagram_post_variations").delete().eq("batch_id", batch_id);
 
-    const previewCount = Math.min(batch.preview_count || accounts.length, accounts.length);
-    const targetAccounts = accounts.slice(0, previewCount);
-
     const variations: Array<Record<string, unknown>> = [];
 
     for (let i = 0; i < targetAccounts.length; i++) {
       const account = targetAccounts[i];
 
+      // Find this account's assignment, if any
+      const assignment = accountAssignments.find(a => a.account_id === account.id);
+      const process = assignment?.process_id ? postProcessesMap.get(assignment.process_id) : null;
+
+      // Resolve per-account settings: process overrides batch defaults
+      let baseCaption = batch.base_caption || '';
+      let hashtagsArr = batch.hashtags || [];
+      let contentType = batch.content_type || 'post';
+      let cSize = batch.carousel_size || 1;
+      let cTextLines = batch.carousel_text_lines || [];
+      let useAICaption = batchSettings.caption !== false;
+      let shuffleHashtags = batchSettings.hashtags !== false;
+      let varyFontFlag = batchSettings.font !== false;
+      let promptContent = batchPromptContent;
+      let accountPostNow = batch.post_now || false;
+      let accountScheduledFor: string | null = null;
+
+      if (process) {
+        baseCaption = (process.base_caption as string) || baseCaption;
+        hashtagsArr = (process.hashtags as string[]) || hashtagsArr;
+        contentType = (process.content_type as string) || contentType;
+        cSize = (process.carousel_size as number) || cSize;
+        cTextLines = (process.carousel_text_lines as string[]) || cTextLines;
+        const pSettings = (process.variation_settings as Record<string, boolean>) || {};
+        useAICaption = pSettings.caption !== false;
+        shuffleHashtags = pSettings.hashtags !== false;
+        varyFontFlag = pSettings.font !== false;
+
+        // Resolve process-level prompt
+        const pMode = (process.prompt_mode as string) || 'none';
+        if (pMode === 'custom' && process.custom_prompt) {
+          promptContent = process.custom_prompt as string;
+        } else if (pMode === 'select' && process.prompt_id) {
+          const { data: pPromptRow } = await supabase
+            .from("prompts")
+            .select("content")
+            .eq("id", process.prompt_id)
+            .eq("user_id", user.id)
+            .maybeSingle();
+          promptContent = pPromptRow?.content || null;
+        } else {
+          promptContent = null;
+        }
+      }
+
+      // Per-account post_now and schedule override batch-level
+      if (assignment) {
+        accountPostNow = assignment.post_now;
+        accountScheduledFor = assignment.scheduled_for;
+      }
+
       // Pick random assets for this carousel — different random selection per account
-      const carouselAssets = pickRandom(assets, Math.min(carouselSize, assets.length));
+      const carouselAssets = pickRandom(assets, Math.min(cSize, assets.length));
 
       // Generate caption variation
-      let caption = batch.base_caption || '';
-      if (useAICaption && promptContent && batch.base_caption) {
+      let caption = baseCaption;
+      if (useAICaption && promptContent && baseCaption) {
         try {
           const captionVars: Record<string, string> = {
-            original_caption: batch.base_caption,
+            original_caption: baseCaption,
             account_name: account.username || '',
-            hashtags: (batch.hashtags || []).join(' '),
+            hashtags: hashtagsArr.join(' '),
             variation_style: 'lightly rephrased, same meaning, different wording',
             transcript: carouselAssets[0]?.transcript || '',
           };
@@ -293,31 +369,28 @@ Deno.serve(async (req: Request) => {
           );
         } catch (e) {
           console.error("AI caption generation failed, using original:", e);
-          caption = batch.base_caption;
+          caption = baseCaption;
         }
       }
 
       // Shuffle hashtags
-      let hashtags = batch.hashtags || [];
+      let hashtags = hashtagsArr;
       if (shuffleHashtags && hashtags.length > 1) {
         hashtags = shuffleArray(hashtags);
       }
 
       // Select font
-      const fontUsed = varyFont ? FONTS[Math.floor(Math.random() * FONTS.length)] : null;
+      const fontUsed = varyFontFlag ? FONTS[Math.floor(Math.random() * FONTS.length)] : null;
 
       // For each carousel image, copy it to a new S3 path with a unique filename
-      // and apply the corresponding text line
       const carouselUrls: string[] = [];
       const carouselS3Keys: string[] = [];
 
       for (let j = 0; j < carouselAssets.length; j++) {
         const asset = carouselAssets[j];
-        const textForImage = carouselTextLines[j] || '';
 
-        // Copy the asset to posts/reels folder with a unique filename
-        const targetFolder = batch.content_type === 'reel' ? 'reels' : 'posts';
-        const contentType = asset.mime_type || (asset.file_type === 'video' ? 'video/mp4' : 'image/jpeg');
+        const targetFolder = contentType === 'reel' ? 'reels' : 'posts';
+        const assetContentType = asset.mime_type || (asset.file_type === 'video' ? 'video/mp4' : 'image/jpeg');
 
         try {
           if (BUCKET_NAME && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
@@ -326,7 +399,7 @@ Deno.serve(async (req: Request) => {
               BUCKET_NAME,
               targetFolder,
               user.id,
-              contentType,
+              assetContentType,
               AWS_ACCESS_KEY_ID,
               AWS_SECRET_ACCESS_KEY,
               AWS_REGION,
@@ -334,7 +407,6 @@ Deno.serve(async (req: Request) => {
             carouselUrls.push(copied.cloudfrontUrl);
             carouselS3Keys.push(copied.s3Key);
           } else {
-            // Fallback: use original URL
             carouselUrls.push(asset.cloudfront_url);
             carouselS3Keys.push(asset.s3_key);
           }
@@ -345,11 +417,10 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Primary URL is the first carousel image
       const primaryUrl = carouselUrls[0] || '';
       const primaryS3Key = carouselS3Keys[0] || '';
 
-      const variationStatus = postNow ? 'publishing' : 'staged';
+      const variationStatus = accountPostNow ? 'publishing' : (accountScheduledFor ? 'scheduled' : 'staged');
 
       variations.push({
         batch_id: batch_id,
@@ -361,9 +432,10 @@ Deno.serve(async (req: Request) => {
         caption: caption,
         hashtags: hashtags,
         font_used: fontUsed,
-        carousel_texts: carouselTextLines,
+        carousel_texts: cTextLines,
         source_filename: carouselAssets[0]?.file_name || null,
         status: variationStatus,
+        scheduled_for: accountScheduledFor,
       });
     }
 
@@ -376,21 +448,27 @@ Deno.serve(async (req: Request) => {
     }
 
     // Update batch status
-    const finalBatchStatus = postNow ? 'scheduled' : 'ready';
+    const anyPostNow = variations.some(v => v.status === 'publishing');
+    const anyScheduled = variations.some(v => v.status === 'scheduled');
+    const finalBatchStatus = anyPostNow ? 'scheduled' : (anyScheduled ? 'scheduled' : 'ready');
     await supabase
       .from("instagram_post_batches")
       .update({ status: finalBatchStatus, updated_at: new Date().toISOString() })
       .eq("id", batch_id);
 
-    // If post_now, trigger immediate publishing for each variation
-    if (postNow) {
+    // For variations with post_now, trigger immediate publishing
+    const publishNowVariations = variations.filter(v => v.status === 'publishing');
+    if (publishNowVariations.length > 0) {
       const insertedVariations = await supabase
         .from("instagram_post_variations")
         .select("id")
         .eq("batch_id", batch_id);
 
       if (insertedVariations.data) {
+        const publishIds = new Set(publishNowVariations.map(v => v.account_id));
         for (const v of insertedVariations.data) {
+          const variation = variations.find(varr => varr.account_id === v.account_id);
+          if (!variation || !publishIds.has(v.account_id)) continue;
           try {
             await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/publish-instagram-post`, {
               method: 'POST',
@@ -404,10 +482,34 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // For variations with a scheduled_for time, trigger scheduling via the publish function
+    const scheduledVariations = variations.filter(v => v.status === 'scheduled' && v.scheduled_for);
+    if (scheduledVariations.length > 0) {
+      const insertedVariations = await supabase
+        .from("instagram_post_variations")
+        .select("id, account_id, scheduled_for")
+        .eq("batch_id", batch_id);
+
+      if (insertedVariations.data) {
+        for (const v of insertedVariations.data) {
+          if (!v.scheduled_for) continue;
+          try {
+            await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/publish-instagram-post`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ variation_id: v.id, action: 'schedule' }),
+            });
+          } catch (e) {
+            console.error(`Schedule failed for ${v.id}:`, e);
+          }
+        }
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       variations_created: variations.length,
-      posted_immediately: postNow,
+      posted_immediately: publishNowVariations.length,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
