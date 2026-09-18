@@ -705,103 +705,30 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
-  const overlayTextOnImageCanvas = async (imageUrl: string, text: string, fontName: string): Promise<Blob> => {
-    // Fetch as blob to avoid canvas CORS tainting
-    const fetchResponse = await fetch(imageUrl);
-    if (!fetchResponse.ok) throw new Error(`Failed to fetch image: ${fetchResponse.status}`);
-    const imageBlob = await fetchResponse.blob();
-    const objectUrl = URL.createObjectURL(imageBlob);
-
-    try {
-      const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = objectUrl;
-      });
-
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-
-      const width = canvas.width;
-      const height = canvas.height;
-      const fontSize = Math.round(width * 0.06);
-      const fontFamily = fontName === 'Georgia' || fontName === 'Palatino'
-        ? `${fontName}, serif`
-        : fontName === 'Courier'
-          ? '"Courier New", monospace'
-          : fontName === 'Impact'
-            ? 'Impact, "Arial Black", sans-serif'
-            : `${fontName}, sans-serif`;
-
-      ctx.font = `bold ${fontSize}px ${fontFamily}`;
-      ctx.fillStyle = 'white';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
-
-      const maxCharsPerLine = Math.floor(width / (fontSize * 0.55));
-      const words = text.split(' ');
-      const lines: string[] = [];
-      let current = '';
-      for (const word of words) {
-        if ((current + ' ' + word).trim().length <= maxCharsPerLine) {
-          current = (current + ' ' + word).trim();
-        } else {
-          if (current) lines.push(current);
-          current = word;
-        }
-      }
-      if (current) lines.push(current);
-
-      const lineHeight = fontSize * 1.3;
-      const totalTextHeight = lines.length * lineHeight;
-      const startY = height - totalTextHeight - (height * 0.08);
-      const bgPadding = fontSize * 0.4;
-
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-      ctx.fillRect(0, startY - bgPadding, width, totalTextHeight + bgPadding * 2);
-
-      ctx.fillStyle = 'white';
-      ctx.font = `bold ${fontSize}px ${fontFamily}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
-      for (let i = 0; i < lines.length; i++) {
-        ctx.fillText(lines[i], width / 2, startY + (i * lineHeight) + fontSize);
-      }
-
-      return new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Failed to create blob from canvas'));
-        }, 'image/png');
-      });
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-    }
-  };
-
-  const uploadOverlayedImage = async (blob: Blob, userId: string): Promise<{ s3Key: string; cloudfrontUrl: string }> => {
-    const formData = new FormData();
-    formData.append('file', blob);
-    formData.append('file_name', `${crypto.randomUUID()}.png`);
-    formData.append('content_type', 'image/png');
-    formData.append('folder', 'posts');
-
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
+  const overlayTextOnImageServer = async (
+    imageUrl: string,
+    text: string,
+    fontName: string,
+  ): Promise<{ s3Key: string; cloudfrontUrl: string }> => {
+    const session = (await supabase.auth.getSession()).data.session;
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overlay-text-on-image`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token}`,
         apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       },
-      body: formData,
+      body: JSON.stringify({
+        source_url: imageUrl,
+        text,
+        font_name: fontName,
+        target_folder: 'posts',
+      }),
     });
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || `Upload failed (${response.status})`);
+      throw new Error(err.error || `Overlay failed (${response.status})`);
     }
 
     const result = await response.json();
@@ -832,8 +759,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
           if (text && !isVideo) {
             try {
-              const blob = await overlayTextOnImageCanvas(url, text, fontName);
-              const uploaded = await uploadOverlayedImage(blob, userId);
+              const uploaded = await overlayTextOnImageServer(url, text, fontName);
               newUrls.push(uploaded.cloudfrontUrl);
               newS3Keys.push(uploaded.s3Key);
             } catch (err) {
@@ -950,8 +876,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       if (text && !isVideo) {
         try {
-          const blob = await overlayTextOnImageCanvas(url, text, fontName);
-          const uploaded = await uploadOverlayedImage(blob, userId);
+          const uploaded = await overlayTextOnImageServer(url, text, fontName);
           newUrls.push(uploaded.cloudfrontUrl);
           newS3Keys.push(uploaded.s3Key);
         } catch (err) {
