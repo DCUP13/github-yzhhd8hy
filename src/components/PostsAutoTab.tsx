@@ -876,75 +876,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
-  const generateOverlayBlob = async (imageUrl: string, text: string): Promise<Blob> => {
-    const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/proxy-image?url=${encodeURIComponent(imageUrl)}`;
-    const imgRes = await fetch(proxyUrl);
-    if (!imgRes.ok) throw new Error(`Failed to download image: ${imgRes.status}`);
-    const blob = await imgRes.blob();
-    const objectUrl = URL.createObjectURL(blob);
-
-    try {
-      const img = new Image();
-      img.src = objectUrl;
-      await img.decode();
-
-      const MAX_DIM = 1080;
-      let w = img.naturalWidth;
-      let h = img.naturalHeight;
-      if (w > MAX_DIM || h > MAX_DIM) {
-        const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
-        w = Math.round(w * scale);
-        h = Math.round(h * scale);
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d')!;
-
-      ctx.drawImage(img, 0, 0, w, h);
-
-      const fontSize = Math.round(w * 0.06);
-      ctx.font = `bold ${fontSize}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
-      const words = text.trim().split(/\s+/);
-      const lines: string[] = [];
-      let current = '';
-      for (const word of words) {
-        if ((current + ' ' + word).trim().length <= maxCharsPerLine) {
-          current = (current + ' ' + word).trim();
-        } else {
-          if (current) lines.push(current);
-          current = word;
-        }
-      }
-      if (current) lines.push(current);
-
-      const lineHeight = fontSize * 1.3;
-      const totalTextHeight = lines.length * lineHeight;
-      const startY = h - totalTextHeight - Math.round(h * 0.08);
-      const bgPadding = Math.round(fontSize * 0.4);
-      const bgRectY = startY - bgPadding;
-      const bgRectHeight = totalTextHeight + bgPadding * 2;
-
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-      ctx.fillRect(0, bgRectY, w, bgRectHeight);
-
-      ctx.fillStyle = 'white';
-      for (let i = 0; i < lines.length; i++) {
-        const y = startY + (i * lineHeight) + fontSize * 0.65;
-        ctx.fillText(lines[i], w / 2, y);
-      }
-
-      return await canvas.toBlob({ type: 'image/png' })!;
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-    }
-  };
-
   const applyOverlaysToVariation = async (variation: PostVariation): Promise<{ urls: string[]; changed: boolean }> => {
     const carouselTexts = variation.carousel_texts || [];
     const hasTextOverlay = carouselTexts.some(t => t && t.trim());
@@ -964,26 +895,28 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       if (text && !isVideo) {
         try {
-          const overlayBlob = await generateOverlayBlob(url, text);
-          const formData = new FormData();
-          formData.append('file', overlayBlob, `${crypto.randomUUID()}.png`);
-          formData.append('file_name', `${crypto.randomUUID()}.png`);
-          formData.append('content_type', 'image/png');
-          formData.append('folder', 'text-overlay');
-
-          const uploadResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
+          const { data: { session } } = await supabase.auth.getSession();
+          const overlayResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overlay-text-on-image`, {
             method: 'POST',
             headers: {
-              Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session?.access_token}`,
+              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
             },
-            body: formData,
+            body: JSON.stringify({
+              source_url: url,
+              text: text,
+              target_folder: 'text-overlay',
+            }),
           });
 
-          if (uploadResponse.ok) {
-            const result = await uploadResponse.json();
+          if (overlayResponse.ok) {
+            const result = await overlayResponse.json();
             overlayedUrls.push(result.cloudfront_url);
             anyOverlayed = true;
           } else {
+            const err = await overlayResponse.json().catch(() => ({}));
+            console.error(`Overlay failed for slide ${i}:`, err.error);
             overlayedUrls.push(url);
           }
         } catch (e) {
