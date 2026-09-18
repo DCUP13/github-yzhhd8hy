@@ -457,7 +457,7 @@ Deno.serve(async (req: Request) => {
     // Publishing from within this function via server-to-server fetch was unreliable
     // and left variations stuck in 'publishing' forever.
     let publishedVariationIds: string[] = [];
-    if (batchPostNow) {
+    if (batch.post_now) {
       const inserted = await supabase
         .from("instagram_post_variations")
         .select("id, account_id")
