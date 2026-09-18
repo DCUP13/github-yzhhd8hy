@@ -546,8 +546,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       return;
     }
     if (!baseCaption.trim()) {
-      toast.error('Enter a base caption');
-      return;
+      const allHaveProcess = selectedAccountIds.every(accId => {
+        const a = accountAssignments.find(asg => asg.account_id === accId);
+        return a?.process_id;
+      });
+      if (!allHaveProcess) {
+        toast.error('Enter a base caption or select a saved process for each account');
+        return;
+      }
     }
     if (selectedAccountIds.length === 0) {
       toast.error('Select at least one account to post to');
@@ -1496,6 +1502,10 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                 value={assignment?.process_id ?? ''}
                                 onChange={(e) => {
                                   const pid = e.target.value || null;
+                                  if (pid) {
+                                    const proc = postProcesses.find(p => p.id === pid);
+                                    if (proc) handleLoadProcess(proc);
+                                  }
                                   setAccountAssignments(prev => prev.map(asg =>
                                     asg.account_id === a.id ? { ...asg, process_id: pid } : asg
                                   ));
