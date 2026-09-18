@@ -381,6 +381,7 @@ Deno.serve(async (req: Request) => {
       const fontUsed = varyFontFlag ? FONTS[Math.floor(Math.random() * FONTS.length)] : null;
 
       // For each carousel image, copy it to a new S3 path with a unique filename
+      // If text overlay is configured for this slide, render the text onto the image
       const carouselUrls: string[] = [];
       const carouselS3Keys: string[] = [];
 
@@ -389,6 +390,7 @@ Deno.serve(async (req: Request) => {
 
         const targetFolder = contentType === 'reel' ? 'reels' : 'posts';
         const assetContentType = asset.mime_type || (asset.file_type === 'video' ? 'video/mp4' : 'image/jpeg');
+        const textForSlide = cTextLines[j]?.trim() || '';
 
         try {
           if (BUCKET_NAME && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
@@ -402,8 +404,43 @@ Deno.serve(async (req: Request) => {
               AWS_SECRET_ACCESS_KEY,
               AWS_REGION,
             );
-            carouselUrls.push(copied.cloudfrontUrl);
-            carouselS3Keys.push(copied.s3Key);
+
+            // If this slide has text and it's an image (not video), overlay the text
+            if (textForSlide && asset.file_type !== 'video') {
+              try {
+                const overlayFont = fontUsed || 'Impact';
+                const overlayResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/overlay-text-on-image`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                    'apikey': Deno.env.get("SUPABASE_ANON_KEY")!,
+                  },
+                  body: JSON.stringify({
+                    source_url: copied.cloudfrontUrl,
+                    text: textForSlide,
+                    font_name: overlayFont,
+                    target_folder: targetFolder,
+                  }),
+                });
+                if (overlayResponse.ok) {
+                  const overlayResult = await overlayResponse.json();
+                  carouselUrls.push(overlayResult.cloudfront_url);
+                  carouselS3Keys.push(overlayResult.s3_key);
+                } else {
+                  console.error(`Text overlay failed for slide ${j}, using plain image`);
+                  carouselUrls.push(copied.cloudfrontUrl);
+                  carouselS3Keys.push(copied.s3Key);
+                }
+              } catch (overlayErr) {
+                console.error(`Text overlay error for slide ${j}:`, overlayErr);
+                carouselUrls.push(copied.cloudfrontUrl);
+                carouselS3Keys.push(copied.s3Key);
+              }
+            } else {
+              carouselUrls.push(copied.cloudfrontUrl);
+              carouselS3Keys.push(copied.s3Key);
+            }
           } else {
             carouselUrls.push(asset.cloudfront_url);
             carouselS3Keys.push(asset.s3_key);

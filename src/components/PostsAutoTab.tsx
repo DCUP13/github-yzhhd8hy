@@ -25,6 +25,7 @@ import {
   CheckCheck,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Reply,
   Bot,
   Save,
@@ -209,6 +210,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [variations, setVariations] = useState<PostVariation[]>([]);
   const [isLoadingVariations, setIsLoadingVariations] = useState(false);
+  const [carouselImageIndex, setCarouselImageIndex] = useState<Record<string, number>>({});
 
   // Schedules state
   const [schedules, setSchedules] = useState<PostingSchedule[]>([]);
@@ -710,11 +712,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     try {
       const { error } = await supabase
         .from('instagram_post_variations')
-        .update({ status: 'rejected', updated_at: new Date().toISOString() })
+        .delete()
         .eq('id', variationId);
       if (error) throw error;
-      setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'rejected' } : v));
-      toast.success('Variation rejected');
+      setVariations(prev => prev.filter(v => v.id !== variationId));
+      toast.success('Variation rejected and removed');
     } catch (error) {
       console.error('Error rejecting variation:', error);
       toast.error('Failed to reject');
@@ -1791,6 +1793,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                   const carouselUrls = variation.carousel_urls && variation.carousel_urls.length > 0
                     ? variation.carousel_urls
                     : [variation.cloudfront_url];
+                  const carouselIndex = carouselImageIndex[variation.id] ?? 0;
+                  const currentUrl = carouselUrls[carouselIndex] || carouselUrls[0];
+                  const isVideo = currentUrl.endsWith('.mp4') || currentUrl.endsWith('.mov');
                   return (
                     <div key={variation.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
                       <div className="flex items-center gap-2 p-3 border-b border-gray-100 dark:border-gray-700">
@@ -1807,17 +1812,43 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         </span>
                       </div>
 
-                      {/* Carousel preview */}
-                      <div className="aspect-square bg-gray-100 dark:bg-gray-900 relative">
+                      {/* Carousel preview with navigation */}
+                      <div className="aspect-square bg-gray-100 dark:bg-gray-900 relative group">
                         {carouselUrls.length > 1 && (
-                          <div className="absolute top-2 right-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <Layers className="w-3 h-3" /> {carouselUrls.length} photos
-                          </div>
+                          <>
+                            <div className="absolute top-2 right-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Layers className="w-3 h-3" /> {carouselIndex + 1}/{carouselUrls.length}
+                            </div>
+                            {carouselIndex > 0 && (
+                              <button
+                                onClick={() => setCarouselImageIndex(prev => ({ ...prev, [variation.id]: carouselIndex - 1 }))}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                              >
+                                <ChevronLeft className="w-5 h-5" />
+                              </button>
+                            )}
+                            {carouselIndex < carouselUrls.length - 1 && (
+                              <button
+                                onClick={() => setCarouselImageIndex(prev => ({ ...prev, [variation.id]: carouselIndex + 1 }))}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                              >
+                                <ChevronRight className="w-5 h-5" />
+                              </button>
+                            )}
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1">
+                              {carouselUrls.map((_, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`w-1.5 h-1.5 rounded-full transition-colors ${idx === carouselIndex ? 'bg-white' : 'bg-white/40'}`}
+                                />
+                              ))}
+                            </div>
+                          </>
                         )}
-                        {(variation.s3_key.endsWith('.mp4') || variation.s3_key.endsWith('.mov')) ? (
-                          <video src={variation.cloudfront_url} className="w-full h-full object-cover" controls preload="metadata" />
+                        {isVideo ? (
+                          <video src={currentUrl} className="w-full h-full object-cover" controls preload="metadata" />
                         ) : (
-                          <img src={variation.cloudfront_url} alt="" className="w-full h-full object-cover" />
+                          <img src={currentUrl} alt="" className="w-full h-full object-cover" />
                         )}
                       </div>
 
@@ -1864,7 +1895,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         )}
 
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
-                          {(variation.status === 'staged' || variation.status === 'rejected') && (
+                          {variation.status === 'staged' && (
                             <>
                               <button
                                 onClick={() => handleApproveVariation(variation.id)}

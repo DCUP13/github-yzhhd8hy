@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
+import { Resvg } from "npm:@resvg/resvg-js@2.6.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,23 +9,27 @@ const corsHeaders = {
 
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 
-const FONTS = [
-  { name: 'Inter', family: 'system-ui, -apple-system, sans-serif' },
-  { name: 'Georgia', family: 'Georgia, "Times New Roman", serif' },
-  { name: 'Courier', family: '"Courier New", monospace' },
-  { name: 'Impact', family: 'Impact, "Arial Black", sans-serif' },
-  { name: 'Palatino', family: 'Palatino, "Palatino Linotype", serif' },
-  { name: 'Arial', family: 'Arial, Helvetica, sans-serif' },
-  { name: 'Verdana', family: 'Verdana, Geneva, sans-serif' },
-  { name: 'Trebuchet', family: '"Trebuchet MS", sans-serif' },
-];
+const FONTS: Record<string, string> = {
+  'Inter': 'system-ui, -apple-system, sans-serif',
+  'Georgia': 'Georgia, "Times New Roman", serif',
+  'Courier': '"Courier New", monospace',
+  'Impact': 'Impact, "Arial Black", sans-serif',
+  'Palatino': 'Palatino, "Palatino Linotype", serif',
+  'Arial': 'Arial, Helvetica, sans-serif',
+  'Verdana': 'Verdana, Geneva, sans-serif',
+  'Trebuchet': '"Trebuchet MS", sans-serif',
+};
 
-async function sha256(message: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+const FONT_WEIGHTS: Record<string, string> = {
+  'Inter': '600',
+  'Georgia': '700',
+  'Courier': '700',
+  'Impact': '400',
+  'Palatino': '700',
+  'Arial': '700',
+  'Verdana': '700',
+  'Trebuchet': '700',
+};
 
 async function uploadToS3Signed(
   bucket: string,
@@ -97,6 +102,97 @@ async function uploadToS3Signed(
   }
 }
 
+function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function wrapText(text: string, maxChars: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    if ((current + ' ' + word).trim().length <= maxChars) {
+      current = (current + ' ' + word).trim();
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+/**
+ * Downloads an image, overlays text on it using SVG compositing, and returns the PNG buffer.
+ */
+async function overlayTextOnImage(
+  imageUrl: string,
+  text: string,
+  fontName: string,
+): Promise<Uint8Array> {
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
+  const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
+
+  // Detect image dimensions from the buffer
+  let width = 1080;
+  let height = 1080;
+  if (imageBuffer.length >= 24) {
+    // JPEG: SOF0 marker
+    if (imageBuffer[0] === 0xFF && imageBuffer[1] === 0xD8) {
+      for (let i = 2; i < imageBuffer.length - 9; i++) {
+        if (imageBuffer[i] === 0xFF && (imageBuffer[i + 1] === 0xC0 || imageBuffer[i + 1] === 0xC2)) {
+          height = (imageBuffer[i + 5] << 8) | imageBuffer[i + 6];
+          width = (imageBuffer[i + 7] << 8) | imageBuffer[i + 8];
+          break;
+        }
+      }
+    }
+    // PNG
+    else if (imageBuffer[0] === 0x89 && imageBuffer[1] === 0x50) {
+      width = (imageBuffer[16] << 24) | (imageBuffer[17] << 16) | (imageBuffer[18] << 8) | imageBuffer[19];
+      height = (imageBuffer[20] << 24) | (imageBuffer[21] << 16) | (imageBuffer[22] << 8) | imageBuffer[23];
+    }
+  }
+
+  const base64Image = btoa(String.fromCharCode(...imageBuffer));
+  const mimeType = imageUrl.match(/\.(png)$/i) ? 'image/png' : 'image/jpeg';
+
+  const fontFamily = FONTS[fontName] || FONTS['Impact'];
+  const fontWeight = FONT_WEIGHTS[fontName] || '700';
+
+  // Font size relative to image width
+  const fontSize = Math.round(width * 0.06);
+  const maxCharsPerLine = Math.floor(width / (fontSize * 0.55));
+  const textLines = wrapText(text, maxCharsPerLine);
+
+  const lineHeight = fontSize * 1.3;
+  const totalTextHeight = textLines.length * lineHeight;
+  const startY = height - totalTextHeight - (height * 0.08);
+
+  // Build SVG with semi-transparent background bar behind text
+  const bgPadding = fontSize * 0.4;
+  const bgRectY = startY - bgPadding;
+  const bgRectHeight = totalTextHeight + bgPadding * 2;
+
+  const textElements = textLines.map((line, i) => {
+    const y = startY + (i * lineHeight) + fontSize;
+    return `<text x="${width / 2}" y="${y}" font-family='${escapeXml(fontFamily)}' font-size="${fontSize}" font-weight="${fontWeight}" fill="white" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(line)}</text>`;
+  }).join('\n');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <image href="data:${mimeType};base64,${base64Image}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice"/>
+  <rect x="0" y="${bgRectY}" width="${width}" height="${bgRectHeight}" fill="rgba(0,0,0,0.45)"/>
+  ${textElements}
+</svg>`;
+
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: 'width', value: width },
+  });
+  const rendered = resvg.render().asPng();
+  return new Uint8Array(rendered);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -117,12 +213,18 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { source_url, text, font_name, target_folder, content_type } = body as {
-      source_url?: string; text?: string; font_name?: string; target_folder?: string; content_type?: string;
+    const { source_url, text, font_name, target_folder } = body as {
+      source_url?: string; text?: string; font_name?: string; target_folder?: string;
     };
 
     if (!source_url) {
       return new Response(JSON.stringify({ error: "Missing source_url" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!text || !text.trim()) {
+      return new Response(JSON.stringify({ error: "Missing text to overlay" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -138,21 +240,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Download the source image and re-upload with a unique filename
-    const imageResponse = await fetch(source_url);
-    if (!imageResponse.ok) throw new Error(`Failed to download source: ${imageResponse.status}`);
-    const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
+    const selectedFont = font_name || 'Impact';
+    const pngBuffer = await overlayTextOnImage(source_url, text.trim(), selectedFont);
 
     const folder = target_folder || 'posts';
-    const ext = source_url.split('.').pop()?.split('?')[0] || 'jpg';
-    const uniqueName = `${crypto.randomUUID()}.${ext}`;
+    const uniqueName = `${crypto.randomUUID()}.png`;
     const s3Key = `instagram/${folder}/${user.id}/${uniqueName}`;
-    const ct = content_type || 'image/jpeg';
 
-    await uploadToS3Signed(BUCKET_NAME, s3Key, imageBuffer, ct, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
+    await uploadToS3Signed(BUCKET_NAME, s3Key, pngBuffer, 'image/png', AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
 
     const cloudfrontUrl = `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;
-    const selectedFont = font_name || FONTS[Math.floor(Math.random() * FONTS.length)].name;
 
     return new Response(JSON.stringify({
       cloudfront_url: cloudfrontUrl,
