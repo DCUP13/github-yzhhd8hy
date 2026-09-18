@@ -112,11 +112,11 @@ async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Ar
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
 
-  // Decode using Deno's native Image API (no WASM download needed)
-  const img = await Image.decode(imageBuffer);
+  // Decode using createImageBitmap (web standard, available in Deno/Edge Runtime)
+  const bitmap = await createImageBitmap(new Blob([imageBuffer]));
 
-  let w = img.width;
-  let h = img.height;
+  let w = bitmap.width;
+  let h = bitmap.height;
   if (w > MAX_DIM || h > MAX_DIM) {
     const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
     w = Math.round(w * scale);
@@ -128,7 +128,7 @@ async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Ar
   const ctx = canvas.getContext('2d')!;
 
   // Draw the image (resize handled by drawImage)
-  ctx.drawImage(img, 0, 0, w, h);
+  ctx.drawImage(bitmap, 0, 0, w, h);
 
   // Text overlay
   const fontSize = Math.round(w * 0.06);
