@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
+import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,18 +9,40 @@ const corsHeaders = {
 
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 
-let fontLoaded = false;
+let wasmInitialized = false;
+let cachedFontBuffer: Uint8Array | null = null;
 
-async function ensureFont(): Promise<void> {
-  if (fontLoaded) return;
+async function ensureWasmInit() {
+  if (wasmInitialized) return;
+  const wasmUrl = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.6.2/index_bg.wasm";
+  const wasmResponse = await fetch(wasmUrl);
+  if (!wasmResponse.ok) throw new Error(`Failed to download WASM: ${wasmResponse.status}`);
+  const wasmBuffer = await wasmResponse.arrayBuffer();
+  await initWasm(new Uint8Array(wasmBuffer));
+  wasmInitialized = true;
+}
+
+async function ensureFont(): Promise<Uint8Array> {
+  if (cachedFontBuffer) return cachedFontBuffer;
   const fontUrl = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.woff2";
   const fontResp = await fetch(fontUrl);
   if (!fontResp.ok) throw new Error(`Failed to download font: ${fontResp.status}`);
-  const fontData = await fontResp.arrayBuffer();
-  const fontFace = new FontFace('Inter', fontData);
-  await fontFace.load();
-  (globalThis as any).fonts?.add(fontFace);
-  fontLoaded = true;
+  cachedFontBuffer = new Uint8Array(await fontResp.arrayBuffer());
+  return cachedFontBuffer;
+}
+
+function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
 }
 
 async function uploadToS3Signed(
@@ -171,39 +194,42 @@ async function processOverlay(
 
   const selectedFont = font_name || 'Inter';
 
-  await ensureFont();
-
+  // Step 1: Download image
   const imageResponse = await fetch(source_url);
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
   const mimeType = source_url.match(/\.(png)$/i) ? 'image/png' : 'image/jpeg';
 
+  // Step 2: Decode via Canvas API (handles EXIF rotation, preserves quality)
   const blob = new Blob([imageBuffer], { type: mimeType });
   const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' } as any);
-
   const width = bitmap.width;
   const height = bitmap.height;
 
   const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
-
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
 
-  const fontSize = Math.round(width * 0.06);
-  ctx.font = `bold ${fontSize}px Inter, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
+  // Convert to PNG so resvg gets a lossless, pre-oriented image
+  const pngBlob = await canvas.convertToBlob({ type: 'image/png' });
+  const pngBytes = new Uint8Array(await pngBlob.arrayBuffer());
+  const base64Png = bytesToBase64(pngBytes);
 
+  // Step 3: Build SVG with the pre-decoded image + text overlay
+  await ensureWasmInit();
+  const fontBuffer = await ensureFont();
+
+  const fontSize = Math.round(width * 0.06);
   const maxWidth = width * 0.85;
+  const maxCharsPerLine = Math.floor(maxWidth / (fontSize * 0.55));
   const words = text.trim().split(/\s+/);
   const lines: string[] = [];
   let current = '';
   for (const word of words) {
-    const test = current ? current + ' ' + word : word;
-    if (ctx.measureText(test).width <= maxWidth) {
-      current = test;
+    if ((current + ' ' + word).trim().length <= maxCharsPerLine) {
+      current = (current + ' ' + word).trim();
     } else {
       if (current) lines.push(current);
       current = word;
@@ -215,23 +241,36 @@ async function processOverlay(
   const totalTextHeight = lines.length * lineHeight;
   const startY = height - totalTextHeight - (height * 0.08);
   const bgPadding = fontSize * 0.4;
+  const bgRectY = startY - bgPadding;
+  const bgRectHeight = totalTextHeight + bgPadding * 2;
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.fillRect(0, startY - bgPadding, width, totalTextHeight + bgPadding * 2);
+  const textElements = lines.map((line, i) => {
+    const y = startY + (i * lineHeight) + fontSize;
+    return `<text x="${width / 2}" y="${y}" font-family="Inter" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`;
+  }).join('\n');
 
-  ctx.fillStyle = 'white';
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], width / 2, startY + i * lineHeight + fontSize);
-  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <image href="data:image/png;base64,${base64Png}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice"/>
+  <rect x="0" y="${bgRectY}" width="${width}" height="${bgRectHeight}" fill="rgba(0,0,0,0.45)"/>
+  ${textElements}
+</svg>`;
 
-  const pngBlob = await canvas.convertToBlob({ type: 'image/png' });
-  const pngBuffer = new Uint8Array(await pngBlob.arrayBuffer());
+  // Step 4: Render with resvg (composites text with loaded font onto the image)
+  const resvg = new Resvg(svg, {
+    font: {
+      fontBuffers: [fontBuffer],
+      defaultFontFamily: 'Inter',
+      loadSystemFonts: false,
+    },
+  });
+  const finalPng = new Uint8Array(resvg.render().asPng());
 
+  // Step 5: Upload
   const folder = target_folder || 'posts';
   const uniqueName = `${crypto.randomUUID()}.png`;
   const s3Key = `instagram/${folder}/${userId}/${uniqueName}`;
 
-  await uploadToS3Signed(BUCKET_NAME, s3Key, pngBuffer, 'image/png', AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
+  await uploadToS3Signed(BUCKET_NAME, s3Key, finalPng, 'image/png', AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
   const cloudfrontUrl = `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;
 
   return new Response(JSON.stringify({
