@@ -1464,9 +1464,10 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                             onChange={(e) => {
                               if (e.target.checked) {
                                 setSelectedAccountIds(prev => [...prev, a.id]);
+                                const schedule = schedules.find(s => s.account_id === a.id);
                                 setAccountAssignments(prev => [...prev, {
                                   account_id: a.id,
-                                  process_id: null,
+                                  process_id: schedule?.default_process_id ?? null,
                                   scheduled_for: null,
                                 }]);
                               } else {
