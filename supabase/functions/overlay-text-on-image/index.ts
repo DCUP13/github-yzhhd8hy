@@ -229,8 +229,14 @@ async function processOverlay(
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
   const { width, height } = detectImageDimensions(imageBuffer);
 
-  const base64Image = btoa(String.fromCharCode(...imageBuffer));
   const mimeType = source_url.match(/\.(png)$/i) ? 'image/png' : 'image/jpeg';
+
+  let base64Image = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < imageBuffer.length; i += chunkSize) {
+    const chunk = imageBuffer.subarray(i, Math.min(i + chunkSize, imageBuffer.length));
+    base64Image += btoa(String.fromCharCode(...chunk));
+  }
 
   const fontSize = Math.round(width * 0.06);
   const maxCharsPerLine = Math.floor(width / (fontSize * 0.55));
