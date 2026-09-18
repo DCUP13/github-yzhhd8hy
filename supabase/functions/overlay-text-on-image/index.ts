@@ -1,20 +1,4 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
-import {
-  ImageMagick,
-  initializeImageMagick,
-  MagickFormat,
-  MagickColors,
-  DrawableFillColor,
-  DrawableFillOpacity,
-  DrawableFontPointSize,
-  DrawableFont,
-  DrawableText,
-  DrawableTextAlignment,
-  DrawableRectangle,
-  TextAlignment,
-  Percentage,
-  Magick,
-} from "npm:@imagemagick/magick-wasm@0.0.29";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,29 +8,6 @@ const corsHeaders = {
 
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 const MAX_DIM = 1080;
-
-let magickInitialized = false;
-let fontRegistered = false;
-
-async function ensureMagickInit() {
-  if (magickInitialized) return;
-  const wasmUrl = "https://cdn.jsdelivr.net/npm/@imagemagick/magick-wasm@0.0.29/dist/magick.wasm";
-  const wasmResp = await fetch(wasmUrl);
-  if (!wasmResp.ok) throw new Error(`Failed to download magick.wasm: ${wasmResp.status}`);
-  const wasmBuffer = await wasmResp.arrayBuffer();
-  await initializeImageMagick(new Uint8Array(wasmBuffer));
-  magickInitialized = true;
-}
-
-async function ensureFont() {
-  if (fontRegistered) return;
-  const fontUrl = "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf";
-  const fontResp = await fetch(fontUrl);
-  if (!fontResp.ok) throw new Error(`Failed to download font: ${fontResp.status}`);
-  const fontData = new Uint8Array(await fontResp.arrayBuffer());
-  Magick.addFont('DejaVuSans-Bold.ttf', fontData);
-  fontRegistered = true;
-}
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -145,6 +106,62 @@ async function uploadToS3Signed(
   }
 }
 
+async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Array> {
+  // Download image
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
+  const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
+
+  // Decode using Deno's native Image API (no WASM download needed)
+  const img = await Image.decode(imageBuffer);
+
+  let w = img.width;
+  let h = img.height;
+  if (w > MAX_DIM || h > MAX_DIM) {
+    const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+  }
+
+  // Use OffscreenCanvas for drawing (native, no WASM)
+  const canvas = new OffscreenCanvas(w, h);
+  const ctx = canvas.getContext('2d')!;
+
+  // Draw the image (resize handled by drawImage)
+  ctx.drawImage(img, 0, 0, w, h);
+
+  // Text overlay
+  const fontSize = Math.round(w * 0.06);
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
+  const lines = wrapText(text, maxCharsPerLine);
+
+  const lineHeight = fontSize * 1.3;
+  const totalTextHeight = lines.length * lineHeight;
+  const startY = h - totalTextHeight - Math.round(h * 0.08);
+  const bgPadding = Math.round(fontSize * 0.4);
+  const bgRectY = startY - bgPadding;
+  const bgRectHeight = totalTextHeight + bgPadding * 2;
+
+  // Semi-transparent black background bar
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillRect(0, bgRectY, w, bgRectHeight);
+
+  // White text
+  ctx.fillStyle = 'white';
+  for (let i = 0; i < lines.length; i++) {
+    const y = startY + (i * lineHeight) + fontSize * 0.65;
+    ctx.fillText(lines[i], w / 2, y);
+  }
+
+  // Encode as PNG
+  const blob = await canvas.convertToBlob({ type: 'image/png' });
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -211,6 +228,20 @@ async function processOverlay(
     });
   }
 
+  const selectedFont = font_name || 'sans-serif';
+
+  const resultPng = await createOverlayPng(source_url, text.trim());
+
+  if (preview_only) {
+    const base64 = bytesToBase64(resultPng);
+    return new Response(JSON.stringify({
+      preview_image: `data:image/png;base64,${base64}`,
+      font_used: selectedFont,
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const BUCKET_NAME = Deno.env.get("S3_BUCKET_NAME");
   const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
   const AWS_SECRET_ACCESS_KEY = Deno.env.get("AWS_SECRET_ACCESS_KEY");
@@ -222,85 +253,11 @@ async function processOverlay(
     });
   }
 
-  const selectedFont = font_name || 'Inter';
-
-  // Step 1: Download image
-  const imageResponse = await fetch(source_url);
-  if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
-  const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
-
-  // Step 2: Initialize magick-wasm (single WASM module — no resvg needed)
-  await ensureMagickInit();
-  await ensureFont();
-
-  // Step 3: All image processing in one magick-wasm pass:
-  //   decode → auto-orient → resize → draw text overlay → encode PNG
-  const resultPng = ImageMagick.read(imageBuffer, (img): Uint8Array => {
-    img.autoOrient();
-
-    let w = img.width;
-    let h = img.height;
-    if (w > MAX_DIM || h > MAX_DIM) {
-      const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
-      w = Math.round(w * scale);
-      h = Math.round(h * scale);
-      img.resize(w, h);
-    }
-
-    const fontSize = Math.round(w * 0.06);
-    const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
-    const lines = wrapText(text!, maxCharsPerLine);
-
-    const lineHeight = fontSize * 1.3;
-    const totalTextHeight = lines.length * lineHeight;
-    const startY = h - totalTextHeight - Math.round(h * 0.08);
-    const bgPadding = Math.round(fontSize * 0.4);
-    const bgRectY = startY - bgPadding;
-    const bgRectHeight = totalTextHeight + bgPadding * 2;
-
-    const black = MagickColors.Black;
-    const white = MagickColors.White;
-
-    const drawables: any[] = [
-      // Semi-transparent black background bar
-      new DrawableFillColor(black),
-      new DrawableFillOpacity(new Percentage(45)),
-      new DrawableRectangle(0, bgRectY, w, bgRectY + bgRectHeight),
-      // Text settings
-      new DrawableFillColor(white),
-      new DrawableFont('DejaVuSans-Bold.ttf'),
-      new DrawableFontPointSize(fontSize),
-      new DrawableTextAlignment(TextAlignment.Center),
-    ];
-
-    // Draw each line of text
-    for (let i = 0; i < lines.length; i++) {
-      const y = startY + (i * lineHeight) + fontSize;
-      const x = Math.round(w / 2);
-      drawables.push(new DrawableText(x, y, lines[i]));
-    }
-
-    img.draw(drawables);
-
-    return img.write(MagickFormat.Png, (data) => new Uint8Array(data));
-  });
-
-  // Step 4: Upload to S3 in text-overlay folder (or return base64 for preview)
-  if (preview_only) {
-    const base64 = bytesToBase64(new Uint8Array(resultPng));
-    return new Response(JSON.stringify({
-      preview_image: `data:image/png;base64,${base64}`,
-      font_used: selectedFont,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   const folder = target_folder || 'text-overlay';
   const uniqueName = `${crypto.randomUUID()}.png`;
   const s3Key = `instagram/${folder}/${userId}/${uniqueName}`;
 
-  await uploadToS3Signed(BUCKET_NAME, s3Key, new Uint8Array(resultPng), 'image/png', AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
+  await uploadToS3Signed(BUCKET_NAME, s3Key, resultPng, 'image/png', AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION);
   const cloudfrontUrl = `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;
 
   return new Response(JSON.stringify({
