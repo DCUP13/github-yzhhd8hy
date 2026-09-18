@@ -1959,7 +1959,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       </div>
 
                       {/* Carousel preview with navigation */}
-                      <div className="aspect-square bg-gray-100 dark:bg-gray-900 relative group overflow-hidden">
+                      <div className="bg-gray-100 dark:bg-gray-900 relative group overflow-hidden">
                         {carouselUrls.length > 1 && (
                           <>
                             <div className="absolute top-2 right-2 z-20 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -1992,34 +1992,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           </>
                         )}
                         {isVideo ? (
-                          <video src={currentUrl} className="w-full h-full object-cover" controls preload="metadata" />
+                          <video src={currentUrl} className="w-full h-auto" controls preload="metadata" />
                         ) : (
-                          <img src={currentUrl} alt="" className="w-full h-full object-cover" />
-                        )}
-                        {/* Text overlay on preview — shows carousel text for the current slide */}
-                        {!isVideo && variation.carousel_texts && variation.carousel_texts[carouselIndex]?.trim() && (
-                          <div className="absolute bottom-0 left-0 right-0 z-10 bg-black/45 px-4 py-3">
-                            <p
-                              className="text-white text-center font-bold leading-snug"
-                              style={{ fontSize: 'clamp(11px, 3.5vw, 16px)' }}
-                            >
-                              {variation.carousel_texts[carouselIndex].trim()}
-                            </p>
-                          </div>
+                          <img src={currentUrl} alt="" className="w-full h-auto" />
                         )}
                       </div>
-
-                      {/* Carousel text list */}
-                      {variation.carousel_texts && variation.carousel_texts.some(t => t?.trim()) && (
-                        <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
-                          <p className="text-[10px] text-gray-400 mb-1">Text on photos:</p>
-                          {variation.carousel_texts.map((text, i) => (
-                            <p key={i} className={`text-xs truncate ${i === carouselIndex ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                              <span className="text-gray-400">{i + 1}.</span> {text}
-                            </p>
-                          ))}
-                        </div>
-                      )}
 
                       <div className="p-3">
                         <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">{variation.caption}</p>
