@@ -470,7 +470,11 @@ Deno.serve(async (req: Request) => {
           try {
             await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/publish-instagram-post`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                'apikey': Deno.env.get("SUPABASE_ANON_KEY")!,
+              },
               body: JSON.stringify({ variation_id: v.id, action: 'publish' }),
             });
           } catch (e) {
@@ -494,7 +498,11 @@ Deno.serve(async (req: Request) => {
           try {
             await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/publish-instagram-post`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                'apikey': Deno.env.get("SUPABASE_ANON_KEY")!,
+              },
               body: JSON.stringify({ variation_id: v.id, action: 'schedule' }),
             });
           } catch (e) {
