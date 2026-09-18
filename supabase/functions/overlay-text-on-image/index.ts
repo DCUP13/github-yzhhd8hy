@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
 import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
+import jpeg from "npm:jpeg-js@0.4.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,6 +44,103 @@ function bytesToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
+}
+
+function getExifOrientation(buf: Uint8Array): number {
+  if (buf.length < 4 || buf[0] !== 0xFF || buf[1] !== 0xD8) return 1;
+  let i = 2;
+  while (i < buf.length - 1) {
+    if (buf[i] !== 0xFF) { i++; continue; }
+    const marker = buf[i + 1];
+    if (marker === 0x00 || marker === 0xFF) { i++; continue; }
+    if (marker === 0xD9 || marker === 0xDA) break;
+    if (marker === 0xE1) {
+      const segLen = (buf[i + 2] << 8) | buf[i + 3];
+      const exifStart = i + 4;
+      if (buf.length < exifStart + 6) return 1;
+      if (buf[exifStart] === 0x45 && buf[exifStart + 1] === 0x78 &&
+          buf[exifStart + 2] === 0x69 && buf[exifStart + 3] === 0x66 &&
+          buf[exifStart + 4] === 0x00 && buf[exifStart + 5] === 0x00) {
+        const tiffStart = exifStart + 6;
+        if (buf.length < tiffStart + 8) return 1;
+        const bigEndian = buf[tiffStart] === 0x4D;
+        const read16 = (off: number) => bigEndian
+          ? (buf[tiffStart + off] << 8) | buf[tiffStart + off + 1]
+          : (buf[tiffStart + off + 1] << 8) | buf[tiffStart + off];
+        const ifdOffset = read16(4);
+        if (buf.length < tiffStart + ifdOffset + 2) return 1;
+        const entryCount = read16(ifdOffset);
+        for (let e = 0; e < entryCount; e++) {
+          const entryOff = ifdOffset + 2 + e * 12;
+          if (buf.length < tiffStart + entryOff + 12) return 1;
+          const tag = read16(entryOff);
+          if (tag === 0x0112) return read16(entryOff + 8);
+        }
+        return 1;
+      }
+      i += 2 + segLen;
+    } else if (marker >= 0xD0 && marker <= 0xD7) {
+      i += 2;
+    } else {
+      const segLen = (buf[i + 2] << 8) | buf[i + 3];
+      i += 2 + segLen;
+    }
+  }
+  return 1;
+}
+
+function applyOrientation(
+  src: Uint8Array, srcW: number, srcH: number, orientation: number
+): { data: Uint8Array; width: number; height: number } {
+  if (orientation === 1) return { data: src, width: srcW, height: srcH };
+
+  let dstW = srcW, dstH = srcH;
+  if (orientation >= 5 && orientation <= 8) { dstW = srcH; dstH = srcW; }
+
+  const dst = new Uint8Array(dstW * dstH * 4);
+
+  for (let y = 0; y < srcH; y++) {
+    for (let x = 0; x < srcW; x++) {
+      const srcIdx = (y * srcW + x) * 4;
+      let dx = x, dy = y;
+      switch (orientation) {
+        case 2: dx = srcW - 1 - x; break;
+        case 3: dx = srcW - 1 - x; dy = srcH - 1 - y; break;
+        case 4: dy = srcH - 1 - y; break;
+        case 5: dx = y; dy = x; break;
+        case 6: dx = srcH - 1 - y; dy = x; break;
+        case 7: dx = srcH - 1 - y; dy = srcW - 1 - x; break;
+        case 8: dx = y; dy = srcW - 1 - x; break;
+      }
+      const dstIdx = (dy * dstW + dx) * 4;
+      dst[dstIdx] = src[srcIdx];
+      dst[dstIdx + 1] = src[srcIdx + 1];
+      dst[dstIdx + 2] = src[srcIdx + 2];
+      dst[dstIdx + 3] = src[srcIdx + 3];
+    }
+  }
+  return { data: dst, width: dstW, height: dstH };
+}
+
+function rgbaToPng(data: Uint8Array, width: number, height: number): Uint8Array {
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d')!;
+  const imageData = ctx.createImageData(width, height);
+  imageData.data.set(data);
+  ctx.putImageData(imageData, 0, 0);
+  // convertToBlob is synchronous-compatible for PNG in Deno
+  // but we need to handle it properly
+  throw new Error('Use async version');
+}
+
+async function rgbaToPngAsync(data: Uint8Array, width: number, height: number): Promise<Uint8Array> {
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d')!;
+  const imageData = ctx.createImageData(width, height);
+  imageData.data.set(data);
+  ctx.putImageData(imageData, 0, 0);
+  const pngBlob = await canvas.convertToBlob({ type: 'image/png' });
+  return new Uint8Array(await pngBlob.arrayBuffer());
 }
 
 async function uploadToS3Signed(
@@ -198,32 +296,36 @@ async function processOverlay(
   const imageResponse = await fetch(source_url);
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
-  const mimeType = source_url.match(/\.(png)$/i) ? 'image/png' : 'image/jpeg';
+  const isPng = source_url.match(/\.(png)$/i) || (imageBuffer.length >= 4 && imageBuffer[0] === 0x89 && imageBuffer[1] === 0x50);
 
-  // Step 2: Decode via Canvas API (handles EXIF rotation, preserves quality)
-  const blob = new Blob([imageBuffer], { type: mimeType });
-  const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' } as any);
-  const width = bitmap.width;
-  const height = bitmap.height;
+  let base64Image: string;
+  let width: number;
+  let height: number;
 
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext('2d')!;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
+  if (isPng) {
+    // PNG: pass directly to resvg — no EXIF rotation issues, no quality loss
+    base64Image = bytesToBase64(imageBuffer);
+    // Parse PNG dimensions
+    width = (imageBuffer[16] << 24) | (imageBuffer[17] << 16) | (imageBuffer[18] << 8) | imageBuffer[19];
+    height = (imageBuffer[20] << 24) | (imageBuffer[21] << 16) | (imageBuffer[22] << 8) | imageBuffer[23];
+  } else {
+    // JPEG: decode with jpeg-js (high quality), apply EXIF orientation, re-encode as PNG
+    const orientation = getExifOrientation(imageBuffer);
+    const decoded = jpeg.decode(imageBuffer, { useTArray: true });
+    if (!decoded) throw new Error('Failed to decode JPEG');
+    const oriented = applyOrientation(decoded.data as Uint8Array, decoded.width, decoded.height, orientation);
+    const pngBytes = await rgbaToPngAsync(oriented.data, oriented.width, oriented.height);
+    base64Image = bytesToBase64(pngBytes);
+    width = oriented.width;
+    height = oriented.height;
+  }
 
-  // Convert to PNG so resvg gets a lossless, pre-oriented image
-  const pngBlob = await canvas.convertToBlob({ type: 'image/png' });
-  const pngBytes = new Uint8Array(await pngBlob.arrayBuffer());
-  const base64Png = bytesToBase64(pngBytes);
-
-  // Step 3: Build SVG with the pre-decoded image + text overlay
+  // Step 2: Build SVG with image + text overlay
   await ensureWasmInit();
   const fontBuffer = await ensureFont();
 
   const fontSize = Math.round(width * 0.06);
-  const maxWidth = width * 0.85;
-  const maxCharsPerLine = Math.floor(maxWidth / (fontSize * 0.55));
+  const maxCharsPerLine = Math.floor((width * 0.85) / (fontSize * 0.55));
   const words = text.trim().split(/\s+/);
   const lines: string[] = [];
   let current = '';
@@ -250,12 +352,12 @@ async function processOverlay(
   }).join('\n');
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <image href="data:image/png;base64,${base64Png}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice"/>
+  <image href="data:image/png;base64,${base64Image}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice"/>
   <rect x="0" y="${bgRectY}" width="${width}" height="${bgRectHeight}" fill="rgba(0,0,0,0.45)"/>
   ${textElements}
 </svg>`;
 
-  // Step 4: Render with resvg (composites text with loaded font onto the image)
+  // Step 3: Render with resvg (text + image compositing with loaded font)
   const resvg = new Resvg(svg, {
     font: {
       fontBuffers: [fontBuffer],
@@ -265,7 +367,7 @@ async function processOverlay(
   });
   const finalPng = new Uint8Array(resvg.render().asPng());
 
-  // Step 5: Upload
+  // Step 4: Upload
   const folder = target_folder || 'posts';
   const uniqueName = `${crypto.randomUUID()}.png`;
   const s3Key = `instagram/${folder}/${userId}/${uniqueName}`;
