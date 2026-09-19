@@ -188,23 +188,23 @@ Deno.serve(async (req: Request) => {
     const profile = profileRes.body;
     const effectiveUserId = extractStringId(profileRes.rawText) ?? igUserId;
 
-    // 2. Fetch recent media (up to 25 posts)
-    let mediaRes: Response;
-    if (isInstagramToken(accessToken)) {
-      mediaRes = await fetch(
-        `${baseUrl}/v21.0/${effectiveUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
-        { headers: authHeaders(accessToken) },
-      );
-    } else {
-      mediaRes = await fetch(
-        graphUrl(
-          `${baseUrl}/v21.0/${effectiveUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
-          accessToken,
-        ),
-      );
+    // 2. Fetch recent media — paginate to get all posts
+    let mediaItems: any[] = [];
+    let nextUrl: string | null = `${baseUrl}/v21.0/${effectiveUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=100`;
+    let pageCount = 0;
+    while (nextUrl && pageCount < 5) {
+      let pageRes: Response;
+      if (isInstagramToken(accessToken)) {
+        pageRes = await fetch(nextUrl, { headers: authHeaders(accessToken) });
+      } else {
+        pageRes = await fetch(graphUrl(nextUrl, accessToken));
+      }
+      if (!pageRes.ok) break;
+      const pageData = await pageRes.json();
+      mediaItems.push(...(pageData.data ?? []));
+      nextUrl = pageData.paging?.next ?? null;
+      pageCount++;
     }
-    const mediaData = mediaRes.ok ? await mediaRes.json() : { data: [] };
-    const mediaItems: any[] = mediaData.data ?? [];
 
     // 3. Fetch insights for each media item
     const postsData: any[] = [];
@@ -220,7 +220,7 @@ Deno.serve(async (req: Request) => {
 
       // Fetch carousel children if this is a carousel post
       let carouselUrls: string[] | null = null;
-      if (item.media_type === "CAROUSEL") {
+      if (item.media_type === "CAROUSEL" || item.media_type === "CAROUSEL_ALBUM") {
         try {
           let childrenRes: Response;
           if (isInstagramToken(accessToken)) {

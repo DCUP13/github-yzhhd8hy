@@ -1267,13 +1267,12 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       }
     }
 
-    // Merge in comment events (only for posts that are in the feed)
+    // Merge in comment events — always show posts that have comments, even if
+    // the post is no longer in the snapshot (it may have been deleted from
+    // Instagram, or the snapshot may be incomplete due to API limitations)
     for (const event of commentEvents) {
       const key = event.media_id ?? event.id;
-      // If we have a snapshot, only keep events for posts that are live on Instagram
-      if (liveMediaIds.size > 0 && event.media_id && !liveMediaIds.has(event.media_id)) {
-        continue;
-      }
+      if (!key) continue;
       const existing = postMap.get(key);
       if (existing) {
         existing.events.push(event);
@@ -1282,7 +1281,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         if (event.media_type && !existing.mediaType) existing.mediaType = event.media_type;
         if (event.media_permalink && !existing.mediaPermalink) existing.mediaPermalink = event.media_permalink;
         if (event.media_caption && !existing.mediaCaption) existing.mediaCaption = event.media_caption;
-      } else if (liveMediaIds.size === 0) {
+      } else {
+        // Post not in snapshot but has comments — show it anyway
         postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, carouselUrls: null, events: [event], hasComments: true, publishedAt: null });
       }
     }
