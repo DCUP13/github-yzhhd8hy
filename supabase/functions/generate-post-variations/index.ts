@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
 import OpenAI from "npm:openai@4.28.0";
+import { Image } from "https://deno.land/x/imagescript@1.3.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,21 +12,15 @@ const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 const FONTS = ['Inter', 'Georgia', 'Courier', 'Impact', 'Palatino', 'Arial', 'Verdana', 'Trebuchet'];
 const MAX_DIM = 1080;
 
-function sniffImageMime(bytes: Uint8Array): string {
-  if (bytes.length >= 8 &&
-      bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-    return "image/png";
-  }
-  if (bytes.length >= 3 &&
-      bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return "image/jpeg";
-  }
-  if (bytes.length >= 12 &&
-      bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
-    return "image/webp";
-  }
-  throw new Error("Unsupported image type.");
+let cachedFont: Uint8Array | null = null;
+async function loadFont(): Promise<Uint8Array> {
+  if (cachedFont) return cachedFont;
+  const res = await fetch(
+    "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.ttf",
+  );
+  if (!res.ok) throw new Error(`Font download failed: ${res.status}`);
+  cachedFont = new Uint8Array(await res.arrayBuffer());
+  return cachedFont;
 }
 
 function wrapText(text: string, maxCharsPerLine: number): string[] {
@@ -45,52 +40,44 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
 }
 
 async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Array> {
+  const fontBytes = await loadFont();
+
   const imageResponse = await fetch(imageUrl);
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
-  const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
-  const mimeType = sniffImageMime(imageBuffer);
+  const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
 
-  const bitmap = await createImageBitmap(new Blob([imageBuffer], { type: mimeType }));
+  const base = await Image.decode(imageBytes);
 
-  let w = bitmap.width;
-  let h = bitmap.height;
-  if (w > MAX_DIM || h > MAX_DIM) {
-    const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
-    w = Math.round(w * scale);
-    h = Math.round(h * scale);
+  let img = base;
+  if (base.width > MAX_DIM || base.height > MAX_DIM) {
+    const scale = Math.min(MAX_DIM / base.width, MAX_DIM / base.height);
+    img = base.resize(Math.round(base.width * scale), Math.round(base.height * scale));
   }
 
-  const canvas = new OffscreenCanvas(w, h);
-  const ctx = canvas.getContext('2d')!;
-
-  ctx.drawImage(bitmap, 0, 0, w, h);
+  const w = img.width;
+  const h = img.height;
 
   const fontSize = Math.round(w * 0.06);
-  ctx.font = `bold ${fontSize}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
   const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
   const lines = wrapText(text, maxCharsPerLine);
 
-  const lineHeight = fontSize * 1.3;
-  const totalTextHeight = lines.length * lineHeight;
-  const startY = h - totalTextHeight - Math.round(h * 0.08);
-  const bgPadding = Math.round(fontSize * 0.4);
-  const bgRectY = startY - bgPadding;
-  const bgRectHeight = totalTextHeight + bgPadding * 2;
+  const lineHeight = Math.round(fontSize * 1.3);
+  const blockHeight = lines.length * lineHeight + Math.round(fontSize * 0.8);
+  const banner = new Image(w, blockHeight);
+  banner.fill(0x00000073); // ~45% black
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  ctx.fillRect(0, bgRectY, w, bgRectHeight);
-
-  ctx.fillStyle = 'white';
-  for (let i = 0; i < lines.length; i++) {
-    const y = startY + (i * lineHeight) + fontSize * 0.65;
-    ctx.fillText(lines[i], w / 2, y);
+  let y = Math.round(fontSize * 0.2);
+  for (const line of lines) {
+    const lineImg = await Image.renderText(fontBytes, fontSize, line, 0xffffffff);
+    const x = Math.round((w - lineImg.width) / 2);
+    banner.composite(lineImg, x, y);
+    y += lineHeight;
   }
 
-  const blob = await canvas.convertToBlob({ type: 'image/png' });
-  return new Uint8Array(await blob.arrayBuffer());
+  const destY = h - banner.height - Math.round(h * 0.04);
+  img.composite(banner, 0, destY);
+
+  return await img.encode();
 }
 
 async function uploadOverlayToS3(
