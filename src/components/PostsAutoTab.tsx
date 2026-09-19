@@ -1466,7 +1466,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       {/* Create Posts */}
       {subView === 'create' && (
-        <div className="max-w-3xl space-y-6">
+        <div className="w-full space-y-6">
           {assets.length === 0 ? (
             <div className="text-center py-12">
               <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
