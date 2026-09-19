@@ -230,8 +230,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   // Overlay designer state
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [overlayPreviewText, setOverlayPreviewText] = useState('Your text here');
-  const previewContainerRef = useRef<HTMLDivElement>(null);
-  const [previewWidth, setPreviewWidth] = useState(640);
 
   // Post now
   const [postNow, setPostNow] = useState(false);
@@ -406,17 +404,20 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           .eq('id', editingProcessId);
         if (error) throw error;
         toast.success('Process updated');
+        setLoadedProcessId(editingProcessId);
       } else {
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('instagram_post_processes')
-          .insert({ ...processData, user_id: userId });
+          .insert({ ...processData, user_id: userId })
+          .select('id')
+          .single();
         if (error) throw error;
         toast.success('Process saved');
+        setLoadedProcessId(inserted.id);
       }
       setShowSaveProcessDialog(false);
       setProcessNameInput('');
       setEditingProcessId(null);
-      setLoadedProcessId(editingProcessId || null);
       fetchPostProcesses();
     } catch (error) {
       console.error('Error saving process:', error);
@@ -505,17 +506,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     fetchSchedules();
     fetchPostProcesses();
   }, [fetchAssets, fetchBatches, fetchSchedules, fetchPostProcesses]);
-
-  useEffect(() => {
-    if (!previewContainerRef.current) return;
-    const updateWidth = () => {
-      if (previewContainerRef.current) setPreviewWidth(previewContainerRef.current.offsetWidth);
-    };
-    updateWidth();
-    const observer = new ResizeObserver(updateWidth);
-    observer.observe(previewContainerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const fetchPrompts = async () => {
@@ -1610,7 +1600,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 <p className="text-xs text-gray-500">Style the text that gets overlaid on your carousel images. These settings are saved with your process.</p>
 
                 {/* Live Preview */}
-                <div ref={previewContainerRef} className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto w-full" style={{ aspectRatio: '16 / 9', maxWidth: '640px' }}>
+                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto w-full" style={{ aspectRatio: '16 / 9', maxWidth: '640px' }}>
                   <img
                     src={assets.find(a => a.file_type === 'image')?.cloudfront_url || 'https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-400-normal.woff2'}
                     alt="Preview"
@@ -1628,20 +1618,20 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       ...(overlaySettings.position === 'center' && { top: '50%', transform: 'translateY(-50%)' }),
                       display: 'flex',
                       justifyContent: 'center',
-                      padding: `0 ${overlaySettings.bubblePadding * (previewWidth / 1080)}px`,
+                      padding: `0 ${overlaySettings.bubblePadding}px`,
                     }}
                   >
                     <div
                       style={{
                         background: `${overlaySettings.bubbleColor}${Math.round(overlaySettings.bubbleOpacity * 2.55).toString(16).padStart(2, '0')}`,
-                        borderRadius: `${overlaySettings.bubbleRadius * (previewWidth / 1080)}px`,
-                        padding: `${overlaySettings.bubblePadding * 0.5 * (previewWidth / 1080)}px ${overlaySettings.bubblePadding * (previewWidth / 1080)}px`,
+                        borderRadius: `${overlaySettings.bubbleRadius}px`,
+                        padding: `${overlaySettings.bubblePadding * 0.5}px ${overlaySettings.bubblePadding}px`,
                       }}
                     >
                       <span
                         style={{
                           color: overlaySettings.textColor,
-                          fontSize: `${overlaySettings.fontSize * (previewWidth / 1080)}px`,
+                          fontSize: `${overlaySettings.fontSize}px`,
                           fontWeight: overlaySettings.fontWeight,
                           fontFamily: 'sans-serif',
                           textAlign: 'center',
@@ -1977,10 +1967,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                 value={assignment?.process_id ?? ''}
                                 onChange={(e) => {
                                   const pid = e.target.value || null;
-                                  if (pid) {
-                                    const proc = postProcesses.find(p => p.id === pid);
-                                    if (proc) handleLoadProcess(proc);
-                                  }
                                   setAccountAssignments(prev => prev.map(asg =>
                                     asg.account_id === a.id ? { ...asg, process_id: pid } : asg
                                   ));

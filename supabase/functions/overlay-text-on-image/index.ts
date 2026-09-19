@@ -101,7 +101,9 @@ async function createOverlayJpeg(
 
   ctx.drawImage(bitmap, 0, 0, w, h);
 
-  const fontSize = settings.fontSize;
+  const PREVIEW_REF_WIDTH = 640;
+  const fontScale = w / PREVIEW_REF_WIDTH;
+  const fontSize = Math.round(settings.fontSize * fontScale);
   ctx.font = `${settings.fontWeight} ${fontSize}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -111,7 +113,7 @@ async function createOverlayJpeg(
 
   const lineHeight = fontSize * 1.3;
   const totalTextHeight = lines.length * lineHeight;
-  const padScaled = Math.round(settings.bubblePadding * (w / 1080));
+  const padScaled = Math.round(settings.bubblePadding * fontScale);
 
   let bannerY: number;
   if (settings.position === 'top') {
@@ -127,7 +129,7 @@ async function createOverlayJpeg(
 
   ctx.fillStyle = hexToRgba(settings.bubbleColor, settings.bubbleOpacity);
   if (settings.bubbleRadius > 0) {
-    const r = settings.bubbleRadius * (w / 1080);
+    const r = settings.bubbleRadius * fontScale;
     ctx.beginPath();
     ctx.moveTo(0, bannerY);
     ctx.lineTo(bubbleWidth, bannerY);
