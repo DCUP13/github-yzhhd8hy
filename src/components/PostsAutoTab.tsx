@@ -239,6 +239,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [variations, setVariations] = useState<PostVariation[]>([]);
   const [isLoadingVariations, setIsLoadingVariations] = useState(false);
+  const [stagedCount, setStagedCount] = useState(0);
   const [carouselImageIndex, setCarouselImageIndex] = useState<Record<string, number>>({});
 
   // Schedules state
@@ -353,6 +354,20 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       setIsLoadingVariations(false);
     }
   }, []);
+
+  const fetchStagedCount = useCallback(async () => {
+    try {
+      const { count, error } = await supabase
+        .from('instagram_post_variations')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'staged');
+      if (error) throw error;
+      setStagedCount(count ?? 0);
+    } catch (error) {
+      console.error('Error fetching staged count:', error);
+    }
+  }, [userId]);
 
   const fetchPublishedPosts = useCallback(async () => {
     try {
@@ -522,7 +537,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     fetchSchedules();
     fetchPostProcesses();
     fetchPublishedPosts();
-  }, [fetchAssets, fetchBatches, fetchSchedules, fetchPostProcesses]);
+    fetchStagedCount();
+  }, [fetchAssets, fetchBatches, fetchSchedules, fetchPostProcesses, fetchStagedCount]);
 
   useEffect(() => {
     const fetchPrompts = async () => {
@@ -853,6 +869,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       setSelectedAccountIds([]);
       setAccountAssignments([]);
       fetchBatches();
+      fetchStagedCount();
       setActiveBatchId(batch.id);
       setSubView('staging');
       fetchVariations(batch.id);
@@ -872,6 +889,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         .eq('id', variationId);
       if (error) throw error;
       setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'approved' } : v));
+      fetchStagedCount();
       toast.success('Variation approved');
     } catch (error) {
       console.error('Error approving variation:', error);
@@ -887,6 +905,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         .eq('id', variationId);
       if (error) throw error;
       setVariations(prev => prev.filter(v => v.id !== variationId));
+      fetchStagedCount();
       toast.success('Variation rejected and removed');
     } catch (error) {
       console.error('Error rejecting variation:', error);
@@ -1316,9 +1335,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
             >
               <tab.icon className="w-4 h-4" />
               {tab.label}
-              {tab.id === 'staging' && batches.filter(b => b.status === 'ready').length > 0 && (
+              {tab.id === 'staging' && stagedCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-pink-500 text-white rounded-full">
-                  {batches.filter(b => b.status === 'ready').length}
+                  {stagedCount}
                 </span>
               )}
             </button>
@@ -2239,8 +2258,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       {/* Staging */}
       {subView === 'staging' && (
         <div>
-          {batches.length > 1 && (
-            <div className="mb-4 flex items-center gap-3">
+          <div className="mb-4 flex items-center gap-3 flex-wrap">
+            {batches.length > 1 && (
               <select
                 value={activeBatchId || ''}
                 onChange={(e) => { setActiveBatchId(e.target.value); fetchVariations(e.target.value); }}
@@ -2252,37 +2271,36 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                   </option>
                 ))}
               </select>
-              <button
-                onClick={async () => {
-                  if (!activeBatchId) return;
-                  const staged = variations.filter(v => v.status === 'staged');
-                  if (staged.length === 0) {
-                    toast.error('No staged variations to delete');
-                    return;
-                  }
-                  if (!confirm(`Delete all ${staged.length} staged variation${staged.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
-                  try {
-                    const { error } = await supabase
-                      .from('instagram_post_variations')
-                      .delete()
-                      .eq('batch_id', activeBatchId)
-                      .eq('status', 'staged');
-                    if (error) throw error;
-                    setVariations(prev => prev.filter(v => v.status !== 'staged'));
-                    toast.success(`Deleted ${staged.length} staged variation${staged.length !== 1 ? 's' : ''}`);
-                  } catch (error) {
-                    console.error('Error deleting staged variations:', error);
-                    toast.error('Failed to delete variations');
-                  }
-                }}
-                disabled={!activeBatchId || !variations.some(v => v.status === 'staged')}
-                className="px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete All Staged ({variations.filter(v => v.status === 'staged').length})
-              </button>
-            </div>
-          )}
+            )}
+            <button
+              onClick={async () => {
+                if (stagedCount === 0) {
+                  toast.error('No staged variations to delete');
+                  return;
+                }
+                if (!confirm(`Delete all ${stagedCount} staged variation${stagedCount !== 1 ? 's' : ''} across all batches? This cannot be undone.`)) return;
+                try {
+                  const { error } = await supabase
+                    .from('instagram_post_variations')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('status', 'staged');
+                  if (error) throw error;
+                  setVariations(prev => prev.filter(v => v.status !== 'staged'));
+                  setStagedCount(0);
+                  toast.success(`Deleted all ${stagedCount} staged variation${stagedCount !== 1 ? 's' : ''}`);
+                } catch (error) {
+                  console.error('Error deleting staged variations:', error);
+                  toast.error('Failed to delete variations');
+                }
+              }}
+              disabled={stagedCount === 0}
+              className="px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete All Staged ({stagedCount})
+            </button>
+          </div>
 
           {batches.length === 0 ? (
             <div className="text-center py-12">
