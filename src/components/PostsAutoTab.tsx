@@ -894,6 +894,23 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
+  const handleDeleteFeedPost = async (mediaId: string) => {
+    if (!confirm('Remove this post from your feed? This deletes it from the database.')) return;
+    try {
+      const { error } = await supabase
+        .from('instagram_post_variations')
+        .delete()
+        .eq('user_id', userId)
+        .or(`ig_media_id.eq.${mediaId},id.eq.${mediaId}`);
+      if (error) throw error;
+      setPublishedPosts(prev => prev.filter(p => (p.ig_media_id || p.id) !== mediaId));
+      toast.success('Post removed from feed');
+    } catch (error) {
+      console.error('Error deleting feed post:', error);
+      toast.error('Failed to remove post');
+    }
+  };
+
   const handleScheduleApproved = async () => {
     const approved = variations.filter(v => v.status === 'approved');
     if (approved.length === 0) {
@@ -2236,10 +2253,33 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 ))}
               </select>
               <button
-                onClick={() => { setActiveBatchId(null); setVariations([]); }}
-                className="px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                onClick={async () => {
+                  if (!activeBatchId) return;
+                  const staged = variations.filter(v => v.status === 'staged');
+                  if (staged.length === 0) {
+                    toast.error('No staged variations to delete');
+                    return;
+                  }
+                  if (!confirm(`Delete all ${staged.length} staged variation${staged.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+                  try {
+                    const { error } = await supabase
+                      .from('instagram_post_variations')
+                      .delete()
+                      .eq('batch_id', activeBatchId)
+                      .eq('status', 'staged');
+                    if (error) throw error;
+                    setVariations(prev => prev.filter(v => v.status !== 'staged'));
+                    toast.success(`Deleted ${staged.length} staged variation${staged.length !== 1 ? 's' : ''}`);
+                  } catch (error) {
+                    console.error('Error deleting staged variations:', error);
+                    toast.error('Failed to delete variations');
+                  }
+                }}
+                disabled={!activeBatchId || !variations.some(v => v.status === 'staged')}
+                className="px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
               >
-                Clear selection
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete All Staged ({variations.filter(v => v.status === 'staged').length})
               </button>
             </div>
           )}
@@ -2630,6 +2670,16 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           View on Instagram
                         </a>
                       )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteFeedPost(post.mediaId);
+                        }}
+                        className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 p-1"
+                        title="Remove from feed"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                       {isExpanded ? (
                         <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
                       ) : (
