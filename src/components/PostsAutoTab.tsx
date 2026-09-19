@@ -1833,13 +1833,51 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 )}
 
                 {promptMode === 'custom' && (
-                  <textarea
-                    value={customPrompt}
-                    onChange={(e) => setCustomPrompt(e.target.value)}
-                    rows={4}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="Type your own prompt for AI caption variation. Use {{original_caption}}, {{account_name}}, {{hashtags}}, {{transcript}} as placeholders."
-                  />
+                  <div>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Type your own prompt for AI caption variation. Click a placeholder to insert it at the cursor:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {[
+                        { label: 'Original caption', value: '{{original_caption}}' },
+                        { label: 'Account name', value: '{{account_name}}' },
+                        { label: 'Hashtags', value: '{{hashtags}}' },
+                        { label: 'Transcript', value: '{{transcript}}' },
+                        { label: 'Variation style', value: '{{variation_style}}' },
+                      ].map(ph => (
+                        <button
+                          key={ph.value}
+                          type="button"
+                          onClick={() => {
+                            const ta = document.getElementById('custom-prompt-textarea') as HTMLTextAreaElement;
+                            if (ta) {
+                              const start = ta.selectionStart;
+                              const end = ta.selectionEnd;
+                              const newText = customPrompt.slice(0, start) + ph.value + customPrompt.slice(end);
+                              setCustomPrompt(newText);
+                              requestAnimationFrame(() => {
+                                ta.focus();
+                                ta.selectionStart = ta.selectionEnd = start + ph.value.length;
+                              });
+                            } else {
+                              setCustomPrompt(prev => prev + ph.value);
+                            }
+                          }}
+                          className="px-2 py-1 text-[11px] font-mono rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-pink-100 dark:hover:bg-pink-900/30 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"
+                        >
+                          {ph.label} <span className="text-gray-400">{ph.value}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      id="custom-prompt-textarea"
+                      value={customPrompt}
+                      onChange={(e) => setCustomPrompt(e.target.value)}
+                      rows={4}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g. Rewrite this caption for {{account_name}} in a {{variation_style}} way. Original: {{original_caption}}"
+                    />
+                  </div>
                 )}
 
                 {promptMode === 'none' && (
