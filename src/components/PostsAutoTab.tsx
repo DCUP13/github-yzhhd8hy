@@ -1466,7 +1466,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       {/* Create Posts */}
       {subView === 'create' && (
-        <div className="max-w-2xl space-y-6">
+        <div className="max-w-3xl space-y-6">
           {assets.length === 0 ? (
             <div className="text-center py-12">
               <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -1597,7 +1597,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 <p className="text-xs text-gray-500">Style the text that gets overlaid on your carousel images. These settings are saved with your process.</p>
 
                 {/* Live Preview */}
-                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto" style={{ aspectRatio: '1', maxWidth: '240px' }}>
+                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto" style={{ aspectRatio: '1', maxWidth: '300px' }}>
                   <img
                     src={assets.find(a => a.file_type === 'image')?.cloudfront_url || 'https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-400-normal.woff2'}
                     alt="Preview"
