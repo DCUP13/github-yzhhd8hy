@@ -1425,7 +1425,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-x-hidden">
       {/* Sub-tab navigation */}
       <div className="border-b border-gray-200 dark:border-gray-700">
         <nav className="flex gap-1 overflow-x-auto">
@@ -2770,7 +2770,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 const isExpanded = expandedPostId === post.mediaId;
                 const { topLevel, repliesByParent } = buildCommentThread(post.events);
                 return (
-                  <div key={post.mediaId} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                  <div key={post.mediaId} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden min-w-0">
                     {/* Post header — click to expand */}
                     <button
                       onClick={() => setExpandedPostId(isExpanded ? null : post.mediaId)}
@@ -2862,11 +2862,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           const isVideo = post.mediaType === 'REEL' || post.mediaType === 'VIDEO';
                           return (
                             <div className="px-4 pt-3 pb-2 max-w-full overflow-x-hidden">
-                              <div className="relative rounded-lg overflow-hidden bg-black max-w-full">
+                              <div className="relative rounded-lg overflow-hidden bg-black w-full">
                                 {isVideo ? (
                                   <video
                                     src={currentUrl}
-                                    className="w-full max-h-[600px] object-contain"
+                                    className="w-full max-w-full h-auto max-h-[600px] object-contain block"
                                     controls
                                     preload="metadata"
                                   />
@@ -2874,7 +2874,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                   <img
                                     src={currentUrl}
                                     alt=""
-                                    className="w-full max-h-[600px] object-contain"
+                                    className="w-full max-w-full h-auto max-h-[600px] object-contain block"
                                     loading="lazy"
                                   />
                                 )}
