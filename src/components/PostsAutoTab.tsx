@@ -32,6 +32,7 @@ import {
   Pencil,
   Palette,
   Type,
+  Heart,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -1200,13 +1201,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   // Feed: seed from latest Instagram snapshot (all posts on Instagram), merge with
   // published variations and comment events. Only posts present in the snapshot appear.
   const feedPosts = useMemo(() => {
-    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; carouselUrls: string[] | null; events: CommentEvent[]; hasComments: boolean; publishedAt: string | null }>();
+    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; carouselUrls: string[] | null; events: CommentEvent[]; hasComments: boolean; igCommentCount: number; likeCount: number; publishedAt: string | null }>();
 
     // Seed with ALL posts from the latest Instagram snapshot (same data as stats tab)
     const latestSnapshot = snapshots[0] || null;
     if (latestSnapshot?.posts_data) {
       for (const p of latestSnapshot.posts_data) {
         if (!p.media_id) continue;
+        const igCommentCount = typeof p.comments_count === 'number' ? p.comments_count : 0;
         postMap.set(p.media_id, {
           mediaId: p.media_id,
           mediaType: p.media_type ?? null,
@@ -1215,7 +1217,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           mediaImageUrl: p.thumbnail_url ?? null,
           carouselUrls: p.carousel_urls ?? null,
           events: [],
-          hasComments: false,
+          hasComments: igCommentCount > 0,
+          igCommentCount,
+          likeCount: typeof p.like_count === 'number' ? p.like_count : 0,
           publishedAt: p.timestamp ?? latestSnapshot.created_at,
         });
       }
@@ -1250,6 +1254,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           carouselUrls: pub.carousel_urls ?? null,
           events: [],
           hasComments: false,
+          igCommentCount: 0,
+          likeCount: 0,
           publishedAt: pub.created_at,
         });
       }
@@ -1271,7 +1277,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         if (event.media_caption && !existing.mediaCaption) existing.mediaCaption = event.media_caption;
       } else {
         // Post not in snapshot but has comments — show it anyway
-        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, carouselUrls: null, events: [event], hasComments: true, publishedAt: null });
+        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, carouselUrls: null, events: [event], hasComments: true, igCommentCount: 0, likeCount: 0, publishedAt: null });
       }
     }
 
@@ -1279,12 +1285,16 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     // Sort based on mode — all posts stay visible, just reordered
     if (feedSortMode === 'comments') {
       posts.sort((a, b) => {
-        if (a.hasComments !== b.hasComments) return a.hasComments ? -1 : 1;
-        return b.events.length - a.events.length;
+        const aTotal = a.igCommentCount || a.events.length;
+        const bTotal = b.igCommentCount || b.events.length;
+        if ((aTotal > 0) !== (bTotal > 0)) return aTotal > 0 ? -1 : 1;
+        return bTotal - aTotal;
       });
     } else if (feedSortMode === 'no-comments') {
       posts.sort((a, b) => {
-        if (a.hasComments !== b.hasComments) return a.hasComments ? 1 : -1;
+        const aTotal = a.igCommentCount || a.events.length;
+        const bTotal = b.igCommentCount || b.events.length;
+        if ((aTotal > 0) !== (bTotal > 0)) return aTotal > 0 ? 1 : -1;
         const aDate = a.publishedAt || a.events[0]?.created_at || '';
         const bDate = b.publishedAt || b.events[0]?.created_at || '';
         return bDate.localeCompare(aDate);
@@ -2783,13 +2793,23 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           <span className="text-sm font-medium text-gray-900 dark:text-white">
                             {post.mediaType === 'REEL' ? 'Reel' : 'Post'}
                           </span>
-                          {post.hasComments ? (
+                          {post.igCommentCount > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30 px-2 py-0.5 rounded-full">
+                              <MessageSquare className="w-3 h-3" />
+                              {post.igCommentCount} comment{post.igCommentCount !== 1 ? 's' : ''}
+                            </span>
+                          ) : post.hasComments ? (
                             <span className="inline-flex items-center gap-1 text-xs font-semibold text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30 px-2 py-0.5 rounded-full">
                               <MessageSquare className="w-3 h-3" />
                               {post.events.length} comment{post.events.length !== 1 ? 's' : ''}
                             </span>
                           ) : (
                             <span className="text-[10px] text-gray-400 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">No comments</span>
+                          )}
+                          {post.likeCount > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                              <Heart className="w-3 h-3" /> {post.likeCount}
+                            </span>
                           )}
                         </div>
                         {post.mediaCaption && (
@@ -2897,7 +2917,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         })()}
                         {post.events.length === 0 ? (
                           <div className="px-4 py-6 text-center">
-                            <p className="text-sm text-gray-400">No comments on this post yet.</p>
+                            {post.igCommentCount > 0 ? (
+                              <p className="text-sm text-gray-400">Instagram reports {post.igCommentCount} comment{post.igCommentCount !== 1 ? 's' : ''} on this post. Sync comments from the Inbox tab to view them here.</p>
+                            ) : (
+                              <p className="text-sm text-gray-400">No comments on this post yet.</p>
+                            )}
                           </div>
                         ) : (
                         <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
