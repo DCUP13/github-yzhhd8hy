@@ -327,6 +327,65 @@ Deno.serve(async (req: Request) => {
         }, { onConflict: "user_id" });
     }
 
+    // 7. Sync feed: update published variations with real Instagram data, remove deleted posts
+    const liveMediaIds = new Set(mediaItems.map((m: any) => m.id));
+
+    // Fetch all published variations for this account
+    const { data: publishedVariations } = await supabaseClient
+      .from("instagram_post_variations")
+      .select("id, ig_media_id, account_id")
+      .eq("user_id", account.user_id)
+      .eq("status", "published")
+      .eq("account_id", accountId);
+
+    const toDelete: string[] = [];
+    const toUpdate: Array<{ id: string; permalink: string | null; caption: string; media_image_url: string | null; media_type: string | null }> = [];
+
+    if (publishedVariations) {
+      for (const v of publishedVariations) {
+        if (!v.ig_media_id) continue;
+        const livePost = mediaItems.find((m: any) => m.id === v.ig_media_id);
+        if (!livePost) {
+          // Post no longer exists on Instagram — mark for deletion
+          toDelete.push(v.id);
+        } else {
+          // Update with real Instagram data
+          const imageUrl = livePost.media_type === "VIDEO" || livePost.media_type === "REEL"
+            ? (livePost.thumbnail_url ?? livePost.media_url ?? null)
+            : (livePost.media_url ?? null);
+          toUpdate.push({
+            id: v.id,
+            permalink: livePost.permalink ?? null,
+            caption: (livePost.caption ?? "").substring(0, 500),
+            media_image_url: imageUrl,
+            media_type: livePost.media_type ?? null,
+          });
+        }
+      }
+
+      // Delete variations whose posts are gone from Instagram
+      if (toDelete.length > 0) {
+        await supabaseClient
+          .from("instagram_post_variations")
+          .delete()
+          .in("id", toDelete);
+      }
+
+      // Update variations with fresh Instagram data
+      for (const u of toUpdate) {
+        await supabaseClient
+          .from("instagram_post_variations")
+          .update({
+            permalink: u.permalink,
+            caption: u.caption,
+            media_image_url: u.media_image_url,
+            media_type: u.media_type,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", u.id);
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       account: {
@@ -343,6 +402,10 @@ Deno.serve(async (req: Request) => {
         posts_count: postsData.length,
       },
       posts: postsData,
+      feed_sync: {
+        updated: toUpdate.length,
+        removed: toDelete.length,
+      },
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

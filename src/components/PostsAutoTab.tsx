@@ -270,8 +270,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [replyDialogCommentId, setReplyDialogCommentId] = useState<string | null>(null);
   const [replyDialogText, setReplyDialogText] = useState('');
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
-  const [publishedPosts, setPublishedPosts] = useState<Array<{ id: string; ig_media_id: string | null; permalink: string | null; caption: string; cloudfront_url: string | null; carousel_urls: string[] | null; account_id: string; created_at: string; is_test_post: boolean }>>([]);
+  const [publishedPosts, setPublishedPosts] = useState<Array<{ id: string; ig_media_id: string | null; permalink: string | null; caption: string; cloudfront_url: string | null; carousel_urls: string[] | null; account_id: string; created_at: string; is_test_post: boolean; media_image_url: string | null; media_type: string | null }>>([]);
   const [feedSortMode, setFeedSortMode] = useState<'recent' | 'comments' | 'no-comments'>('recent');
+  const [isSyncingFeed, setIsSyncingFeed] = useState(false);
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -373,7 +374,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     try {
       const { data, error } = await supabase
         .from('instagram_post_variations')
-        .select('id, ig_media_id, permalink, caption, cloudfront_url, carousel_urls, account_id, created_at, is_test_post')
+        .select('id, ig_media_id, permalink, caption, cloudfront_url, carousel_urls, account_id, created_at, is_test_post, media_image_url, media_type')
         .eq('user_id', userId)
         .eq('status', 'published')
         .order('created_at', { ascending: false });
@@ -1196,12 +1197,13 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       const key = pub.ig_media_id || pub.id;
       if (!postMap.has(key)) {
         const urls = pub.carousel_urls && pub.carousel_urls.length > 0 ? pub.carousel_urls : (pub.cloudfront_url ? [pub.cloudfront_url] : []);
+        const igImageUrl = pub.media_image_url || urls[0] || null;
         postMap.set(key, {
           mediaId: key,
-          mediaType: null,
+          mediaType: pub.media_type || null,
           mediaPermalink: pub.permalink,
           mediaCaption: pub.caption,
-          mediaImageUrl: urls[0] || null,
+          mediaImageUrl: igImageUrl,
           events: [],
           hasComments: false,
           publishedAt: pub.created_at,
@@ -1315,6 +1317,41 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       toast.error('Failed to send reply');
     } finally {
       setFeedSendingFor(null);
+    }
+  };
+
+  const handleSyncFeed = async () => {
+    if (!selectedAccount) {
+      toast.error('Select an account to sync');
+      return;
+    }
+    setIsSyncingFeed(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/instagram-sync-insights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ account_id: selectedAccount.id }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to sync with Instagram');
+        return;
+      }
+      const data = await response.json();
+      await fetchPublishedPosts();
+      const synced = data.feed_sync;
+      if (synced && synced.removed > 0) {
+        toast.success(`Synced with Instagram — ${synced.updated} posts updated, ${synced.removed} removed (no longer on Instagram)`);
+      } else {
+        toast.success(`Synced with Instagram — ${synced?.updated ?? 0} posts updated`);
+      }
+    } catch {
+      toast.error('Failed to sync with Instagram');
+    } finally {
+      setIsSyncingFeed(false);
     }
   };
 
@@ -2615,27 +2652,49 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
             <div className="text-center py-12">
               <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No published posts yet</h3>
-              <p className="text-gray-500 dark:text-gray-400">
+              <p className="text-gray-500 dark:text-gray-400 mb-4">
                 Posts you publish through the auto-posting system will appear here, along with any comments they receive.
               </p>
+              {selectedAccount && (
+                <button
+                  onClick={handleSyncFeed}
+                  disabled={isSyncingFeed}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-500 hover:bg-pink-600 rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  {isSyncingFeed ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  Sync Now
+                </button>
+              )}
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Sort:</span>
-                {([['recent', 'Most recent'], ['comments', 'With comments'], ['no-comments', 'No comments']] as const).map(([mode, label]) => (
+              <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Sort:</span>
+                  {([['recent', 'Most recent'], ['comments', 'With comments'], ['no-comments', 'No comments']] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      onClick={() => setFeedSortMode(mode)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                        feedSortMode === mode
+                          ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300'
+                          : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {selectedAccount && (
                   <button
-                    key={mode}
-                    onClick={() => setFeedSortMode(mode)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                      feedSortMode === mode
-                        ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300'
-                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }`}
+                    onClick={handleSyncFeed}
+                    disabled={isSyncingFeed}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-lg disabled:opacity-50 transition-colors"
                   >
-                    {label}
+                    {isSyncingFeed ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Sync Now
                   </button>
-                ))}
+                )}
               </div>
               <div className="space-y-4">
               {feedPosts.map((post) => {
