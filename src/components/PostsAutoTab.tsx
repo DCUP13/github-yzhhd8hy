@@ -1407,10 +1407,15 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       if (onSynced) onSynced();
       const synced = data.feed_sync;
       const commentsSynced = synced?.comments_synced ?? 0;
+      const commentsRemoved = synced?.comments_removed ?? 0;
+      const commentInfo = [
+        commentsSynced > 0 ? `${commentsSynced} new comments pulled` : null,
+        commentsRemoved > 0 ? `${commentsRemoved} stale comments removed` : null,
+      ].filter(Boolean).join(', ');
       if (synced && synced.removed > 0) {
-        toast.success(`Synced with Instagram — ${synced.updated} posts updated, ${synced.removed} removed${commentsSynced > 0 ? `, ${commentsSynced} new comments pulled` : ''}`);
+        toast.success(`Synced with Instagram — ${synced.updated} posts updated, ${synced.removed} removed${commentInfo ? `, ${commentInfo}` : ''}`);
       } else {
-        toast.success(`Synced with Instagram — ${synced?.updated ?? 0} posts updated${commentsSynced > 0 ? `, ${commentsSynced} new comments pulled` : ''}`);
+        toast.success(`Synced with Instagram — ${synced?.updated ?? 0} posts updated${commentInfo ? `, ${commentInfo}` : ''}`);
       }
     } catch {
       toast.error('Failed to sync with Instagram');

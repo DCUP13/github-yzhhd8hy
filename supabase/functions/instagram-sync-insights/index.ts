@@ -360,16 +360,65 @@ Deno.serve(async (req: Request) => {
         }, { onConflict: "user_id" });
     }
 
-    // 7. Pull comments from Instagram for posts that have them, so the feed
-    //    shows actual comment text — not just the count from the snapshot.
-    //    We only insert comments that aren't already in instagram_webhook_events
-    //    (deduplicated by event_id = comment_id).
+    // 7. Pull comments from Instagram and reconcile with stored events.
+    //    For each post: fetch live comments, insert new ones, and delete
+    //    stored comment events that no longer exist on Instagram.
+    //    Posts with 0 comments on Instagram get all their stored comment
+    //    events removed (they were deleted on Instagram).
     let commentsSynced = 0;
+    let commentsRemoved = 0;
     const igPageScopedId = account.page_scoped_id ?? effectiveUserId;
+    const liveMediaIds = new Set(mediaItems.map((m: any) => m.id));
+
+    // First, delete comment events for posts that no longer exist on Instagram at all
+    const { data: storedCommentMediaIds } = await supabaseClient
+      .from("instagram_webhook_events")
+      .select("media_id")
+      .eq("user_id", account.user_id)
+      .eq("event_type", "comment")
+      .not("media_id", "is", null);
+    const orphanedMediaIds = new Set<string>();
+    if (storedCommentMediaIds) {
+      for (const row of storedCommentMediaIds) {
+        if (row.media_id && !liveMediaIds.has(row.media_id)) {
+          orphanedMediaIds.add(row.media_id);
+        }
+      }
+    }
+    if (orphanedMediaIds.size > 0) {
+      const { data: deleted, error: delErr } = await supabaseClient
+        .from("instagram_webhook_events")
+        .delete()
+        .eq("user_id", account.user_id)
+        .eq("event_type", "comment")
+        .in("media_id", Array.from(orphanedMediaIds))
+        .select("id");
+      if (delErr) {
+        console.error("Error deleting orphaned comments:", delErr);
+      } else {
+        commentsRemoved += deleted?.length ?? 0;
+      }
+    }
 
     for (const item of mediaItems) {
       const commentsCount = item.comments_count ?? 0;
-      if (commentsCount === 0) continue;
+
+      // Posts with 0 comments on Instagram — remove any stale stored comment events
+      if (commentsCount === 0) {
+        const { data: deleted, error: delErr } = await supabaseClient
+          .from("instagram_webhook_events")
+          .delete()
+          .eq("user_id", account.user_id)
+          .eq("event_type", "comment")
+          .eq("media_id", item.id)
+          .select("id");
+        if (delErr) {
+          console.error(`Error deleting stale comments for media ${item.id}:`, delErr);
+        } else {
+          commentsRemoved += deleted?.length ?? 0;
+        }
+        continue;
+      }
 
       try {
         let commentsRes: Response;
@@ -382,9 +431,34 @@ Deno.serve(async (req: Request) => {
         if (!commentsRes.ok) continue;
         const commentsBody = await commentsRes.json();
         const comments: any[] = commentsBody.data ?? [];
+        const liveCommentIds = new Set(comments.map((c: any) => c.id).filter(Boolean));
+
+        // Delete stored comment events for this post that no longer exist on Instagram
+        const { data: storedComments } = await supabaseClient
+          .from("instagram_webhook_events")
+          .select("id, event_id")
+          .eq("user_id", account.user_id)
+          .eq("event_type", "comment")
+          .eq("media_id", item.id);
+        if (storedComments && storedComments.length > 0) {
+          const staleIds: string[] = [];
+          for (const row of storedComments) {
+            if (row.event_id && !liveCommentIds.has(row.event_id)) {
+              staleIds.push(row.id);
+            }
+          }
+          if (staleIds.length > 0) {
+            const { data: deleted } = await supabaseClient
+              .from("instagram_webhook_events")
+              .delete()
+              .in("id", staleIds)
+              .select("id");
+            commentsRemoved += deleted?.length ?? 0;
+          }
+        }
+
         if (comments.length === 0) continue;
 
-        // Fetch media meta once for this post so stored events have full context
         const mediaMeta = {
           media_type: item.media_type ?? null,
           permalink: item.permalink ?? null,
@@ -392,7 +466,7 @@ Deno.serve(async (req: Request) => {
           media_image_url: item.thumbnail_url ?? item.media_url ?? null,
         };
 
-        // Collect all comment IDs to check which ones already exist
+        // Insert new comments that aren't already stored
         const commentIds = comments.map((c: any) => c.id).filter(Boolean);
         let existingIds = new Set<string>();
         if (commentIds.length > 0) {
@@ -449,8 +523,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (commentsSynced > 0) {
-      console.log(`Synced ${commentsSynced} new comments from Instagram`);
+    if (commentsSynced > 0 || commentsRemoved > 0) {
+      console.log(`Synced ${commentsSynced} new comments, removed ${commentsRemoved} stale comments`);
     }
 
     // 8. Sync feed: update published variations with real Instagram data, remove deleted posts
@@ -532,6 +606,7 @@ Deno.serve(async (req: Request) => {
         updated: toUpdate.length,
         removed: toDelete.length,
         comments_synced: commentsSynced,
+        comments_removed: commentsRemoved,
       },
     }), {
       status: 200,
