@@ -180,11 +180,18 @@ interface CommentEvent {
   replied_at: string | null;
 }
 
+interface SnapshotData {
+  id: string;
+  posts_data: Array<{ id: string; caption?: string; media_type?: string; media_url?: string; permalink?: string; thumbnail_url?: string; timestamp?: string }>;
+  created_at: string;
+}
+
 interface PostsAutoTabProps {
   accounts: IgAccount[];
   userId: string;
   commentEvents?: CommentEvent[];
   selectedAccount?: { id: string; owner_profile_id: string | null; page_scoped_id: string | null } | null;
+  snapshots?: SnapshotData[];
 }
 
 type SubView = 'library' | 'create' | 'staging' | 'schedules' | 'feed';
@@ -199,7 +206,7 @@ function fromLocalDatetimeInput(local: string): string {
   return new Date(local).toISOString();
 }
 
-export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAccount }: PostsAutoTabProps) {
+export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAccount, snapshots = [] }: PostsAutoTabProps) {
   const [subView, setSubView] = useState<SubView>('library');
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
@@ -1188,14 +1195,59 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     });
   }, [carouselSize]);
 
-  // Feed: merge comment events with published variations, group by post (media_id)
+  // Feed: seed from latest Instagram snapshot (all posts on Instagram), merge with
+  // published variations and comment events. Only posts present in the snapshot appear.
   const feedPosts = useMemo(() => {
     const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; events: CommentEvent[]; hasComments: boolean; publishedAt: string | null }>();
 
-    // Seed with published variations (posts that were posted via the auto-posting system)
+    // Build a set of live Instagram media IDs from the latest snapshot
+    const latestSnapshot = snapshots[0] || null;
+    const liveMediaIds = new Set<string>();
+    if (latestSnapshot?.posts_data) {
+      for (const p of latestSnapshot.posts_data) {
+        if (p.id) liveMediaIds.add(p.id);
+      }
+    }
+
+    // Seed with ALL posts from the latest Instagram snapshot (not just app-posted ones)
+    if (latestSnapshot?.posts_data) {
+      for (const p of latestSnapshot.posts_data) {
+        if (!p.id) continue;
+        const imageUrl = p.media_type === 'VIDEO' || p.media_type === 'REEL'
+          ? (p.thumbnail_url ?? p.media_url ?? null)
+          : (p.media_url ?? null);
+        postMap.set(p.id, {
+          mediaId: p.id,
+          mediaType: p.media_type ?? null,
+          mediaPermalink: p.permalink ?? null,
+          mediaCaption: (p.caption ?? '').substring(0, 500) || null,
+          mediaImageUrl: imageUrl,
+          events: [],
+          hasComments: false,
+          publishedAt: p.timestamp ?? latestSnapshot.created_at,
+        });
+      }
+    }
+
+    // Merge in published variations (for posts made via the app — adds created_at if no snapshot)
     for (const pub of publishedPosts) {
       const key = pub.ig_media_id || pub.id;
-      if (!postMap.has(key)) {
+      if (liveMediaIds.size > 0 && pub.ig_media_id && !liveMediaIds.has(pub.ig_media_id)) {
+        // This variation's post is no longer on Instagram — skip it
+        continue;
+      }
+      const existing = postMap.get(key);
+      if (existing) {
+        // Enrich with variation data if snapshot was missing fields
+        if (!existing.mediaImageUrl) {
+          const urls = pub.carousel_urls && pub.carousel_urls.length > 0 ? pub.carousel_urls : (pub.cloudfront_url ? [pub.cloudfront_url] : []);
+          existing.mediaImageUrl = pub.media_image_url || urls[0] || null;
+        }
+        if (!existing.mediaType) existing.mediaType = pub.media_type || null;
+        if (!existing.mediaPermalink) existing.mediaPermalink = pub.permalink;
+        if (!existing.mediaCaption) existing.mediaCaption = pub.caption;
+      } else if (liveMediaIds.size === 0) {
+        // No snapshot available — include variation as fallback
         const urls = pub.carousel_urls && pub.carousel_urls.length > 0 ? pub.carousel_urls : (pub.cloudfront_url ? [pub.cloudfront_url] : []);
         const igImageUrl = pub.media_image_url || urls[0] || null;
         postMap.set(key, {
@@ -1211,9 +1263,13 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       }
     }
 
-    // Merge in comment events
+    // Merge in comment events (only for posts that are in the feed)
     for (const event of commentEvents) {
       const key = event.media_id ?? event.id;
+      // If we have a snapshot, only keep events for posts that are live on Instagram
+      if (liveMediaIds.size > 0 && event.media_id && !liveMediaIds.has(event.media_id)) {
+        continue;
+      }
       const existing = postMap.get(key);
       if (existing) {
         existing.events.push(event);
@@ -1222,7 +1278,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         if (event.media_type && !existing.mediaType) existing.mediaType = event.media_type;
         if (event.media_permalink && !existing.mediaPermalink) existing.mediaPermalink = event.media_permalink;
         if (event.media_caption && !existing.mediaCaption) existing.mediaCaption = event.media_caption;
-      } else {
+      } else if (liveMediaIds.size === 0) {
         postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, events: [event], hasComments: true, publishedAt: null });
       }
     }
@@ -1245,7 +1301,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       });
     }
     return posts;
-  }, [commentEvents, publishedPosts, feedSortMode]);
+  }, [commentEvents, publishedPosts, feedSortMode, snapshots]);
 
   function buildCommentThread(postEvents: CommentEvent[]) {
     const sorted = postEvents.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));

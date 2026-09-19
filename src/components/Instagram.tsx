@@ -1763,6 +1763,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
             userId={selectedAccount?.user_id || ''}
             commentEvents={events.filter(e => e.event_type !== 'message')}
             selectedAccount={selectedAccount ? { id: selectedAccount.id, owner_profile_id: selectedAccount.owner_profile_id ?? null, page_scoped_id: selectedAccount.page_scoped_id ?? null } : null}
+            snapshots={snapshots}
           />
         )}
 
