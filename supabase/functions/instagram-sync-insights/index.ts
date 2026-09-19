@@ -218,6 +218,38 @@ Deno.serve(async (req: Request) => {
       let saved: number | null = null;
       let videoViews: number | null = null;
 
+      // Fetch carousel children if this is a carousel post
+      let carouselUrls: string[] | null = null;
+      if (item.media_type === "CAROUSEL") {
+        try {
+          let childrenRes: Response;
+          if (isInstagramToken(accessToken)) {
+            childrenRes = await fetch(
+              `${baseUrl}/v21.0/${item.id}/children?fields=id,media_type,media_url,thumbnail_url&limit=20`,
+              { headers: authHeaders(accessToken) },
+            );
+          } else {
+            childrenRes = await fetch(
+              graphUrl(
+                `${baseUrl}/v21.0/${item.id}/children?fields=id,media_type,media_url,thumbnail_url&limit=20`,
+                accessToken,
+              ),
+            );
+          }
+          if (childrenRes.ok) {
+            const childrenBody = await childrenRes.json();
+            const children: any[] = childrenBody.data ?? [];
+            carouselUrls = children.map((c: any) =>
+              c.media_type === "VIDEO" || c.media_type === "REEL"
+                ? (c.thumbnail_url ?? c.media_url ?? null)
+                : (c.media_url ?? null)
+            ).filter((url: string | null): url is string => url != null);
+          }
+        } catch {
+          // Carousel children fetch may fail; continue with single image
+        }
+      }
+
       try {
         let insightsRes: Response;
         if (isInstagramToken(accessToken)) {
@@ -266,6 +298,7 @@ Deno.serve(async (req: Request) => {
         media_type: item.media_type ?? null,
         permalink: item.permalink ?? null,
         thumbnail_url: item.thumbnail_url ?? item.media_url ?? null,
+        carousel_urls: carouselUrls,
         like_count: likeCount,
         comments_count: commentsCount,
         reach,

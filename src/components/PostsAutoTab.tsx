@@ -182,7 +182,7 @@ interface CommentEvent {
 
 interface SnapshotData {
   id: string;
-  posts_data: Array<{ media_id: string; caption?: string; media_type?: string; permalink?: string; thumbnail_url?: string; timestamp?: string; like_count?: number; comments_count?: number }>;
+  posts_data: Array<{ media_id: string; caption?: string; media_type?: string; permalink?: string; thumbnail_url?: string; carousel_urls?: string[] | null; timestamp?: string; like_count?: number; comments_count?: number }>;
   created_at: string;
 }
 
@@ -281,6 +281,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [publishedPosts, setPublishedPosts] = useState<Array<{ id: string; ig_media_id: string | null; permalink: string | null; caption: string; cloudfront_url: string | null; carousel_urls: string[] | null; account_id: string; created_at: string; is_test_post: boolean; media_image_url: string | null; media_type: string | null }>>([]);
   const [feedSortMode, setFeedSortMode] = useState<'recent' | 'comments' | 'no-comments'>('recent');
   const [isSyncingFeed, setIsSyncingFeed] = useState(false);
+  const [feedCarouselIndex, setFeedCarouselIndex] = useState<Record<string, number>>({});
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1199,7 +1200,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   // Feed: seed from latest Instagram snapshot (all posts on Instagram), merge with
   // published variations and comment events. Only posts present in the snapshot appear.
   const feedPosts = useMemo(() => {
-    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; events: CommentEvent[]; hasComments: boolean; publishedAt: string | null }>();
+    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; carouselUrls: string[] | null; events: CommentEvent[]; hasComments: boolean; publishedAt: string | null }>();
 
     // Build a set of live Instagram media IDs from the latest snapshot
     const latestSnapshot = snapshots[0] || null;
@@ -1220,6 +1221,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           mediaPermalink: p.permalink ?? null,
           mediaCaption: (p.caption ?? '').substring(0, 500) || null,
           mediaImageUrl: p.thumbnail_url ?? null,
+          carouselUrls: p.carousel_urls ?? null,
           events: [],
           hasComments: false,
           publishedAt: p.timestamp ?? latestSnapshot.created_at,
@@ -1241,6 +1243,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           const urls = pub.carousel_urls && pub.carousel_urls.length > 0 ? pub.carousel_urls : (pub.cloudfront_url ? [pub.cloudfront_url] : []);
           existing.mediaImageUrl = pub.media_image_url || urls[0] || null;
         }
+        if (!existing.carouselUrls && pub.carousel_urls && pub.carousel_urls.length > 0) {
+          existing.carouselUrls = pub.carousel_urls;
+        }
         if (!existing.mediaType) existing.mediaType = pub.media_type || null;
         if (!existing.mediaPermalink) existing.mediaPermalink = pub.permalink;
         if (!existing.mediaCaption) existing.mediaCaption = pub.caption;
@@ -1254,6 +1259,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           mediaPermalink: pub.permalink,
           mediaCaption: pub.caption,
           mediaImageUrl: igImageUrl,
+          carouselUrls: pub.carousel_urls ?? null,
           events: [],
           hasComments: false,
           publishedAt: pub.created_at,
@@ -1277,7 +1283,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         if (event.media_permalink && !existing.mediaPermalink) existing.mediaPermalink = event.media_permalink;
         if (event.media_caption && !existing.mediaCaption) existing.mediaCaption = event.media_caption;
       } else if (liveMediaIds.size === 0) {
-        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, events: [event], hasComments: true, publishedAt: null });
+        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, carouselUrls: null, events: [event], hasComments: true, publishedAt: null });
       }
     }
 
@@ -2762,7 +2768,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       onClick={() => setExpandedPostId(isExpanded ? null : post.mediaId)}
                       className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
                     >
-                      <div className="w-10 h-10 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      <div className="w-10 h-10 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
                         {post.mediaImageUrl ? (
                           post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
                             <video src={post.mediaImageUrl} className="w-full h-full object-cover" preload="metadata" muted />
@@ -2773,6 +2779,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           <VideoIcon className="w-5 h-5 text-pink-500" />
                         ) : (
                           <ImageIcon className="w-5 h-5 text-pink-500" />
+                        )}
+                        {post.carouselUrls && post.carouselUrls.length > 1 && (
+                          <span className="absolute top-0 right-0 bg-black/60 text-white text-[8px] font-bold px-1 rounded-bl leading-tight">
+                            {post.carouselUrls.length}
+                          </span>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -2822,26 +2833,72 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                     {/* Expanded comment threads */}
                     {isExpanded && (
                       <div className="border-t border-gray-200 dark:border-gray-700">
-                        {/* Post image/video preview */}
-                        {post.mediaImageUrl && (
-                          <div className="px-4 pt-3 pb-2">
-                            {post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
-                              <video
-                                src={post.mediaImageUrl}
-                                className="w-full max-h-64 rounded-lg object-cover"
-                                controls
-                                preload="metadata"
-                              />
-                            ) : (
-                              <img
-                                src={post.mediaImageUrl}
-                                alt=""
-                                className="w-full max-h-64 rounded-lg object-cover"
-                                loading="lazy"
-                              />
-                            )}
-                          </div>
-                        )}
+                        {/* Post image/video — full size with carousel support */}
+                        {(() => {
+                          const carousel = post.carouselUrls && post.carouselUrls.length > 0 ? post.carouselUrls : (post.mediaImageUrl ? [post.mediaImageUrl] : []);
+                          if (carousel.length === 0) return null;
+                          const currentIdx = feedCarouselIndex[post.mediaId] ?? 0;
+                          const currentUrl = carousel[Math.min(currentIdx, carousel.length - 1)];
+                          const isVideo = post.mediaType === 'REEL' || post.mediaType === 'VIDEO';
+                          return (
+                            <div className="px-4 pt-3 pb-2">
+                              <div className="relative rounded-lg overflow-hidden bg-black">
+                                {isVideo ? (
+                                  <video
+                                    src={currentUrl}
+                                    className="w-full max-h-[600px] object-contain"
+                                    controls
+                                    preload="metadata"
+                                  />
+                                ) : (
+                                  <img
+                                    src={currentUrl}
+                                    alt=""
+                                    className="w-full max-h-[600px] object-contain"
+                                    loading="lazy"
+                                  />
+                                )}
+                                {carousel.length > 1 && (
+                                  <>
+                                    {/* Navigation arrows */}
+                                    {currentIdx > 0 && (
+                                      <button
+                                        onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: Math.max(0, currentIdx - 1) }))}
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 dark:bg-gray-800/80 flex items-center justify-center shadow-md hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                                      >
+                                        <ChevronLeft className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                                      </button>
+                                    )}
+                                    {currentIdx < carousel.length - 1 && (
+                                      <button
+                                        onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: Math.min(carousel.length - 1, currentIdx + 1) }))}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 dark:bg-gray-800/80 flex items-center justify-center shadow-md hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                                      >
+                                        <ChevronRight className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                                      </button>
+                                    )}
+                                    {/* Slide counter */}
+                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 text-white text-xs font-medium">
+                                      {currentIdx + 1} / {carousel.length}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              {/* Thumbnail dots for carousels */}
+                              {carousel.length > 1 && (
+                                <div className="flex justify-center gap-1.5 mt-2">
+                                  {carousel.map((url, idx) => (
+                                    <button
+                                      key={idx}
+                                      onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: idx }))}
+                                      className={`w-2 h-2 rounded-full transition-colors ${idx === currentIdx ? 'bg-pink-500' : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400'}`}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {post.events.length === 0 ? (
                           <div className="px-4 py-6 text-center">
                             <p className="text-sm text-gray-400">No comments on this post yet.</p>
