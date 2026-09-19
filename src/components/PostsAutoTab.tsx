@@ -513,6 +513,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         .from('prompts')
         .select('id, title')
         .eq('user_id', userId)
+        .eq('category', 'Instagram')
         .order('title');
       setAvailablePrompts(data || []);
     };
