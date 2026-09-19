@@ -644,32 +644,50 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         .eq('batch_id', batch.id);
 
       if (newVariations) {
+        let totalOverlays = 0;
+        let successOverlays = 0;
+        for (const v of newVariations) {
+          for (const t of v.carousel_texts || []) {
+            if (t?.trim()) totalOverlays++;
+          }
+        }
+
+        if (totalOverlays > 0) {
+          toast.success(`Applying text overlays to ${totalOverlays} image${totalOverlays !== 1 ? 's' : ''}...`);
+        }
+
         for (const v of newVariations) {
           const urls = [...(v.carousel_urls || [])];
           let anyOverlay = false;
           for (let i = 0; i < urls.length; i++) {
             const slideText = (v.carousel_texts?.[i] || '').trim();
             if (!slideText) continue;
-            try {
-              const overlayResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overlay-text-on-image`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-                  apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-                },
-                body: JSON.stringify({ source_url: urls[i], text: slideText }),
-              });
-              if (overlayResponse.ok) {
-                const overlayData = await overlayResponse.json();
-                urls[i] = overlayData.cloudfront_url;
-                anyOverlay = true;
-              } else {
-                const err = await overlayResponse.json().catch(() => ({}));
-                console.error(`Overlay failed for variation ${v.id} slide ${i}:`, err.error);
+
+            let overlaid = false;
+            for (let attempt = 0; attempt < 2 && !overlaid; attempt++) {
+              try {
+                const overlayResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overlay-text-on-image`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                    apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+                  },
+                  body: JSON.stringify({ source_url: urls[i], text: slideText }),
+                });
+                if (overlayResponse.ok) {
+                  const overlayData = await overlayResponse.json();
+                  urls[i] = overlayData.cloudfront_url;
+                  overlaid = true;
+                  anyOverlay = true;
+                  successOverlays++;
+                } else if (attempt === 1) {
+                  const err = await overlayResponse.json().catch(() => ({}));
+                  console.error(`Overlay failed for variation ${v.id} slide ${i}:`, err.error);
+                }
+              } catch (e) {
+                if (attempt === 1) console.error(`Overlay error for variation ${v.id} slide ${i}:`, e);
               }
-            } catch (e) {
-              console.error(`Overlay error for variation ${v.id} slide ${i}:`, e);
             }
           }
           if (anyOverlay) {
@@ -677,6 +695,16 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
               .from('instagram_post_variations')
               .update({ carousel_urls: urls, cloudfront_url: urls[0], updated_at: new Date().toISOString() })
               .eq('id', v.id);
+          }
+        }
+
+        if (totalOverlays > 0) {
+          if (successOverlays === totalOverlays) {
+            toast.success(`All ${successOverlays} text overlays applied!`);
+          } else if (successOverlays > 0) {
+            toast.error(`${successOverlays}/${totalOverlays} overlays applied — some images kept original`);
+          } else {
+            toast.error('Text overlays failed — showing original images');
           }
         }
       }
