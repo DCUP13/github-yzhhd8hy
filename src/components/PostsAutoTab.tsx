@@ -30,6 +30,8 @@ import {
   Bot,
   Save,
   Pencil,
+  Palette,
+  Type,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -111,6 +113,28 @@ interface PostingSchedule {
   default_process_id: string | null;
 }
 
+interface OverlaySettings {
+  fontSize: number;
+  fontWeight: number;
+  textColor: string;
+  bubbleColor: string;
+  bubbleOpacity: number;
+  bubblePadding: number;
+  bubbleRadius: number;
+  position: 'bottom' | 'top' | 'center';
+}
+
+const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
+  fontSize: 6,
+  fontWeight: 700,
+  textColor: '#ffffff',
+  bubbleColor: '#000000',
+  bubbleOpacity: 45,
+  bubblePadding: 40,
+  bubbleRadius: 0,
+  position: 'bottom',
+};
+
 interface PostProcess {
   id: string;
   name: string;
@@ -124,6 +148,7 @@ interface PostProcess {
   prompt_mode: string;
   prompt_id: string | null;
   custom_prompt: string | null;
+  overlay_settings: OverlaySettings | null;
   created_at: string;
   updated_at: string;
 }
@@ -201,6 +226,10 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   // Carousel state
   const [carouselSize, setCarouselSize] = useState(1);
   const [carouselTextLines, setCarouselTextLines] = useState<string[]>(['']);
+
+  // Overlay designer state
+  const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
+  const [overlayPreviewText, setOverlayPreviewText] = useState('Your text here');
 
   // Post now
   const [postNow, setPostNow] = useState(false);
@@ -363,6 +392,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       prompt_mode: promptMode,
       prompt_id: promptMode === 'select' ? selectedPromptId : null,
       custom_prompt: promptMode === 'custom' ? customPrompt.trim() : null,
+      overlay_settings: overlaySettings,
     };
 
     try {
@@ -404,6 +434,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     setPromptMode(process.prompt_mode as 'none' | 'select' | 'custom');
     setSelectedPromptId(process.prompt_id || null);
     setCustomPrompt(process.custom_prompt || '');
+    if (process.overlay_settings) {
+      setOverlaySettings({ ...DEFAULT_OVERLAY_SETTINGS, ...process.overlay_settings });
+    }
     toast.success(`Loaded process: ${process.name}`);
   };
 
@@ -598,6 +631,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         post_now: postNow,
         use_whole_library: useWholeLibrary,
         account_assignments: assignments,
+        overlay_settings: overlaySettings,
         status: 'draft',
       };
 
@@ -673,7 +707,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                     Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
                     apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
                   },
-                  body: JSON.stringify({ source_url: urls[i], text: slideText }),
+                  body: JSON.stringify({ source_url: urls[i], text: slideText, overlay_settings: overlaySettings }),
                 });
                 if (overlayResponse.ok) {
                   const overlayData = await overlayResponse.json();
@@ -1512,49 +1546,185 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 <p className="mt-1 text-xs text-gray-500">Separate with spaces or commas</p>
               </div>
 
-              {/* Saved Processes */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Saved Post Processes</h4>
-                  <button
-                    onClick={() => { setEditingProcessId(null); setProcessNameInput(''); setShowSaveProcessDialog(true); }}
-                    className="px-3 py-1.5 text-xs font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg flex items-center gap-1"
-                  >
-                    <Save className="w-3 h-3" /> Save Current as Process
-                  </button>
+              {/* Overlay Designer */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-pink-600" />
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Overlay Text Designer</h4>
                 </div>
-                {isLoadingProcesses ? (
-                  <p className="text-xs text-gray-400">Loading...</p>
-                ) : postProcesses.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    No saved processes yet. Configure your settings above and click "Save Current as Process" to create a reusable template.
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {postProcesses.map(proc => (
-                      <div key={proc.id} className="flex items-center gap-1 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 px-2 py-1">
-                        <button
-                          onClick={() => handleLoadProcess(proc)}
-                          className="text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-pink-600 dark:hover:text-pink-400"
-                        >
-                          {proc.name}
-                        </button>
-                        <button
-                          onClick={() => { setEditingProcessId(proc.id); setProcessNameInput(proc.name); setShowSaveProcessDialog(true); }}
-                          className="text-gray-400 hover:text-blue-500"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteProcess(proc.id)}
-                          className="text-gray-400 hover:text-red-500"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
+                <p className="text-xs text-gray-500">Style the text that gets overlaid on your carousel images. These settings are saved with your process.</p>
+
+                {/* Live Preview */}
+                <div className="relative w-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600" style={{ aspectRatio: '1' }}>
+                  <img
+                    src={assets.find(a => a.file_type === 'image')?.cloudfront_url || 'https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-400-normal.woff2'}
+                    alt="Preview"
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-br from-gray-700 to-gray-900" />
+                  <div
+                    className="absolute"
+                    style={{
+                      left: 0,
+                      right: 0,
+                      ...(overlaySettings.position === 'bottom' && { bottom: '8%' }),
+                      ...(overlaySettings.position === 'top' && { top: '8%' }),
+                      ...(overlaySettings.position === 'center' && { top: '50%', transform: 'translateY(-50%)' }),
+                      display: 'flex',
+                      justifyContent: 'center',
+                      padding: `0 ${overlaySettings.bubblePadding * 0.3}px`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: `${overlaySettings.bubbleColor}${Math.round(overlaySettings.bubbleOpacity * 2.55).toString(16).padStart(2, '0')}`,
+                        borderRadius: `${overlaySettings.bubbleRadius}px`,
+                        padding: `${overlaySettings.bubblePadding * 0.15}px ${overlaySettings.bubblePadding * 0.3}px`,
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: overlaySettings.textColor,
+                          fontSize: `${overlaySettings.fontSize * 2.5}px`,
+                          fontWeight: overlaySettings.fontWeight,
+                          fontFamily: 'sans-serif',
+                          textAlign: 'center',
+                          display: 'block',
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {overlayPreviewText || 'Your text here'}
+                      </span>
+                    </div>
                   </div>
-                )}
+                </div>
+
+                {/* Preview text input */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Preview Text</label>
+                  <input
+                    type="text"
+                    value={overlayPreviewText}
+                    onChange={(e) => setOverlayPreviewText(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Type to preview..."
+                  />
+                </div>
+
+                {/* Sliders */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span className="flex items-center gap-1"><Type className="w-3 h-3" /> Font Size</span>
+                      <span className="text-gray-400">{overlaySettings.fontSize}%</span>
+                    </label>
+                    <input
+                      type="range" min={3} max={12} step={0.5}
+                      value={overlaySettings.fontSize}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, fontSize: parseFloat(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span>Boldness</span>
+                      <span className="text-gray-400">{overlaySettings.fontWeight}</span>
+                    </label>
+                    <input
+                      type="range" min={100} max={900} step={100}
+                      value={overlaySettings.fontWeight}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, fontWeight: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span>Bubble Opacity</span>
+                      <span className="text-gray-400">{overlaySettings.bubbleOpacity}%</span>
+                    </label>
+                    <input
+                      type="range" min={0} max={100} step={5}
+                      value={overlaySettings.bubbleOpacity}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, bubbleOpacity: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span>Bubble Padding</span>
+                      <span className="text-gray-400">{overlaySettings.bubblePadding}px</span>
+                    </label>
+                    <input
+                      type="range" min={0} max={100} step={5}
+                      value={overlaySettings.bubblePadding}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, bubblePadding: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span>Bubble Radius</span>
+                      <span className="text-gray-400">{overlaySettings.bubbleRadius}px</span>
+                    </label>
+                    <input
+                      type="range" min={0} max={50} step={1}
+                      value={overlaySettings.bubbleRadius}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, bubbleRadius: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Position</label>
+                    <div className="flex gap-1">
+                      {(['top', 'center', 'bottom'] as const).map(pos => (
+                        <button
+                          key={pos}
+                          onClick={() => setOverlaySettings(prev => ({ ...prev, position: pos }))}
+                          className={`px-3 py-1 text-xs rounded-lg flex-1 capitalize ${overlaySettings.position === pos ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}
+                        >
+                          {pos}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Color pickers */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Text Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={overlaySettings.textColor}
+                        onChange={(e) => setOverlaySettings(prev => ({ ...prev, textColor: e.target.value }))}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300 dark:border-gray-600"
+                      />
+                      <span className="text-xs text-gray-500 font-mono">{overlaySettings.textColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Bubble Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={overlaySettings.bubbleColor}
+                        onChange={(e) => setOverlaySettings(prev => ({ ...prev, bubbleColor: e.target.value }))}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300 dark:border-gray-600"
+                      />
+                      <span className="text-xs text-gray-500 font-mono">{overlaySettings.bubbleColor}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reset button */}
+                <button
+                  onClick={() => setOverlaySettings(DEFAULT_OVERLAY_SETTINGS)}
+                  className="text-xs text-gray-500 hover:text-pink-600"
+                >
+                  Reset to defaults
+                </button>
               </div>
 
               {/* Account Selection */}
@@ -1745,6 +1915,51 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                     </p>
                   </div>
                 </label>
+              </div>
+
+              {/* Saved Post Processes */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Saved Post Processes</h4>
+                  <button
+                    onClick={() => { setEditingProcessId(null); setProcessNameInput(''); setShowSaveProcessDialog(true); }}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg flex items-center gap-1"
+                  >
+                    <Save className="w-3 h-3" /> Save Current as Process
+                  </button>
+                </div>
+                {isLoadingProcesses ? (
+                  <p className="text-xs text-gray-400">Loading...</p>
+                ) : postProcesses.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No saved processes yet. Configure your settings above and click "Save Current as Process" to create a reusable template.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {postProcesses.map(proc => (
+                      <div key={proc.id} className="flex items-center gap-1 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 px-2 py-1">
+                        <button
+                          onClick={() => handleLoadProcess(proc)}
+                          className="text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-pink-600 dark:hover:text-pink-400"
+                        >
+                          {proc.name}
+                        </button>
+                        <button
+                          onClick={() => { setEditingProcessId(proc.id); setProcessNameInput(proc.name); setShowSaveProcessDialog(true); }}
+                          className="text-gray-400 hover:text-blue-500"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProcess(proc.id)}
+                          className="text-gray-400 hover:text-red-500"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Generate button */}

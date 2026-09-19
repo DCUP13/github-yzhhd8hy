@@ -9,6 +9,28 @@ const corsHeaders = {
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 const MAX_DIM = 1080;
 
+interface OverlaySettings {
+  fontSize: number;
+  fontWeight: number;
+  textColor: string;
+  bubbleColor: string;
+  bubbleOpacity: number;
+  bubblePadding: number;
+  bubbleRadius: number;
+  position: 'bottom' | 'top' | 'center';
+}
+
+const DEFAULT_SETTINGS: OverlaySettings = {
+  fontSize: 6,
+  fontWeight: 700,
+  textColor: '#ffffff',
+  bubbleColor: '#000000',
+  bubbleOpacity: 45,
+  bubblePadding: 40,
+  bubbleRadius: 0,
+  position: 'bottom',
+};
+
 function wrapText(text: string, maxCharsPerLine: number): string[] {
   const words = text.trim().split(/\s+/);
   const lines: string[] = [];
@@ -42,7 +64,18 @@ function sniffImageMime(bytes: Uint8Array): string {
   throw new Error("Unsupported image type. Use JPEG or PNG.");
 }
 
-async function createOverlayJpeg(imageUrl: string, text: string): Promise<Uint8Array> {
+function hexToRgba(hex: string, opacity: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity / 100})`;
+}
+
+async function createOverlayJpeg(
+  imageUrl: string,
+  text: string,
+  settings: OverlaySettings,
+): Promise<Uint8Array> {
   const imageResponse = await fetch(imageUrl);
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
@@ -68,8 +101,9 @@ async function createOverlayJpeg(imageUrl: string, text: string): Promise<Uint8A
 
   ctx.drawImage(bitmap, 0, 0, w, h);
 
-  const fontSize = Math.round(w * 0.06);
-  ctx.font = `bold ${fontSize}px sans-serif`;
+  const fontSizePct = settings.fontSize / 100;
+  const fontSize = Math.round(w * fontSizePct);
+  ctx.font = `${settings.fontWeight} ${fontSize}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -78,17 +112,37 @@ async function createOverlayJpeg(imageUrl: string, text: string): Promise<Uint8A
 
   const lineHeight = fontSize * 1.3;
   const totalTextHeight = lines.length * lineHeight;
-  const startY = h - totalTextHeight - Math.round(h * 0.08);
-  const bgPadding = Math.round(fontSize * 0.4);
-  const bgRectY = startY - bgPadding;
-  const bgRectHeight = totalTextHeight + bgPadding * 2;
+  const padScaled = Math.round(fontSize * (settings.bubblePadding / 100));
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.fillRect(0, bgRectY, w, bgRectHeight);
+  let bannerY: number;
+  if (settings.position === 'top') {
+    bannerY = Math.round(h * 0.08);
+  } else if (settings.position === 'center') {
+    bannerY = Math.round((h - totalTextHeight - padScaled * 2) / 2);
+  } else {
+    bannerY = h - totalTextHeight - padScaled * 2 - Math.round(h * 0.08);
+  }
 
-  ctx.fillStyle = 'white';
+  const bubbleWidth = w;
+  const bubbleHeight = totalTextHeight + padScaled * 2;
+
+  ctx.fillStyle = hexToRgba(settings.bubbleColor, settings.bubbleOpacity);
+  if (settings.bubbleRadius > 0) {
+    const r = settings.bubbleRadius;
+    ctx.beginPath();
+    ctx.moveTo(0, bannerY);
+    ctx.lineTo(bubbleWidth, bannerY);
+    ctx.lineTo(bubbleWidth, bannerY + bubbleHeight);
+    ctx.lineTo(0, bannerY + bubbleHeight);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.fillRect(0, bannerY, bubbleWidth, bubbleHeight);
+  }
+
+  ctx.fillStyle = settings.textColor;
   for (let i = 0; i < lines.length; i++) {
-    const y = startY + (i * lineHeight) + fontSize * 0.65;
+    const y = bannerY + padScaled + (i * lineHeight) + fontSize * 0.65;
     ctx.fillText(lines[i], w / 2, y);
   }
 
@@ -203,7 +257,7 @@ Deno.serve(async (req: Request) => {
       userId = user.id;
     }
 
-    const { source_url, text, target_folder } = body;
+    const { source_url, text, target_folder, overlay_settings } = body;
 
     if (!source_url) {
       return new Response(JSON.stringify({ error: "Missing source_url" }), {
@@ -216,7 +270,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const jpegData = await createOverlayJpeg(source_url, text.trim());
+    const settings: OverlaySettings = { ...DEFAULT_SETTINGS, ...(overlay_settings || {}) };
+    const jpegData = await createOverlayJpeg(source_url, text.trim(), settings);
 
     const BUCKET_NAME = Deno.env.get("S3_BUCKET_NAME");
     const AWS_ACCESS_KEY_ID = Deno.env.get("AWS_ACCESS_KEY_ID");
