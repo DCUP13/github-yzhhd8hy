@@ -125,7 +125,7 @@ interface OverlaySettings {
 }
 
 const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
-  fontSize: 6,
+  fontSize: 64,
   fontWeight: 700,
   textColor: '#ffffff',
   bubbleColor: '#000000',
@@ -230,6 +230,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   // Overlay designer state
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [overlayPreviewText, setOverlayPreviewText] = useState('Your text here');
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const [previewWidth, setPreviewWidth] = useState(640);
 
   // Post now
   const [postNow, setPostNow] = useState(false);
@@ -503,6 +505,17 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     fetchSchedules();
     fetchPostProcesses();
   }, [fetchAssets, fetchBatches, fetchSchedules, fetchPostProcesses]);
+
+  useEffect(() => {
+    if (!previewContainerRef.current) return;
+    const updateWidth = () => {
+      if (previewContainerRef.current) setPreviewWidth(previewContainerRef.current.offsetWidth);
+    };
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(previewContainerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const fetchPrompts = async () => {
@@ -1597,7 +1610,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 <p className="text-xs text-gray-500">Style the text that gets overlaid on your carousel images. These settings are saved with your process.</p>
 
                 {/* Live Preview */}
-                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto w-full" style={{ aspectRatio: '16 / 9', maxWidth: '640px' }}>
+                <div ref={previewContainerRef} className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto w-full" style={{ aspectRatio: '16 / 9', maxWidth: '640px' }}>
                   <img
                     src={assets.find(a => a.file_type === 'image')?.cloudfront_url || 'https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-400-normal.woff2'}
                     alt="Preview"
@@ -1615,20 +1628,20 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       ...(overlaySettings.position === 'center' && { top: '50%', transform: 'translateY(-50%)' }),
                       display: 'flex',
                       justifyContent: 'center',
-                      padding: `0 ${overlaySettings.bubblePadding * 0.3}px`,
+                      padding: `0 ${overlaySettings.bubblePadding * (previewWidth / 1080)}px`,
                     }}
                   >
                     <div
                       style={{
                         background: `${overlaySettings.bubbleColor}${Math.round(overlaySettings.bubbleOpacity * 2.55).toString(16).padStart(2, '0')}`,
-                        borderRadius: `${overlaySettings.bubbleRadius}px`,
-                        padding: `${overlaySettings.bubblePadding * 0.15}px ${overlaySettings.bubblePadding * 0.3}px`,
+                        borderRadius: `${overlaySettings.bubbleRadius * (previewWidth / 1080)}px`,
+                        padding: `${overlaySettings.bubblePadding * 0.5 * (previewWidth / 1080)}px ${overlaySettings.bubblePadding * (previewWidth / 1080)}px`,
                       }}
                     >
                       <span
                         style={{
                           color: overlaySettings.textColor,
-                          fontSize: `${overlaySettings.fontSize * 3.5}px`,
+                          fontSize: `${overlaySettings.fontSize * (previewWidth / 1080)}px`,
                           fontWeight: overlaySettings.fontWeight,
                           fontFamily: 'sans-serif',
                           textAlign: 'center',
@@ -1659,12 +1672,12 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                   <div>
                     <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
                       <span className="flex items-center gap-1"><Type className="w-3 h-3" /> Font Size</span>
-                      <span className="text-gray-400">{overlaySettings.fontSize}%</span>
+                      <span className="text-gray-400">{overlaySettings.fontSize}px</span>
                     </label>
                     <input
-                      type="range" min={3} max={25} step={0.5}
+                      type="range" min={12} max={300} step={1}
                       value={overlaySettings.fontSize}
-                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, fontSize: parseFloat(e.target.value) }))}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, fontSize: parseInt(e.target.value) }))}
                       className="w-full accent-pink-600"
                     />
                   </div>

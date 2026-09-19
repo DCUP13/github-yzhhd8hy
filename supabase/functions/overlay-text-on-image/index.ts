@@ -21,7 +21,7 @@ interface OverlaySettings {
 }
 
 const DEFAULT_SETTINGS: OverlaySettings = {
-  fontSize: 6,
+  fontSize: 64,
   fontWeight: 700,
   textColor: '#ffffff',
   bubbleColor: '#000000',
@@ -101,8 +101,7 @@ async function createOverlayJpeg(
 
   ctx.drawImage(bitmap, 0, 0, w, h);
 
-  const fontSizePct = settings.fontSize / 100;
-  const fontSize = Math.round(w * fontSizePct);
+  const fontSize = settings.fontSize;
   ctx.font = `${settings.fontWeight} ${fontSize}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -112,7 +111,7 @@ async function createOverlayJpeg(
 
   const lineHeight = fontSize * 1.3;
   const totalTextHeight = lines.length * lineHeight;
-  const padScaled = Math.round(fontSize * (settings.bubblePadding / 100));
+  const padScaled = Math.round(settings.bubblePadding * (w / 1080));
 
   let bannerY: number;
   if (settings.position === 'top') {
@@ -128,7 +127,7 @@ async function createOverlayJpeg(
 
   ctx.fillStyle = hexToRgba(settings.bubbleColor, settings.bubbleOpacity);
   if (settings.bubbleRadius > 0) {
-    const r = settings.bubbleRadius;
+    const r = settings.bubbleRadius * (w / 1080);
     ctx.beginPath();
     ctx.moveTo(0, bannerY);
     ctx.lineTo(bubbleWidth, bannerY);
