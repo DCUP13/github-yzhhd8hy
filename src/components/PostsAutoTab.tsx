@@ -1597,7 +1597,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 <p className="text-xs text-gray-500">Style the text that gets overlaid on your carousel images. These settings are saved with your process.</p>
 
                 {/* Live Preview */}
-                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto" style={{ aspectRatio: '1', maxWidth: '300px' }}>
+                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto w-full" style={{ aspectRatio: '1', maxWidth: '500px' }}>
                   <img
                     src={assets.find(a => a.file_type === 'image')?.cloudfront_url || 'https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-400-normal.woff2'}
                     alt="Preview"
