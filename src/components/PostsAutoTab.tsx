@@ -1675,7 +1675,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       <span className="text-gray-400">{overlaySettings.fontSize}px</span>
                     </label>
                     <input
-                      type="range" min={12} max={300} step={1}
+                      type="range" min={12} max={64} step={1}
                       value={overlaySettings.fontSize}
                       onChange={(e) => setOverlaySettings(prev => ({ ...prev, fontSize: parseInt(e.target.value) }))}
                       className="w-full accent-pink-600"
