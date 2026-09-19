@@ -1301,9 +1301,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       });
     } else {
       posts.sort((a, b) => {
-        const aLast = a.events.reduce((max, e) => e.created_at > max ? e.created_at : max, a.publishedAt || '');
-        const bLast = b.events.reduce((max, e) => e.created_at > max ? e.created_at : max, b.publishedAt || '');
-        return bLast.localeCompare(aLast);
+        const aDate = a.publishedAt || '';
+        const bDate = b.publishedAt || '';
+        return bDate.localeCompare(aDate);
       });
     }
     return posts;
