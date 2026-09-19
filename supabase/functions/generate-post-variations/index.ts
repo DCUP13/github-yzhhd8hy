@@ -1,6 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.7";
 import OpenAI from "npm:openai@4.28.0";
-import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,45 +10,6 @@ const corsHeaders = {
 const CLOUDFRONT_DOMAIN = 'd292js7mlprar.cloudfront.net';
 const FONTS = ['Inter', 'Georgia', 'Courier', 'Impact', 'Palatino', 'Arial', 'Verdana', 'Trebuchet'];
 const MAX_DIM = 1080;
-
-let wasmInitialized = false;
-async function ensureWasmInit() {
-  if (wasmInitialized) return;
-  const wasmUrl = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.6.2/index_bg.wasm";
-  const wasmResponse = await fetch(wasmUrl);
-  const wasmBytes = new Uint8Array(await wasmResponse.arrayBuffer());
-  await initWasm(wasmBytes);
-  wasmInitialized = true;
-}
-
-let cachedFont: Uint8Array | null = null;
-async function ensureFont(): Promise<Uint8Array> {
-  if (cachedFont) return cachedFont;
-  const fontUrl = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.ttf";
-  const fontResponse = await fetch(fontUrl);
-  if (!fontResponse.ok) throw new Error(`Failed to download font: ${fontResponse.status}`);
-  cachedFont = new Uint8Array(await fontResponse.arrayBuffer());
-  return cachedFont;
-}
-
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
-}
 
 function sniffImageMime(bytes: Uint8Array): string {
   if (bytes.length >= 8 &&
@@ -66,79 +26,6 @@ function sniffImageMime(bytes: Uint8Array): string {
     return "image/webp";
   }
   throw new Error("Unsupported image type.");
-}
-
-function getImageDimensions(bytes: Uint8Array, mime: string): { w: number; h: number } {
-  if (mime === 'image/png') {
-    const w = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
-    const h = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
-    return { w, h };
-  }
-  if (mime === 'image/jpeg') {
-    let i = 2;
-    while (i < bytes.length) {
-      if (bytes[i] !== 0xff) { i++; continue; }
-      const marker = bytes[i + 1];
-      if (marker === 0xc0 || marker === 0xc2) {
-        const h = (bytes[i + 5] << 8) | bytes[i + 6];
-        const w = (bytes[i + 7] << 8) | bytes[i + 8];
-        return { w, h };
-      }
-      const len = (bytes[i + 2] << 8) | bytes[i + 3];
-      i += 2 + len;
-    }
-  }
-  return { w: 1080, h: 1080 };
-}
-
-function getExifOrientation(bytes: Uint8Array): number {
-  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return 1;
-  let i = 2;
-  while (i < bytes.length - 1) {
-    if (bytes[i] !== 0xff) { i++; continue; }
-    const marker = bytes[i + 1];
-    if (marker === 0xe1) {
-      const segLen = (bytes[i + 2] << 8) | bytes[i + 3];
-      const exifStart = i + 4;
-      if (bytes[exifStart] === 0x45 && bytes[exifStart + 1] === 0x78 &&
-          bytes[exifStart + 2] === 0x69 && bytes[exifStart + 3] === 0x66) {
-        const tiffStart = exifStart + 6;
-        const byteOrder = bytes[tiffStart];
-        const isLittleEndian = byteOrder === 0x49;
-        const readU16 = (offset: number) => {
-          const base = tiffStart + offset;
-          return isLittleEndian
-            ? (bytes[base] | (bytes[base + 1] << 8))
-            : ((bytes[base] << 8) | bytes[base + 1]);
-        };
-        const readU32 = (offset: number) => {
-          const base = tiffStart + offset;
-          return isLittleEndian
-            ? (bytes[base] | (bytes[base + 1] << 8) | (bytes[base + 2] << 16) | (bytes[base + 3] << 24))
-            : ((bytes[base] << 24) | (bytes[base + 1] << 16) | (bytes[base + 2] << 8) | bytes[base + 3]);
-        };
-        const ifdOffset = readU32(4);
-        const entryCount = readU16(ifdOffset);
-        for (let e = 0; e < entryCount; e++) {
-          const entryOffset = ifdOffset + 2 + e * 12;
-          const tag = readU16(entryOffset);
-          if (tag === 0x0112) {
-            const valType = readU16(entryOffset + 2);
-            if (valType === 3) {
-              return readU16(entryOffset + 8);
-            }
-          }
-        }
-      }
-      i += 2 + segLen;
-    } else if (marker >= 0xd0 && marker <= 0xd7) {
-      i += 2;
-    } else {
-      const len = (bytes[i + 2] << 8) | bytes[i + 3];
-      i += 2 + len;
-    }
-  }
-  return 1;
 }
 
 function wrapText(text: string, maxCharsPerLine: number): string[] {
@@ -158,79 +45,52 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
 }
 
 async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Array> {
-  await ensureWasmInit();
-  const fontData = await ensureFont();
-
   const imageResponse = await fetch(imageUrl);
   if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.status}`);
   const imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
   const mimeType = sniffImageMime(imageBuffer);
-  const base64Image = bytesToBase64(imageBuffer);
 
-  const orientation = mimeType === 'image/jpeg' ? getExifOrientation(imageBuffer) : 1;
-  let { w: rawW, h: rawH } = getImageDimensions(imageBuffer, mimeType);
+  const bitmap = await createImageBitmap(new Blob([imageBuffer], { type: mimeType }));
 
-  const isRotated = orientation >= 5 && orientation <= 8;
-  let canvasW = isRotated ? rawH : rawW;
-  let canvasH = isRotated ? rawW : rawH;
-
-  if (canvasW > MAX_DIM || canvasH > MAX_DIM) {
-    const scale = Math.min(MAX_DIM / canvasW, MAX_DIM / canvasH);
-    canvasW = Math.round(canvasW * scale);
-    canvasH = Math.round(canvasH * scale);
+  let w = bitmap.width;
+  let h = bitmap.height;
+  if (w > MAX_DIM || h > MAX_DIM) {
+    const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
   }
 
-  const fontSize = Math.round(canvasW * 0.06);
-  const maxCharsPerLine = Math.floor((canvasW * 0.85) / (fontSize * 0.55));
+  const canvas = new OffscreenCanvas(w, h);
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.drawImage(bitmap, 0, 0, w, h);
+
+  const fontSize = Math.round(w * 0.06);
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
   const lines = wrapText(text, maxCharsPerLine);
 
   const lineHeight = fontSize * 1.3;
   const totalTextHeight = lines.length * lineHeight;
-  const startY = canvasH - totalTextHeight - Math.round(canvasH * 0.08);
+  const startY = h - totalTextHeight - Math.round(h * 0.08);
   const bgPadding = Math.round(fontSize * 0.4);
   const bgRectY = startY - bgPadding;
   const bgRectHeight = totalTextHeight + bgPadding * 2;
 
-  const textElements = lines.map((line, i) => {
-    const y = Math.round(startY + (i * lineHeight) + fontSize * 0.65);
-    return `<text x="${Math.round(canvasW / 2)}" y="${y}" font-family="Inter" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`;
-  }).join('\n  ');
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(0, bgRectY, w, bgRectHeight);
 
-  let imageElement: string;
-  if (orientation === 1) {
-    imageElement = `<image href="data:${mimeType};base64,${base64Image}" width="${canvasW}" height="${canvasH}" preserveAspectRatio="xMidYMid meet"/>`;
-  } else {
-    const origW = rawW;
-    const origH = rawH;
-    const scaleX = canvasW / (isRotated ? origH : origW);
-    const scaleY = canvasH / (isRotated ? origW : origH);
-    let transform = '';
-    switch (orientation) {
-      case 2: transform = `scale(${-scaleX},${scaleY}) translate(${-origW},0)`; break;
-      case 3: transform = `scale(${scaleX},${scaleY}) rotate(180 ${origW / 2} ${origH / 2})`; break;
-      case 4: transform = `scale(${scaleX},${-scaleY}) translate(0,${-origH})`; break;
-      case 5: transform = `scale(${scaleY},${-scaleX}) rotate(90)`; break;
-      case 6: transform = `scale(${scaleY},${scaleX}) rotate(90)`; break;
-      case 7: transform = `scale(${-scaleY},${scaleX}) rotate(-90)`; break;
-      case 8: transform = `scale(${scaleY},${scaleX}) rotate(-90)`; break;
-    }
-    imageElement = `<g transform="${transform}"><image href="data:${mimeType};base64,${base64Image}" width="${origW}" height="${origH}"/></g>`;
+  ctx.fillStyle = 'white';
+  for (let i = 0; i < lines.length; i++) {
+    const y = startY + (i * lineHeight) + fontSize * 0.65;
+    ctx.fillText(lines[i], w / 2, y);
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasW}" height="${canvasH}" viewBox="0 0 ${canvasW} ${canvasH}">
-  ${imageElement}
-  <rect x="0" y="${Math.round(bgRectY)}" width="${canvasW}" height="${Math.round(bgRectHeight)}" fill="black" fill-opacity="0.45"/>
-  ${textElements}
-</svg>`;
-
-  const resvg = new Resvg(svg, {
-    font: {
-      fontFiles: [fontData],
-      loadSystemFonts: false,
-    },
-  });
-  const pngBuffer = resvg.render().asPng();
-  return pngBuffer;
+  const blob = await canvas.convertToBlob({ type: 'image/png' });
+  return new Uint8Array(await blob.arrayBuffer());
 }
 
 async function uploadOverlayToS3(
