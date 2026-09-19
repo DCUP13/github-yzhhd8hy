@@ -182,7 +182,7 @@ interface CommentEvent {
 
 interface SnapshotData {
   id: string;
-  posts_data: Array<{ id: string; caption?: string; media_type?: string; media_url?: string; permalink?: string; thumbnail_url?: string; timestamp?: string }>;
+  posts_data: Array<{ media_id: string; caption?: string; media_type?: string; permalink?: string; thumbnail_url?: string; timestamp?: string; like_count?: number; comments_count?: number }>;
   created_at: string;
 }
 
@@ -192,6 +192,7 @@ interface PostsAutoTabProps {
   commentEvents?: CommentEvent[];
   selectedAccount?: { id: string; owner_profile_id: string | null; page_scoped_id: string | null } | null;
   snapshots?: SnapshotData[];
+  onSynced?: () => void;
 }
 
 type SubView = 'library' | 'create' | 'staging' | 'schedules' | 'feed';
@@ -206,7 +207,7 @@ function fromLocalDatetimeInput(local: string): string {
   return new Date(local).toISOString();
 }
 
-export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAccount, snapshots = [] }: PostsAutoTabProps) {
+export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAccount, snapshots = [], onSynced }: PostsAutoTabProps) {
   const [subView, setSubView] = useState<SubView>('library');
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
@@ -1205,23 +1206,20 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     const liveMediaIds = new Set<string>();
     if (latestSnapshot?.posts_data) {
       for (const p of latestSnapshot.posts_data) {
-        if (p.id) liveMediaIds.add(p.id);
+        if (p.media_id) liveMediaIds.add(p.media_id);
       }
     }
 
     // Seed with ALL posts from the latest Instagram snapshot (not just app-posted ones)
     if (latestSnapshot?.posts_data) {
       for (const p of latestSnapshot.posts_data) {
-        if (!p.id) continue;
-        const imageUrl = p.media_type === 'VIDEO' || p.media_type === 'REEL'
-          ? (p.thumbnail_url ?? p.media_url ?? null)
-          : (p.media_url ?? null);
-        postMap.set(p.id, {
-          mediaId: p.id,
+        if (!p.media_id) continue;
+        postMap.set(p.media_id, {
+          mediaId: p.media_id,
           mediaType: p.media_type ?? null,
           mediaPermalink: p.permalink ?? null,
           mediaCaption: (p.caption ?? '').substring(0, 500) || null,
-          mediaImageUrl: imageUrl,
+          mediaImageUrl: p.thumbnail_url ?? null,
           events: [],
           hasComments: false,
           publishedAt: p.timestamp ?? latestSnapshot.created_at,
@@ -1398,6 +1396,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       }
       const data = await response.json();
       await fetchPublishedPosts();
+      if (onSynced) onSynced();
       const synced = data.feed_sync;
       if (synced && synced.removed > 0) {
         toast.success(`Synced with Instagram — ${synced.updated} posts updated, ${synced.removed} removed (no longer on Instagram)`);
