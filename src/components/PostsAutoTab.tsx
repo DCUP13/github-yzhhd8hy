@@ -1597,7 +1597,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 <p className="text-xs text-gray-500">Style the text that gets overlaid on your carousel images. These settings are saved with your process.</p>
 
                 {/* Live Preview */}
-                <div className="relative w-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600" style={{ aspectRatio: '1' }}>
+                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto" style={{ aspectRatio: '1', maxWidth: '240px' }}>
                   <img
                     src={assets.find(a => a.file_type === 'image')?.cloudfront_url || 'https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-400-normal.woff2'}
                     alt="Preview"
@@ -1628,7 +1628,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       <span
                         style={{
                           color: overlaySettings.textColor,
-                          fontSize: `${overlaySettings.fontSize * 2.5}px`,
+                          fontSize: `${overlaySettings.fontSize * 3.5}px`,
                           fontWeight: overlaySettings.fontWeight,
                           fontFamily: 'sans-serif',
                           textAlign: 'center',
@@ -1662,7 +1662,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       <span className="text-gray-400">{overlaySettings.fontSize}%</span>
                     </label>
                     <input
-                      type="range" min={3} max={12} step={0.5}
+                      type="range" min={3} max={25} step={0.5}
                       value={overlaySettings.fontSize}
                       onChange={(e) => setOverlaySettings(prev => ({ ...prev, fontSize: parseFloat(e.target.value) }))}
                       className="w-full accent-pink-600"
@@ -1710,7 +1710,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       <span className="text-gray-400">{overlaySettings.bubbleRadius}px</span>
                     </label>
                     <input
-                      type="range" min={0} max={50} step={1}
+                      type="range" min={0} max={200} step={1}
                       value={overlaySettings.bubbleRadius}
                       onChange={(e) => setOverlaySettings(prev => ({ ...prev, bubbleRadius: parseInt(e.target.value) }))}
                       className="w-full accent-pink-600"
