@@ -188,23 +188,23 @@ Deno.serve(async (req: Request) => {
     const profile = profileRes.body;
     const effectiveUserId = extractStringId(profileRes.rawText) ?? igUserId;
 
-    // 2. Fetch recent media (up to 25 posts)
-    let mediaRes: Response;
-    if (isInstagramToken(accessToken)) {
-      mediaRes = await fetch(
-        `${baseUrl}/v21.0/${effectiveUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
-        { headers: authHeaders(accessToken) },
-      );
-    } else {
-      mediaRes = await fetch(
-        graphUrl(
-          `${baseUrl}/v21.0/${effectiveUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=25`,
-          accessToken,
-        ),
-      );
+    // 2. Fetch recent media — paginate to get all posts
+    let mediaItems: any[] = [];
+    let nextUrl: string | null = `${baseUrl}/v21.0/${effectiveUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=100`;
+    let pageCount = 0;
+    while (nextUrl && pageCount < 5) {
+      let pageRes: Response;
+      if (isInstagramToken(accessToken)) {
+        pageRes = await fetch(nextUrl, { headers: authHeaders(accessToken) });
+      } else {
+        pageRes = await fetch(graphUrl(nextUrl, accessToken));
+      }
+      if (!pageRes.ok) break;
+      const pageData = await pageRes.json();
+      mediaItems.push(...(pageData.data ?? []));
+      nextUrl = pageData.paging?.next ?? null;
+      pageCount++;
     }
-    const mediaData = mediaRes.ok ? await mediaRes.json() : { data: [] };
-    const mediaItems: any[] = mediaData.data ?? [];
 
     // 3. Fetch insights for each media item
     const postsData: any[] = [];
@@ -217,6 +217,38 @@ Deno.serve(async (req: Request) => {
       let impressions: number | null = null;
       let saved: number | null = null;
       let videoViews: number | null = null;
+
+      // Fetch carousel children if this is a carousel post
+      let carouselUrls: string[] | null = null;
+      if (item.media_type === "CAROUSEL" || item.media_type === "CAROUSEL_ALBUM") {
+        try {
+          let childrenRes: Response;
+          if (isInstagramToken(accessToken)) {
+            childrenRes = await fetch(
+              `${baseUrl}/v21.0/${item.id}/children?fields=id,media_type,media_url,thumbnail_url&limit=20`,
+              { headers: authHeaders(accessToken) },
+            );
+          } else {
+            childrenRes = await fetch(
+              graphUrl(
+                `${baseUrl}/v21.0/${item.id}/children?fields=id,media_type,media_url,thumbnail_url&limit=20`,
+                accessToken,
+              ),
+            );
+          }
+          if (childrenRes.ok) {
+            const childrenBody = await childrenRes.json();
+            const children: any[] = childrenBody.data ?? [];
+            carouselUrls = children.map((c: any) =>
+              c.media_type === "VIDEO" || c.media_type === "REEL"
+                ? (c.thumbnail_url ?? c.media_url ?? null)
+                : (c.media_url ?? null)
+            ).filter((url: string | null): url is string => url != null);
+          }
+        } catch {
+          // Carousel children fetch may fail; continue with single image
+        }
+      }
 
       try {
         let insightsRes: Response;
@@ -266,6 +298,7 @@ Deno.serve(async (req: Request) => {
         media_type: item.media_type ?? null,
         permalink: item.permalink ?? null,
         thumbnail_url: item.thumbnail_url ?? item.media_url ?? null,
+        carousel_urls: carouselUrls,
         like_count: likeCount,
         comments_count: commentsCount,
         reach,
@@ -327,6 +360,230 @@ Deno.serve(async (req: Request) => {
         }, { onConflict: "user_id" });
     }
 
+    // 7. Pull comments from Instagram and reconcile with stored events.
+    //    For each post: fetch live comments, insert new ones, and delete
+    //    stored comment events that no longer exist on Instagram.
+    //    Posts with 0 comments on Instagram get all their stored comment
+    //    events removed (they were deleted on Instagram).
+    let commentsSynced = 0;
+    let commentsRemoved = 0;
+    const igPageScopedId = account.page_scoped_id ?? effectiveUserId;
+    const liveMediaIds = new Set(mediaItems.map((m: any) => m.id));
+
+    // First, delete comment events for posts that no longer exist on Instagram at all
+    const { data: storedCommentMediaIds } = await supabaseClient
+      .from("instagram_webhook_events")
+      .select("media_id")
+      .eq("user_id", account.user_id)
+      .eq("event_type", "comment")
+      .not("media_id", "is", null);
+    const orphanedMediaIds = new Set<string>();
+    if (storedCommentMediaIds) {
+      for (const row of storedCommentMediaIds) {
+        if (row.media_id && !liveMediaIds.has(row.media_id)) {
+          orphanedMediaIds.add(row.media_id);
+        }
+      }
+    }
+    if (orphanedMediaIds.size > 0) {
+      const { data: deleted, error: delErr } = await supabaseClient
+        .from("instagram_webhook_events")
+        .delete()
+        .eq("user_id", account.user_id)
+        .eq("event_type", "comment")
+        .in("media_id", Array.from(orphanedMediaIds))
+        .select("id");
+      if (delErr) {
+        console.error("Error deleting orphaned comments:", delErr);
+      } else {
+        commentsRemoved += deleted?.length ?? 0;
+      }
+    }
+
+    for (const item of mediaItems) {
+      const commentsCount = item.comments_count ?? 0;
+
+      // Posts with 0 comments on Instagram — remove any stale stored comment events
+      if (commentsCount === 0) {
+        const { data: deleted, error: delErr } = await supabaseClient
+          .from("instagram_webhook_events")
+          .delete()
+          .eq("user_id", account.user_id)
+          .eq("event_type", "comment")
+          .eq("media_id", item.id)
+          .select("id");
+        if (delErr) {
+          console.error(`Error deleting stale comments for media ${item.id}:`, delErr);
+        } else {
+          commentsRemoved += deleted?.length ?? 0;
+        }
+        continue;
+      }
+
+      try {
+        let commentsRes: Response;
+        const commentsUrl = `${baseUrl}/v21.0/${item.id}/comments?fields=id,text,from,timestamp,parent_id&limit=50`;
+        if (isInstagramToken(accessToken)) {
+          commentsRes = await fetch(commentsUrl, { headers: authHeaders(accessToken) });
+        } else {
+          commentsRes = await fetch(graphUrl(commentsUrl, accessToken));
+        }
+        if (!commentsRes.ok) continue;
+        const commentsBody = await commentsRes.json();
+        const comments: any[] = commentsBody.data ?? [];
+        const liveCommentIds = new Set(comments.map((c: any) => c.id).filter(Boolean));
+
+        // Delete stored comment events for this post that no longer exist on Instagram
+        const { data: storedComments } = await supabaseClient
+          .from("instagram_webhook_events")
+          .select("id, event_id")
+          .eq("user_id", account.user_id)
+          .eq("event_type", "comment")
+          .eq("media_id", item.id);
+        if (storedComments && storedComments.length > 0) {
+          const staleIds: string[] = [];
+          for (const row of storedComments) {
+            if (row.event_id && !liveCommentIds.has(row.event_id)) {
+              staleIds.push(row.id);
+            }
+          }
+          if (staleIds.length > 0) {
+            const { data: deleted } = await supabaseClient
+              .from("instagram_webhook_events")
+              .delete()
+              .in("id", staleIds)
+              .select("id");
+            commentsRemoved += deleted?.length ?? 0;
+          }
+        }
+
+        if (comments.length === 0) continue;
+
+        const mediaMeta = {
+          media_type: item.media_type ?? null,
+          permalink: item.permalink ?? null,
+          caption: (item.caption ?? "").substring(0, 500),
+          media_image_url: item.thumbnail_url ?? item.media_url ?? null,
+        };
+
+        // Insert new comments that aren't already stored
+        const commentIds = comments.map((c: any) => c.id).filter(Boolean);
+        let existingIds = new Set<string>();
+        if (commentIds.length > 0) {
+          const { data: existing } = await supabaseClient
+            .from("instagram_webhook_events")
+            .select("event_id")
+            .in("event_id", commentIds)
+            .eq("event_type", "comment");
+          if (existing) {
+            for (const row of existing) {
+              if (row.event_id) existingIds.add(row.event_id);
+            }
+          }
+        }
+
+        const newRows: any[] = [];
+        for (const c of comments) {
+          if (!c.id || existingIds.has(c.id)) continue;
+          newRows.push({
+            user_id: account.user_id,
+            event_id: c.id,
+            event_type: "comment",
+            ig_user_id: igPageScopedId,
+            sender_id: c.from?.id ?? null,
+            sender_username: c.from?.username ?? null,
+            sender_name: null,
+            sender_profile_url: null,
+            media_id: item.id,
+            media_type: mediaMeta.media_type,
+            media_permalink: mediaMeta.permalink,
+            media_caption: mediaMeta.caption,
+            media_image_url: mediaMeta.media_image_url,
+            comment_id: c.id,
+            message_text: c.text ?? null,
+            direction: "incoming",
+            recipient_id: null,
+            raw_event: { synced_from_insights: true, comment: c },
+            parent_comment_id: c.parent_id ?? null,
+          });
+        }
+
+        if (newRows.length > 0) {
+          const { error: insertError } = await supabaseClient
+            .from("instagram_webhook_events")
+            .insert(newRows);
+          if (insertError) {
+            console.error("Error inserting synced comments:", insertError);
+          } else {
+            commentsSynced += newRows.length;
+          }
+        }
+      } catch (err) {
+        console.error(`Error fetching comments for media ${item.id}:`, err);
+      }
+    }
+
+    if (commentsSynced > 0 || commentsRemoved > 0) {
+      console.log(`Synced ${commentsSynced} new comments, removed ${commentsRemoved} stale comments`);
+    }
+
+    // 8. Sync feed: update published variations with real Instagram data, remove deleted posts
+    // Fetch all published variations for this account
+    const { data: publishedVariations } = await supabaseClient
+      .from("instagram_post_variations")
+      .select("id, ig_media_id, account_id")
+      .eq("user_id", account.user_id)
+      .eq("status", "published")
+      .eq("account_id", accountId);
+
+    const toDelete: string[] = [];
+    const toUpdate: Array<{ id: string; permalink: string | null; caption: string; media_image_url: string | null; media_type: string | null }> = [];
+
+    if (publishedVariations) {
+      for (const v of publishedVariations) {
+        if (!v.ig_media_id) continue;
+        const livePost = mediaItems.find((m: any) => m.id === v.ig_media_id);
+        if (!livePost) {
+          // Post no longer exists on Instagram — mark for deletion
+          toDelete.push(v.id);
+        } else {
+          // Update with real Instagram data
+          const imageUrl = livePost.media_type === "VIDEO" || livePost.media_type === "REEL"
+            ? (livePost.thumbnail_url ?? livePost.media_url ?? null)
+            : (livePost.media_url ?? null);
+          toUpdate.push({
+            id: v.id,
+            permalink: livePost.permalink ?? null,
+            caption: (livePost.caption ?? "").substring(0, 500),
+            media_image_url: imageUrl,
+            media_type: livePost.media_type ?? null,
+          });
+        }
+      }
+
+      // Delete variations whose posts are gone from Instagram
+      if (toDelete.length > 0) {
+        await supabaseClient
+          .from("instagram_post_variations")
+          .delete()
+          .in("id", toDelete);
+      }
+
+      // Update variations with fresh Instagram data
+      for (const u of toUpdate) {
+        await supabaseClient
+          .from("instagram_post_variations")
+          .update({
+            permalink: u.permalink,
+            caption: u.caption,
+            media_image_url: u.media_image_url,
+            media_type: u.media_type,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", u.id);
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       account: {
@@ -343,6 +600,12 @@ Deno.serve(async (req: Request) => {
         posts_count: postsData.length,
       },
       posts: postsData,
+      feed_sync: {
+        updated: toUpdate.length,
+        removed: toDelete.length,
+        comments_synced: commentsSynced,
+        comments_removed: commentsRemoved,
+      },
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

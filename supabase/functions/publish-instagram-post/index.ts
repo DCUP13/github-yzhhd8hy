@@ -358,16 +358,23 @@ Deno.serve(async (req: Request) => {
 
     const actionType = action || 'publish';
 
+    // --- Text overlay is now applied at approve time (client-side canvas + S3 upload) ---
+    // The variation's cloudfront_url / carousel_urls already point to the overlayed images.
+    let effectiveUrls: string[] = variation.carousel_urls?.length
+      ? variation.carousel_urls
+      : [variation.cloudfront_url];
+    let effectiveS3Key: string = variation.s3_key;
+
     // Schedule action: move content to scheduled folder
     if (actionType === 'schedule') {
       if (BUCKET_NAME && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
-        const ext = variation.s3_key.split('.').pop() || 'jpg';
+        const ext = effectiveS3Key.split('.').pop() || 'jpg';
         const scheduledKey = `instagram/scheduled/${variation.user_id}/${variation_id}.${ext}`;
         try {
           await copyS3Object(
-            variation.cloudfront_url, BUCKET_NAME, scheduledKey,
+            effectiveUrls[0], BUCKET_NAME, scheduledKey,
             AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION,
-            variation.s3_key.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg',
+            effectiveS3Key.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg',
           );
           const newUrl = `https://${CLOUDFRONT_DOMAIN}/${scheduledKey}`;
           await supabase.from("instagram_post_variations")
@@ -407,7 +414,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", variation_id);
 
     const fullCaption = `${variation.caption}\n\n${(variation.hashtags || []).join(' ')}`.trim();
-    const carouselUrls: string[] = variation.carousel_urls || [variation.cloudfront_url];
+    const carouselUrls: string[] = effectiveUrls;
     const isCarousel = carouselUrls.length > 1;
     const isIgToken = accessToken.startsWith('IGA');
 
@@ -490,13 +497,13 @@ Deno.serve(async (req: Request) => {
 
     } else {
       // Single media post
-      const isVideo = variation.s3_key.endsWith('.mp4') || variation.s3_key.endsWith('.mov');
+      const isVideo = effectiveS3Key.endsWith('.mp4') || effectiveS3Key.endsWith('.mov');
       const mediaType = isVideo ? 'VIDEO' : 'IMAGE';
 
       const createMediaUrl = graphUrl(`${base}/v26.0/${effectiveIgUserId}/media`, accessToken);
       const mediaParams = new URLSearchParams({
         media_type: mediaType,
-        image_url: variation.cloudfront_url,
+        image_url: effectiveUrls[0],
         caption: fullCaption,
       });
       const mediaResponse = await fetch(createMediaUrl, {
@@ -543,13 +550,13 @@ Deno.serve(async (req: Request) => {
 
     // Move content to posted folder
     if (BUCKET_NAME && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
-      const ext = variation.s3_key.split('.').pop() || 'jpg';
+      const ext = effectiveS3Key.split('.').pop() || 'jpg';
       const postedKey = `instagram/posted/${variation.user_id}/${mediaId}.${ext}`;
       try {
         await copyS3Object(
-          variation.cloudfront_url, BUCKET_NAME, postedKey,
+          effectiveUrls[0], BUCKET_NAME, postedKey,
           AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION,
-          variation.s3_key.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg',
+          effectiveS3Key.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg',
         );
       } catch (e) {
         console.error("Failed to copy to posted folder:", e);

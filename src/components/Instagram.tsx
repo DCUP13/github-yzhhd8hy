@@ -1076,10 +1076,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   }
 
   return (
-    <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
-      <div className="max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+      <div className="max-w-5xl mx-auto w-full min-w-0">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <InstagramIcon className="w-6 h-6 text-pink-600 dark:text-pink-400" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Instagram</h1>
@@ -1763,6 +1763,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
             userId={selectedAccount?.user_id || ''}
             commentEvents={events.filter(e => e.event_type !== 'message')}
             selectedAccount={selectedAccount ? { id: selectedAccount.id, owner_profile_id: selectedAccount.owner_profile_id ?? null, page_scoped_id: selectedAccount.page_scoped_id ?? null } : null}
+            snapshots={snapshots}
+            onSynced={() => { if (selectedAccount) fetchAccountData(selectedAccount, selectedAccount.user_id); }}
           />
         )}
 

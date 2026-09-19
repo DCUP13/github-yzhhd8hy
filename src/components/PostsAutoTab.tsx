@@ -25,8 +25,14 @@ import {
   CheckCheck,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Reply,
   Bot,
+  Save,
+  Pencil,
+  Palette,
+  Type,
+  Heart,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -105,6 +111,53 @@ interface PostingSchedule {
   active_days: number[];
   min_gap_minutes: number;
   carousel_size: number;
+  default_process_id: string | null;
+}
+
+interface OverlaySettings {
+  fontSize: number;
+  fontWeight: number;
+  textColor: string;
+  bubbleColor: string;
+  bubbleOpacity: number;
+  bubblePadding: number;
+  bubbleRadius: number;
+  position: 'bottom' | 'top' | 'center';
+}
+
+const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
+  fontSize: 64,
+  fontWeight: 700,
+  textColor: '#ffffff',
+  bubbleColor: '#000000',
+  bubbleOpacity: 45,
+  bubblePadding: 40,
+  bubbleRadius: 0,
+  position: 'bottom',
+};
+
+interface PostProcess {
+  id: string;
+  name: string;
+  content_type: string;
+  carousel_size: number;
+  carousel_text_lines: string[];
+  base_caption: string;
+  hashtags: string[];
+  variation_settings: Record<string, boolean>;
+  randomize_content: boolean;
+  prompt_mode: string;
+  prompt_id: string | null;
+  custom_prompt: string | null;
+  overlay_settings: OverlaySettings | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AccountAssignment {
+  account_id: string;
+  process_id: string | null;
+  scheduled_for: string | null;
 }
 
 interface CommentEvent {
@@ -128,16 +181,34 @@ interface CommentEvent {
   replied_at: string | null;
 }
 
+interface SnapshotData {
+  id: string;
+  posts_data: Array<{ media_id: string; caption?: string; media_type?: string; permalink?: string; thumbnail_url?: string; carousel_urls?: string[] | null; timestamp?: string; like_count?: number; comments_count?: number }>;
+  created_at: string;
+}
+
 interface PostsAutoTabProps {
   accounts: IgAccount[];
   userId: string;
   commentEvents?: CommentEvent[];
   selectedAccount?: { id: string; owner_profile_id: string | null; page_scoped_id: string | null } | null;
+  snapshots?: SnapshotData[];
+  onSynced?: () => void;
 }
 
 type SubView = 'library' | 'create' | 'staging' | 'schedules' | 'feed';
 
-export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAccount }: PostsAutoTabProps) {
+function toLocalDatetimeInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalDatetimeInput(local: string): string {
+  return new Date(local).toISOString();
+}
+
+export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAccount, snapshots = [], onSynced }: PostsAutoTabProps) {
   const [subView, setSubView] = useState<SubView>('library');
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
@@ -165,6 +236,10 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [carouselSize, setCarouselSize] = useState(1);
   const [carouselTextLines, setCarouselTextLines] = useState<string[]>(['']);
 
+  // Overlay designer state
+  const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
+  const [overlayPreviewText, setOverlayPreviewText] = useState('Your text here');
+
   // Post now
   const [postNow, setPostNow] = useState(false);
 
@@ -173,6 +248,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [variations, setVariations] = useState<PostVariation[]>([]);
   const [isLoadingVariations, setIsLoadingVariations] = useState(false);
+  const [stagedCount, setStagedCount] = useState(0);
+  const [carouselImageIndex, setCarouselImageIndex] = useState<Record<string, number>>({});
 
   // Schedules state
   const [schedules, setSchedules] = useState<PostingSchedule[]>([]);
@@ -180,9 +257,21 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
   // Test post state
   const [testPostAssetId, setTestPostAssetId] = useState<string | null>(null);
-  const [testPostAccountId, setTestPostAccountId] = useState<string>('');
+  const [testPostAccountIds, setTestPostAccountIds] = useState<string[]>([]);
   const [testPostCaption, setTestPostCaption] = useState<string>('');
   const [isPostingTest, setIsPostingTest] = useState(false);
+
+  // Post processes state
+  const [postProcesses, setPostProcesses] = useState<PostProcess[]>([]);
+  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true);
+  const [showSaveProcessDialog, setShowSaveProcessDialog] = useState(false);
+  const [processNameInput, setProcessNameInput] = useState('');
+  const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
+  const [loadedProcessId, setLoadedProcessId] = useState<string | null>(null);
+
+  // Account selection state
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+  const [accountAssignments, setAccountAssignments] = useState<AccountAssignment[]>([]);
 
   // Feed state
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
@@ -190,6 +279,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [replyDialogCommentId, setReplyDialogCommentId] = useState<string | null>(null);
   const [replyDialogText, setReplyDialogText] = useState('');
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [publishedPosts, setPublishedPosts] = useState<Array<{ id: string; ig_media_id: string | null; permalink: string | null; caption: string; cloudfront_url: string | null; carousel_urls: string[] | null; account_id: string; created_at: string; is_test_post: boolean; media_image_url: string | null; media_type: string | null }>>([]);
+  const [feedSortMode, setFeedSortMode] = useState<'recent' | 'comments' | 'no-comments'>('recent');
+  const [isSyncingFeed, setIsSyncingFeed] = useState(false);
+  const [feedCarouselIndex, setFeedCarouselIndex] = useState<Record<string, number>>({});
+
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -272,11 +366,190 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   }, []);
 
+  const fetchStagedCount = useCallback(async () => {
+    try {
+      const { count, error } = await supabase
+        .from('instagram_post_variations')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'staged');
+      if (error) throw error;
+      setStagedCount(count ?? 0);
+    } catch (error) {
+      console.error('Error fetching staged count:', error);
+    }
+  }, [userId]);
+
+  const fetchPublishedPosts = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('instagram_post_variations')
+        .select('id, ig_media_id, permalink, caption, cloudfront_url, carousel_urls, account_id, created_at, is_test_post, media_image_url, media_type')
+        .eq('user_id', userId)
+        .eq('status', 'published')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setPublishedPosts(data || []);
+    } catch (error) {
+      console.error('Error fetching published posts:', error);
+    }
+  }, [userId]);
+
+  const fetchPostProcesses = useCallback(async () => {    setIsLoadingProcesses(true);
+    try {
+      const { data, error } = await supabase
+        .from('instagram_post_processes')
+        .select('*')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      setPostProcesses(data || []);
+    } catch (error) {
+      console.error('Error fetching post processes:', error);
+    } finally {
+      setIsLoadingProcesses(false);
+    }
+  }, [userId]);
+
+  const handleSaveProcess = async () => {
+    if (!processNameInput.trim()) {
+      toast.error('Enter a name for this process');
+      return;
+    }
+    const hashtags = hashtagsText
+      .split(/[,\n\s]+/)
+      .map(h => h.trim().replace(/^#/, ''))
+      .filter(h => h.length > 0)
+      .map(h => `#${h}`);
+    const textLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
+
+    const processData = {
+      name: processNameInput.trim(),
+      content_type: contentType,
+      carousel_size: carouselSize,
+      carousel_text_lines: textLines,
+      base_caption: baseCaption,
+      hashtags,
+      variation_settings: { caption: varyCaption, hashtags: varyHashtags, font: varyFont },
+      randomize_content: randomizeContent,
+      prompt_mode: promptMode,
+      prompt_id: promptMode === 'select' ? selectedPromptId : null,
+      custom_prompt: promptMode === 'custom' ? customPrompt.trim() : null,
+      overlay_settings: overlaySettings,
+    };
+
+    try {
+      if (editingProcessId) {
+        const { error } = await supabase
+          .from('instagram_post_processes')
+          .update({ ...processData, updated_at: new Date().toISOString() })
+          .eq('id', editingProcessId);
+        if (error) throw error;
+        toast.success('Process updated');
+        setLoadedProcessId(editingProcessId);
+      } else {
+        const { data: inserted, error } = await supabase
+          .from('instagram_post_processes')
+          .insert({ ...processData, user_id: userId })
+          .select('id')
+          .single();
+        if (error) throw error;
+        toast.success('Process saved');
+        setLoadedProcessId(inserted.id);
+      }
+      setShowSaveProcessDialog(false);
+      setProcessNameInput('');
+      setEditingProcessId(null);
+      fetchPostProcesses();
+    } catch (error) {
+      console.error('Error saving process:', error);
+      toast.error(`Failed to save process: ${error.message}`);
+    }
+  };
+
+  const handleLoadProcess = (process: PostProcess) => {
+    setContentType(process.content_type as 'post' | 'reel');
+    setCarouselSize(process.carousel_size);
+    setCarouselTextLines(process.carousel_text_lines?.length ? process.carousel_text_lines : ['']);
+    setBaseCaption(process.base_caption);
+    setHashtagsText((process.hashtags || []).join(' '));
+    const vs = process.variation_settings || {};
+    setVaryCaption(vs.caption !== false);
+    setVaryHashtags(vs.hashtags !== false);
+    setVaryFont(vs.font !== false);
+    setRandomizeContent(process.randomize_content);
+    setPromptMode(process.prompt_mode as 'none' | 'select' | 'custom');
+    setSelectedPromptId(process.prompt_id || null);
+    setCustomPrompt(process.custom_prompt || '');
+    if (process.overlay_settings) {
+      setOverlaySettings({ ...DEFAULT_OVERLAY_SETTINGS, ...process.overlay_settings });
+    }
+    setLoadedProcessId(process.id);
+    toast.success(`Loaded process: ${process.name}`);
+  };
+
+  const handleQuickUpdateProcess = async () => {
+    if (!loadedProcessId) return;
+    const proc = postProcesses.find(p => p.id === loadedProcessId);
+    if (!proc) return;
+    const hashtags = hashtagsText
+      .split(/[,\n\s]+/)
+      .map(h => h.trim().replace(/^#/, ''))
+      .filter(h => h.length > 0)
+      .map(h => `#${h}`);
+    const textLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
+    const processData = {
+      name: proc.name,
+      content_type: contentType,
+      carousel_size: carouselSize,
+      carousel_text_lines: textLines,
+      base_caption: baseCaption,
+      hashtags,
+      variation_settings: { caption: varyCaption, hashtags: varyHashtags, font: varyFont },
+      randomize_content: randomizeContent,
+      prompt_mode: promptMode,
+      prompt_id: promptMode === 'select' ? selectedPromptId : null,
+      custom_prompt: promptMode === 'custom' ? customPrompt.trim() : null,
+      overlay_settings: overlaySettings,
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      const { error } = await supabase
+        .from('instagram_post_processes')
+        .update(processData)
+        .eq('id', loadedProcessId);
+      if (error) throw error;
+      toast.success(`Saved changes to "${proc.name}"`);
+      fetchPostProcesses();
+    } catch (error) {
+      console.error('Error updating process:', error);
+      toast.error(`Failed to save changes: ${error.message}`);
+    }
+  };
+
+  const handleDeleteProcess = async (processId: string) => {
+    try {
+      const { error } = await supabase
+        .from('instagram_post_processes')
+        .delete()
+        .eq('id', processId);
+      if (error) throw error;
+      setPostProcesses(prev => prev.filter(p => p.id !== processId));
+      toast.success('Process deleted');
+    } catch (error) {
+      console.error('Error deleting process:', error);
+      toast.error('Failed to delete process');
+    }
+  };
+
   useEffect(() => {
     fetchAssets();
     fetchBatches();
     fetchSchedules();
-  }, [fetchAssets, fetchBatches, fetchSchedules]);
+    fetchPostProcesses();
+    fetchPublishedPosts();
+    fetchStagedCount();
+  }, [fetchAssets, fetchBatches, fetchSchedules, fetchPostProcesses, fetchStagedCount]);
 
   useEffect(() => {
     const fetchPrompts = async () => {
@@ -284,6 +557,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         .from('prompts')
         .select('id, title')
         .eq('user_id', userId)
+        .eq('category', 'Instagram')
         .order('title');
       setAvailablePrompts(data || []);
     };
@@ -398,7 +672,17 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       return;
     }
     if (!baseCaption.trim()) {
-      toast.error('Enter a base caption');
+      const allHaveProcess = selectedAccountIds.every(accId => {
+        const a = accountAssignments.find(asg => asg.account_id === accId);
+        return a?.process_id;
+      });
+      if (!allHaveProcess) {
+        toast.error('Enter a base caption or select a saved process for each account');
+        return;
+      }
+    }
+    if (selectedAccountIds.length === 0) {
+      toast.error('Select at least one account to post to');
       return;
     }
 
@@ -410,8 +694,18 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         .filter(h => h.length > 0)
         .map(h => `#${h}`);
 
-      // Filter out empty carousel text lines
       const textLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
+
+      // Build account_assignments: each selected account gets its process
+      // assignment and schedule time. post_now is global (batch-level).
+      const assignments = selectedAccountIds.map(accId => {
+        const existing = accountAssignments.find(a => a.account_id === accId);
+        return {
+          account_id: accId,
+          process_id: existing?.process_id ?? null,
+          scheduled_for: existing?.scheduled_for ?? null,
+        };
+      });
 
       const batchInsert: Record<string, unknown> = {
         user_id: userId,
@@ -421,11 +715,13 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         selected_asset_ids: [],
         variation_settings: { caption: varyCaption, hashtags: varyHashtags, font: varyFont },
         randomize_content: randomizeContent,
-        preview_count: previewCount,
+        preview_count: selectedAccountIds.length,
         carousel_size: carouselSize,
         carousel_text_lines: textLines,
         post_now: postNow,
         use_whole_library: useWholeLibrary,
+        account_assignments: assignments,
+        overlay_settings: overlaySettings,
         status: 'draft',
       };
 
@@ -465,7 +761,114 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       const result = await response.json();
 
-      if (postNow) {
+      // Apply text overlays — one image per function call to stay within CPU limits
+      const { data: newVariations } = await supabase
+        .from('instagram_post_variations')
+        .select('id, carousel_urls, carousel_texts')
+        .eq('batch_id', batch.id);
+
+      if (newVariations) {
+        let totalOverlays = 0;
+        let successOverlays = 0;
+        for (const v of newVariations) {
+          for (const t of v.carousel_texts || []) {
+            if (t?.trim()) totalOverlays++;
+          }
+        }
+
+        if (totalOverlays > 0) {
+          toast.success(`Applying text overlays to ${totalOverlays} image${totalOverlays !== 1 ? 's' : ''}...`);
+        }
+
+        for (const v of newVariations) {
+          const urls = [...(v.carousel_urls || [])];
+          let anyOverlay = false;
+          for (let i = 0; i < urls.length; i++) {
+            const slideText = (v.carousel_texts?.[i] || '').trim();
+            if (!slideText) continue;
+
+            let overlaid = false;
+            for (let attempt = 0; attempt < 2 && !overlaid; attempt++) {
+              try {
+                const overlayResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overlay-text-on-image`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                    apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+                  },
+                  body: JSON.stringify({ source_url: urls[i], text: slideText, overlay_settings: overlaySettings }),
+                });
+                if (overlayResponse.ok) {
+                  const overlayData = await overlayResponse.json();
+                  urls[i] = overlayData.cloudfront_url;
+                  overlaid = true;
+                  anyOverlay = true;
+                  successOverlays++;
+                } else if (attempt === 1) {
+                  const err = await overlayResponse.json().catch(() => ({}));
+                  console.error(`Overlay failed for variation ${v.id} slide ${i}:`, err.error);
+                }
+              } catch (e) {
+                if (attempt === 1) console.error(`Overlay error for variation ${v.id} slide ${i}:`, e);
+              }
+            }
+          }
+          if (anyOverlay) {
+            await supabase
+              .from('instagram_post_variations')
+              .update({ carousel_urls: urls, cloudfront_url: urls[0], updated_at: new Date().toISOString() })
+              .eq('id', v.id);
+          }
+        }
+
+        if (totalOverlays > 0) {
+          if (successOverlays === totalOverlays) {
+            toast.success(`All ${successOverlays} text overlays applied!`);
+          } else if (successOverlays > 0) {
+            toast.error(`${successOverlays}/${totalOverlays} overlays applied — some images kept original`);
+          } else {
+            toast.error('Text overlays failed — showing original images');
+          }
+        }
+      }
+
+      if (postNow && result.publish_variation_ids?.length > 0) {
+        toast.success(`${result.variations_created} variations generated. Publishing now...`);
+
+        let successCount = 0;
+        let failCount = 0;
+        for (const varId of result.publish_variation_ids) {
+          try {
+            const pubResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+              },
+              body: JSON.stringify({ variation_id: varId, action: 'publish' }),
+            });
+            if (pubResponse.ok) {
+              successCount++;
+            } else {
+              failCount++;
+              const err = await pubResponse.json().catch(() => ({}));
+              console.error(`Publish failed for ${varId}:`, err.error);
+            }
+          } catch (e) {
+            failCount++;
+            console.error(`Publish failed for ${varId}:`, e);
+          }
+        }
+        if (failCount === 0) {
+          toast.success(`${successCount} posts published immediately!`);
+        } else if (successCount === 0) {
+          toast.error('All posts failed to publish');
+        } else {
+          toast.error(`${successCount} published, ${failCount} failed`);
+        }
+      } else if (postNow) {
         toast.success(`${result.variations_created} posts published immediately!`);
       } else {
         toast.success('Variations generated! Review them in Staging.');
@@ -474,7 +877,10 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       setBaseCaption('');
       setHashtagsText('');
       setCarouselTextLines(['']);
+      setSelectedAccountIds([]);
+      setAccountAssignments([]);
       fetchBatches();
+      fetchStagedCount();
       setActiveBatchId(batch.id);
       setSubView('staging');
       fetchVariations(batch.id);
@@ -494,6 +900,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         .eq('id', variationId);
       if (error) throw error;
       setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'approved' } : v));
+      fetchStagedCount();
       toast.success('Variation approved');
     } catch (error) {
       console.error('Error approving variation:', error);
@@ -505,14 +912,32 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     try {
       const { error } = await supabase
         .from('instagram_post_variations')
-        .update({ status: 'rejected', updated_at: new Date().toISOString() })
+        .delete()
         .eq('id', variationId);
       if (error) throw error;
-      setVariations(prev => prev.map(v => v.id === variationId ? { ...v, status: 'rejected' } : v));
-      toast.success('Variation rejected');
+      setVariations(prev => prev.filter(v => v.id !== variationId));
+      fetchStagedCount();
+      toast.success('Variation rejected and removed');
     } catch (error) {
       console.error('Error rejecting variation:', error);
       toast.error('Failed to reject');
+    }
+  };
+
+  const handleDeleteFeedPost = async (mediaId: string) => {
+    if (!confirm('Remove this post from your feed? This deletes it from the database.')) return;
+    try {
+      const { error } = await supabase
+        .from('instagram_post_variations')
+        .delete()
+        .eq('user_id', userId)
+        .or(`ig_media_id.eq.${mediaId},id.eq.${mediaId}`);
+      if (error) throw error;
+      setPublishedPosts(prev => prev.filter(p => (p.ig_media_id || p.id) !== mediaId));
+      toast.success('Post removed from feed');
+    } catch (error) {
+      console.error('Error deleting feed post:', error);
+      toast.error('Failed to remove post');
     }
   };
 
@@ -553,6 +978,73 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
+  const handlePublishNow = async (variationId: string) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ variation_id: variationId, action: 'publish' }),
+      });
+      if (response.ok) {
+        toast.success('Post published successfully!');
+      } else {
+        const err = await response.json().catch(() => ({}));
+        toast.error(`Publish failed: ${err.error || 'Unknown error'}`);
+      }
+      if (activeBatchId) fetchVariations(activeBatchId);
+    } catch (error) {
+      console.error('Publish now error:', error);
+      toast.error(`Publish failed: ${error.message}`);
+    }
+  };
+
+  const handlePublishApprovedNow = async () => {
+    const approved = variations.filter(v => v.status === 'approved');
+    if (approved.length === 0) {
+      toast.error('No approved variations to publish');
+      return;
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+    for (const variation of approved) {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ variation_id: variation.id, action: 'publish' }),
+        });
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          const err = await response.json().catch(() => ({}));
+          console.error(`Publish failed for ${variation.id}:`, err.error);
+        }
+      } catch (error) {
+        failCount++;
+        console.error(`Publish failed for ${variation.id}:`, error);
+      }
+    }
+
+    if (failCount === 0) {
+      toast.success(`${successCount} posts published!`);
+    } else if (successCount === 0) {
+      toast.error('All posts failed to publish');
+    } else {
+      toast.error(`${successCount} published, ${failCount} failed`);
+    }
+    if (activeBatchId) fetchVariations(activeBatchId);
+  };
+
   const handleRetryVariation = async (variationId: string) => {
     try {
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
@@ -578,37 +1070,50 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   };
 
   const handleTestPost = async () => {
-    if (!testPostAssetId || !testPostAccountId) {
-      toast.error('Select an asset and an account for the test post');
+    if (!testPostAssetId || testPostAccountIds.length === 0) {
+      toast.error('Select an asset and at least one account for the test post');
       return;
     }
 
     setIsPostingTest(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          action: 'test_post',
-          asset_id: testPostAssetId,
-          account_id: testPostAccountId,
-          caption: testPostCaption,
-        }),
-      });
+      let successCount = 0;
+      let failCount = 0;
+      for (const accId of testPostAccountIds) {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-instagram-post`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            action: 'test_post',
+            asset_id: testPostAssetId,
+            account_id: accId,
+            caption: testPostCaption,
+          }),
+        });
 
-      if (response.ok) {
-        const result = await response.json();
-        toast.success(`Test post published! Media ID: ${result.media_id}`);
-        setTestPostAssetId(null);
-        setTestPostCaption('');
-      } else {
-        const err = await response.json().catch(() => ({}));
-        toast.error(`Test post failed: ${err.error || 'Unknown error'}`);
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          const err = await response.json().catch(() => ({}));
+          console.error(`Test post failed for account ${accId}:`, err.error);
+        }
       }
+
+      if (failCount === 0) {
+        toast.success(`${successCount} test post${successCount !== 1 ? 's' : ''} published!`);
+      } else if (successCount === 0) {
+        toast.error('All test posts failed');
+      } else {
+        toast.error(`${successCount} succeeded, ${failCount} failed`);
+      }
+      setTestPostAssetId(null);
+      setTestPostAccountIds([]);
+      setTestPostCaption('');
     } catch (error) {
       console.error('Test post error:', error);
       toast.error(`Test post failed: ${error.message}`);
@@ -693,25 +1198,116 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     });
   }, [carouselSize]);
 
-  // Feed: group comment events by post (media_id)
+  // Feed: seed from latest Instagram snapshot (all posts on Instagram), merge with
+  // published variations and comment events. Only posts present in the snapshot appear.
   const feedPosts = useMemo(() => {
-    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; events: CommentEvent[] }>();
+    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; carouselUrls: string[] | null; events: CommentEvent[]; hasComments: boolean; igCommentCount: number; likeCount: number; publishedAt: string | null }>();
+
+    // Seed with ALL posts from the latest Instagram snapshot (same data as stats tab)
+    const latestSnapshot = snapshots[0] || null;
+    if (latestSnapshot?.posts_data) {
+      for (const p of latestSnapshot.posts_data) {
+        if (!p.media_id) continue;
+        const igCommentCount = typeof p.comments_count === 'number' ? p.comments_count : 0;
+        postMap.set(p.media_id, {
+          mediaId: p.media_id,
+          mediaType: p.media_type ?? null,
+          mediaPermalink: p.permalink ?? null,
+          mediaCaption: (p.caption ?? '').substring(0, 500) || null,
+          mediaImageUrl: p.thumbnail_url ?? null,
+          carouselUrls: p.carousel_urls ?? null,
+          events: [],
+          hasComments: igCommentCount > 0,
+          igCommentCount,
+          likeCount: typeof p.like_count === 'number' ? p.like_count : 0,
+          publishedAt: p.timestamp ?? latestSnapshot.created_at,
+        });
+      }
+    }
+
+    // Merge in published variations (for posts made via the app — enriches feed)
+    for (const pub of publishedPosts) {
+      const key = pub.ig_media_id || pub.id;
+      const existing = postMap.get(key);
+      if (existing) {
+        // Enrich with variation data if snapshot was missing fields
+        if (!existing.mediaImageUrl) {
+          const urls = pub.carousel_urls && pub.carousel_urls.length > 0 ? pub.carousel_urls : (pub.cloudfront_url ? [pub.cloudfront_url] : []);
+          existing.mediaImageUrl = pub.media_image_url || urls[0] || null;
+        }
+        if (!existing.carouselUrls && pub.carousel_urls && pub.carousel_urls.length > 0) {
+          existing.carouselUrls = pub.carousel_urls;
+        }
+        if (!existing.mediaType) existing.mediaType = pub.media_type || null;
+        if (!existing.mediaPermalink) existing.mediaPermalink = pub.permalink;
+        if (!existing.mediaCaption) existing.mediaCaption = pub.caption;
+      } else {
+        // Not in snapshot — include as extra post
+        const urls = pub.carousel_urls && pub.carousel_urls.length > 0 ? pub.carousel_urls : (pub.cloudfront_url ? [pub.cloudfront_url] : []);
+        const igImageUrl = pub.media_image_url || urls[0] || null;
+        postMap.set(key, {
+          mediaId: key,
+          mediaType: pub.media_type || null,
+          mediaPermalink: pub.permalink,
+          mediaCaption: pub.caption,
+          mediaImageUrl: igImageUrl,
+          carouselUrls: pub.carousel_urls ?? null,
+          events: [],
+          hasComments: false,
+          igCommentCount: 0,
+          likeCount: 0,
+          publishedAt: pub.created_at,
+        });
+      }
+    }
+
+    // Merge in comment events — always show posts that have comments, even if
+    // the post is no longer in the snapshot (it may have been deleted from
+    // Instagram, or the snapshot may be incomplete due to API limitations)
     for (const event of commentEvents) {
       const key = event.media_id ?? event.id;
+      if (!key) continue;
       const existing = postMap.get(key);
       if (existing) {
         existing.events.push(event);
+        existing.hasComments = true;
         if (event.media_image_url && !existing.mediaImageUrl) existing.mediaImageUrl = event.media_image_url;
+        if (event.media_type && !existing.mediaType) existing.mediaType = event.media_type;
+        if (event.media_permalink && !existing.mediaPermalink) existing.mediaPermalink = event.media_permalink;
+        if (event.media_caption && !existing.mediaCaption) existing.mediaCaption = event.media_caption;
       } else {
-        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, events: [event] });
+        // Post not in snapshot but has comments — show it anyway
+        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, carouselUrls: null, events: [event], hasComments: true, igCommentCount: 0, likeCount: 0, publishedAt: null });
       }
     }
-    return Array.from(postMap.values()).sort((a, b) => {
-      const aLast = a.events.reduce((max, e) => e.created_at > max ? e.created_at : max, '');
-      const bLast = b.events.reduce((max, e) => e.created_at > max ? e.created_at : max, '');
-      return bLast.localeCompare(aLast);
-    });
-  }, [commentEvents]);
+
+    const posts = Array.from(postMap.values());
+    // Sort based on mode — all posts stay visible, just reordered
+    if (feedSortMode === 'comments') {
+      posts.sort((a, b) => {
+        const aTotal = a.igCommentCount || a.events.length;
+        const bTotal = b.igCommentCount || b.events.length;
+        if ((aTotal > 0) !== (bTotal > 0)) return aTotal > 0 ? -1 : 1;
+        return bTotal - aTotal;
+      });
+    } else if (feedSortMode === 'no-comments') {
+      posts.sort((a, b) => {
+        const aTotal = a.igCommentCount || a.events.length;
+        const bTotal = b.igCommentCount || b.events.length;
+        if ((aTotal > 0) !== (bTotal > 0)) return aTotal > 0 ? 1 : -1;
+        const aDate = a.publishedAt || a.events[0]?.created_at || '';
+        const bDate = b.publishedAt || b.events[0]?.created_at || '';
+        return bDate.localeCompare(aDate);
+      });
+    } else {
+      posts.sort((a, b) => {
+        const aDate = a.publishedAt || '';
+        const bDate = b.publishedAt || '';
+        return bDate.localeCompare(aDate);
+      });
+    }
+    return posts;
+  }, [commentEvents, publishedPosts, feedSortMode, snapshots]);
 
   function buildCommentThread(postEvents: CommentEvent[]) {
     const sorted = postEvents.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -786,8 +1382,50 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   };
 
+  const handleSyncFeed = async () => {
+    if (!selectedAccount) {
+      toast.error('Select an account to sync');
+      return;
+    }
+    setIsSyncingFeed(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/instagram-sync-insights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ account_id: selectedAccount.id }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to sync with Instagram');
+        return;
+      }
+      const data = await response.json();
+      await fetchPublishedPosts();
+      if (onSynced) onSynced();
+      const synced = data.feed_sync;
+      const commentsSynced = synced?.comments_synced ?? 0;
+      const commentsRemoved = synced?.comments_removed ?? 0;
+      const commentInfo = [
+        commentsSynced > 0 ? `${commentsSynced} new comments pulled` : null,
+        commentsRemoved > 0 ? `${commentsRemoved} stale comments removed` : null,
+      ].filter(Boolean).join(', ');
+      if (synced && synced.removed > 0) {
+        toast.success(`Synced with Instagram — ${synced.updated} posts updated, ${synced.removed} removed${commentInfo ? `, ${commentInfo}` : ''}`);
+      } else {
+        toast.success(`Synced with Instagram — ${synced?.updated ?? 0} posts updated${commentInfo ? `, ${commentInfo}` : ''}`);
+      }
+    } catch {
+      toast.error('Failed to sync with Instagram');
+    } finally {
+      setIsSyncingFeed(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-x-hidden">
       {/* Sub-tab navigation */}
       <div className="border-b border-gray-200 dark:border-gray-700">
         <nav className="flex gap-1 overflow-x-auto">
@@ -803,9 +1441,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
             >
               <tab.icon className="w-4 h-4" />
               {tab.label}
-              {tab.id === 'staging' && batches.filter(b => b.status === 'ready').length > 0 && (
+              {tab.id === 'staging' && stagedCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-pink-500 text-white rounded-full">
-                  {batches.filter(b => b.status === 'ready').length}
+                  {stagedCount}
                 </span>
               )}
             </button>
@@ -909,16 +1547,35 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       <option key={a.id} value={a.id}>{a.file_name}</option>
                     ))}
                   </select>
-                  <select
-                    value={testPostAccountId}
-                    onChange={(e) => setTestPostAccountId(e.target.value)}
-                    className="sm:w-auto px-3 py-2.5 text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">Select account...</option>
+                </div>
+                <div>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">Select accounts to test post to:</p>
+                  <div className="flex flex-wrap gap-2">
                     {accounts.map(a => (
-                      <option key={a.id} value={a.id}>@{a.username || 'Unknown'}</option>
+                      <label key={a.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                        testPostAccountIds.includes(a.id)
+                          ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/30'
+                          : 'border-amber-300 dark:border-amber-600 bg-white dark:bg-gray-700'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={testPostAccountIds.includes(a.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setTestPostAccountIds(prev => [...prev, a.id]);
+                            } else {
+                              setTestPostAccountIds(prev => prev.filter(id => id !== a.id));
+                            }
+                          }}
+                          className="rounded border-amber-300 text-amber-600"
+                        />
+                        {a.profile_picture_url ? (
+                          <img src={a.profile_picture_url} alt="" className="w-5 h-5 rounded-full" />
+                        ) : null}
+                        <span className="text-sm text-gray-700 dark:text-gray-300">@{a.username || 'Unknown'}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
                 <textarea
                   value={testPostCaption}
@@ -929,11 +1586,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 />
                 <button
                   onClick={handleTestPost}
-                  disabled={!testPostAssetId || !testPostAccountId || isPostingTest}
+                  disabled={!testPostAssetId || testPostAccountIds.length === 0 || isPostingTest}
                   className="px-4 py-2.5 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
                 >
                   {isPostingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Post Test
+                  Post Test ({testPostAccountIds.length} account{testPostAccountIds.length !== 1 ? 's' : ''})
                 </button>
               </div>
             </div>
@@ -1010,7 +1667,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       {/* Create Posts */}
       {subView === 'create' && (
-        <div className="max-w-2xl space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
           {assets.length === 0 ? (
             <div className="text-center py-12">
               <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -1132,20 +1789,185 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 <p className="mt-1 text-xs text-gray-500">Separate with spaces or commas</p>
               </div>
 
-              {/* Preview count */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Number of Posts to Preview: {previewCount}
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max={Math.max(1, accounts.length)}
-                  value={previewCount}
-                  onChange={(e) => setPreviewCount(parseInt(e.target.value))}
-                  className="w-full accent-pink-500"
-                />
-                <p className="text-xs text-gray-500">One variation per account (max {accounts.length})</p>
+              {/* Overlay Designer */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-pink-600" />
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Overlay Text Designer</h4>
+                </div>
+                <p className="text-xs text-gray-500">Style the text that gets overlaid on your carousel images. These settings are saved with your process.</p>
+
+                {/* Live Preview */}
+                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mx-auto w-full" style={{ aspectRatio: '16 / 9', maxWidth: '640px' }}>
+                  <img
+                    src={assets.find(a => a.file_type === 'image')?.cloudfront_url || 'https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-400-normal.woff2'}
+                    alt="Preview"
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-br from-gray-700 to-gray-900" />
+                  <div
+                    className="absolute"
+                    style={{
+                      left: 0,
+                      right: 0,
+                      ...(overlaySettings.position === 'bottom' && { bottom: '8%' }),
+                      ...(overlaySettings.position === 'top' && { top: '8%' }),
+                      ...(overlaySettings.position === 'center' && { top: '50%', transform: 'translateY(-50%)' }),
+                      display: 'flex',
+                      justifyContent: 'center',
+                      padding: `0 ${overlaySettings.bubblePadding}px`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: `${overlaySettings.bubbleColor}${Math.round(overlaySettings.bubbleOpacity * 2.55).toString(16).padStart(2, '0')}`,
+                        borderRadius: `${overlaySettings.bubbleRadius}px`,
+                        padding: `${overlaySettings.bubblePadding * 0.5}px ${overlaySettings.bubblePadding}px`,
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: overlaySettings.textColor,
+                          fontSize: `${overlaySettings.fontSize}px`,
+                          fontWeight: overlaySettings.fontWeight,
+                          fontFamily: 'sans-serif',
+                          textAlign: 'center',
+                          display: 'block',
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {overlayPreviewText || 'Your text here'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview text input */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Preview Text</label>
+                  <input
+                    type="text"
+                    value={overlayPreviewText}
+                    onChange={(e) => setOverlayPreviewText(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Type to preview..."
+                  />
+                </div>
+
+                {/* Sliders */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span className="flex items-center gap-1"><Type className="w-3 h-3" /> Font Size</span>
+                      <span className="text-gray-400">{overlaySettings.fontSize}px</span>
+                    </label>
+                    <input
+                      type="range" min={12} max={64} step={1}
+                      value={overlaySettings.fontSize}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, fontSize: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span>Boldness</span>
+                      <span className="text-gray-400">{overlaySettings.fontWeight}</span>
+                    </label>
+                    <input
+                      type="range" min={100} max={900} step={100}
+                      value={overlaySettings.fontWeight}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, fontWeight: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span>Bubble Opacity</span>
+                      <span className="text-gray-400">{overlaySettings.bubbleOpacity}%</span>
+                    </label>
+                    <input
+                      type="range" min={0} max={100} step={5}
+                      value={overlaySettings.bubbleOpacity}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, bubbleOpacity: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span>Bubble Padding</span>
+                      <span className="text-gray-400">{overlaySettings.bubblePadding}px</span>
+                    </label>
+                    <input
+                      type="range" min={0} max={100} step={5}
+                      value={overlaySettings.bubblePadding}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, bubblePadding: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      <span>Bubble Radius</span>
+                      <span className="text-gray-400">{overlaySettings.bubbleRadius}px</span>
+                    </label>
+                    <input
+                      type="range" min={0} max={200} step={1}
+                      value={overlaySettings.bubbleRadius}
+                      onChange={(e) => setOverlaySettings(prev => ({ ...prev, bubbleRadius: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Position</label>
+                    <div className="flex gap-1">
+                      {(['top', 'center', 'bottom'] as const).map(pos => (
+                        <button
+                          key={pos}
+                          onClick={() => setOverlaySettings(prev => ({ ...prev, position: pos }))}
+                          className={`px-3 py-1 text-xs rounded-lg flex-1 capitalize ${overlaySettings.position === pos ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}
+                        >
+                          {pos}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Color pickers */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Text Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={overlaySettings.textColor}
+                        onChange={(e) => setOverlaySettings(prev => ({ ...prev, textColor: e.target.value }))}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300 dark:border-gray-600"
+                      />
+                      <span className="text-xs text-gray-500 font-mono">{overlaySettings.textColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Bubble Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={overlaySettings.bubbleColor}
+                        onChange={(e) => setOverlaySettings(prev => ({ ...prev, bubbleColor: e.target.value }))}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300 dark:border-gray-600"
+                      />
+                      <span className="text-xs text-gray-500 font-mono">{overlaySettings.bubbleColor}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reset button */}
+                <button
+                  onClick={() => setOverlaySettings(DEFAULT_OVERLAY_SETTINGS)}
+                  className="text-xs text-gray-500 hover:text-pink-600"
+                >
+                  Reset to defaults
+                </button>
               </div>
 
               {/* Variation settings */}
@@ -1170,60 +1992,96 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
               </div>
 
               {/* Prompt mode selector */}
-              {varyCaption && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Caption Variation Prompt
-                  </label>
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      onClick={() => setPromptMode('none')}
-                      className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'none' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
-                    >
-                      No AI
-                    </button>
-                    <button
-                      onClick={() => setPromptMode('select')}
-                      className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'select' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
-                    >
-                      Select from saved
-                    </button>
-                    <button
-                      onClick={() => setPromptMode('custom')}
-                      className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'custom' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
-                    >
-                      Type custom prompt
-                    </button>
-                  </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Caption Variation Prompt
+                </label>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setPromptMode('none')}
+                    className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'none' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                  >
+                    No AI
+                  </button>
+                  <button
+                    onClick={() => setPromptMode('select')}
+                    className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'select' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                  >
+                    Select from saved
+                  </button>
+                  <button
+                    onClick={() => setPromptMode('custom')}
+                    className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'custom' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                  >
+                    Type custom prompt
+                  </button>
+                </div>
 
-                  {promptMode === 'select' && (
-                    <select
-                      value={selectedPromptId}
-                      onChange={(e) => setSelectedPromptId(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="">Select a prompt...</option>
-                      {availablePrompts.map(p => (
-                        <option key={p.id} value={p.id}>{p.title}</option>
+                {promptMode === 'select' && (
+                  <select
+                    value={selectedPromptId}
+                    onChange={(e) => setSelectedPromptId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Select a prompt...</option>
+                    {availablePrompts.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                )}
+
+                {promptMode === 'custom' && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Type your own prompt for AI caption variation. Click a placeholder to insert it at the cursor:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {[
+                        { label: 'Original caption', value: '{{original_caption}}' },
+                        { label: 'Account name', value: '{{account_name}}' },
+                        { label: 'Hashtags', value: '{{hashtags}}' },
+                        { label: 'Transcript', value: '{{transcript}}' },
+                        { label: 'Variation style', value: '{{variation_style}}' },
+                      ].map(ph => (
+                        <button
+                          key={ph.value}
+                          type="button"
+                          onClick={() => {
+                            const ta = document.getElementById('custom-prompt-textarea') as HTMLTextAreaElement;
+                            if (ta) {
+                              const start = ta.selectionStart;
+                              const end = ta.selectionEnd;
+                              const newText = customPrompt.slice(0, start) + ph.value + customPrompt.slice(end);
+                              setCustomPrompt(newText);
+                              requestAnimationFrame(() => {
+                                ta.focus();
+                                ta.selectionStart = ta.selectionEnd = start + ph.value.length;
+                              });
+                            } else {
+                              setCustomPrompt(prev => prev + ph.value);
+                            }
+                          }}
+                          className="px-2 py-1 text-[11px] font-mono rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-pink-100 dark:hover:bg-pink-900/30 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"
+                        >
+                          {ph.label} <span className="text-gray-400">{ph.value}</span>
+                        </button>
                       ))}
-                    </select>
-                  )}
-
-                  {promptMode === 'custom' && (
+                    </div>
                     <textarea
+                      id="custom-prompt-textarea"
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
                       rows={4}
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="Type your own prompt for AI caption variation. Use {{original_caption}}, {{account_name}}, {{hashtags}}, {{transcript}} as placeholders."
+                      placeholder="e.g. Rewrite this caption for {{account_name}} in a {{variation_style}} way. Original: {{original_caption}}"
                     />
-                  )}
+                  </div>
+                )}
 
-                  {promptMode === 'none' && (
-                    <p className="text-xs text-gray-500">Captions will only be varied by shuffling words mechanically, no AI.</p>
-                  )}
-                </div>
-              )}
+                {promptMode === 'none' && (
+                  <p className="text-xs text-gray-500">Captions will only be varied by shuffling words mechanically, no AI.</p>
+                )}
+              </div>
 
               {/* Post now toggle */}
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
@@ -1245,10 +2103,144 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 </label>
               </div>
 
+              {/* Saved Post Processes */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Saved Post Processes</h4>
+                  <button
+                    onClick={() => { setEditingProcessId(null); setProcessNameInput(''); setShowSaveProcessDialog(true); }}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg flex items-center gap-1"
+                  >
+                    <Save className="w-3 h-3" /> Save Current as Process
+                  </button>
+                </div>
+                {isLoadingProcesses ? (
+                  <p className="text-xs text-gray-400">Loading...</p>
+                ) : postProcesses.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No saved processes yet. Configure your settings above and click "Save Current as Process" to create a reusable template.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {postProcesses.map(proc => (
+                      <div key={proc.id} className="flex items-center gap-1 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 px-2 py-1">
+                        <button
+                          onClick={() => handleLoadProcess(proc)}
+                          className="text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-pink-600 dark:hover:text-pink-400"
+                        >
+                          {proc.name}
+                        </button>
+                        <button
+                          onClick={() => { setEditingProcessId(proc.id); setProcessNameInput(proc.name); setShowSaveProcessDialog(true); }}
+                          className="text-gray-400 hover:text-blue-500"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProcess(proc.id)}
+                          className="text-gray-400 hover:text-red-500"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Account Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Accounts to Post To
+                </label>
+                <p className="text-xs text-gray-500 mb-3">
+                  Check the accounts you want to create posts for. Each account can use a different saved process and schedule.
+                </p>
+                <div className="space-y-2">
+                  {accounts.map(a => {
+                    const isChecked = selectedAccountIds.includes(a.id);
+                    const assignment = accountAssignments.find(asg => asg.account_id === a.id);
+                    return (
+                      <div key={a.id} className={`rounded-lg border transition-colors ${
+                        isChecked ? 'border-pink-300 bg-pink-50/50 dark:bg-pink-900/10' : 'border-gray-200 dark:border-gray-700'
+                      }`}>
+                        <label className="flex items-center gap-3 p-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAccountIds(prev => [...prev, a.id]);
+                                const schedule = schedules.find(s => s.account_id === a.id);
+                                setAccountAssignments(prev => [...prev, {
+                                  account_id: a.id,
+                                  process_id: schedule?.default_process_id ?? null,
+                                  scheduled_for: null,
+                                }]);
+                              } else {
+                                setSelectedAccountIds(prev => prev.filter(id => id !== a.id));
+                                setAccountAssignments(prev => prev.filter(asg => asg.account_id !== a.id));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-pink-600"
+                          />
+                          {a.profile_picture_url ? (
+                            <img src={a.profile_picture_url} alt="" className="w-8 h-8 rounded-full" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                              <ImageIcon className="w-4 h-4 text-gray-400" />
+                            </div>
+                          )}
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">@{a.username || 'Unknown'}</span>
+                        </label>
+
+                        {/* Per-account process & schedule */}
+                        {isChecked && (
+                          <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-1">Process</label>
+                              <select
+                                value={assignment?.process_id ?? ''}
+                                onChange={(e) => {
+                                  const pid = e.target.value || null;
+                                  setAccountAssignments(prev => prev.map(asg =>
+                                    asg.account_id === a.id ? { ...asg, process_id: pid } : asg
+                                  ));
+                                }}
+                                className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              >
+                                <option value="">Use form settings</option>
+                                {postProcesses.map(p => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-1">Schedule</label>
+                              <input
+                                type="datetime-local"
+                                value={assignment?.scheduled_for ? toLocalDatetimeInput(assignment.scheduled_for) : ''}
+                                onChange={(e) => {
+                                  const val = e.target.value ? fromLocalDatetimeInput(e.target.value) : null;
+                                  setAccountAssignments(prev => prev.map(asg =>
+                                    asg.account_id === a.id ? { ...asg, scheduled_for: val } : asg
+                                  ));
+                                }}
+                                className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Generate button */}
               <button
                 onClick={handleCreateBatch}
-                disabled={isGenerating || !baseCaption.trim()}
+                disabled={isGenerating || (!baseCaption.trim() && !selectedAccountIds.every(accId => accountAssignments.find(a => a.account_id === accId)?.process_id)) || selectedAccountIds.length === 0}
                 className="w-full px-6 py-3 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-2"
               >
                 {isGenerating ? (
@@ -1259,16 +2251,121 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                   <><Wand2 className="w-4 h-4" /> Generate Preview Variations</>
                 )}
               </button>
+
+              {/* Status panel */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+                <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Ready to Generate</h4>
+                <div className="space-y-1.5">
+                  {(() => {
+                    const checks: Array<{ label: string; done: boolean }> = [
+                      { label: 'Content in library', done: assets.length > 0 },
+                      { label: 'Base caption or process per account', done: baseCaption.trim() !== '' || selectedAccountIds.every(accId => accountAssignments.find(a => a.account_id === accId)?.process_id) },
+                      { label: 'At least one account selected', done: selectedAccountIds.length > 0 },
+                      { label: 'Carousel text (for multi-slide)', done: carouselSize === 1 || carouselTextLines.some(t => t.trim()) },
+                    ];
+                    return checks.map((c, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        {c.done ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 flex-shrink-0" />
+                        )}
+                        <span className={c.done ? 'text-gray-600 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}>
+                          {c.label}
+                        </span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+
+                {/* Unsaved changes warning */}
+                {loadedProcessId && (() => {
+                  const proc = postProcesses.find(p => p.id === loadedProcessId);
+                  if (!proc) return null;
+                  const currentHashtags = hashtagsText.split(/[,\n\s]+/).map(h => h.trim().replace(/^#/, '')).filter(h => h.length > 0).map(h => `#${h}`);
+                  const currentTextLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
+                  const procTextLines = (proc.carousel_text_lines || []).filter(t => t.length > 0);
+                  const hasChanges =
+                    proc.content_type !== contentType ||
+                    proc.carousel_size !== carouselSize ||
+                    JSON.stringify(procTextLines) !== JSON.stringify(currentTextLines) ||
+                    proc.base_caption !== baseCaption ||
+                    JSON.stringify(proc.hashtags || []) !== JSON.stringify(currentHashtags) ||
+                    JSON.stringify(proc.variation_settings || {}) !== JSON.stringify({ caption: varyCaption, hashtags: varyHashtags, font: varyFont }) ||
+                    proc.randomize_content !== randomizeContent ||
+                    proc.prompt_mode !== promptMode ||
+                    (proc.prompt_id || null) !== (promptMode === 'select' ? selectedPromptId || null : null) ||
+                    (proc.custom_prompt || null) !== (promptMode === 'custom' ? customPrompt.trim() || null : null) ||
+                    JSON.stringify(proc.overlay_settings || {}) !== JSON.stringify(overlaySettings);
+                  if (!hasChanges) return null;
+                  return (
+                    <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">
+                      <span className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        Unsaved changes to "{proc.name}"
+                      </span>
+                      <button
+                        onClick={handleQuickUpdateProcess}
+                        className="px-2.5 py-1 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg flex items-center gap-1"
+                      >
+                        <Save className="w-3 h-3" /> Save changes
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Save Process Dialog */}
+      {showSaveProcessDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSaveProcessDialog(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-sm w-full mx-4 p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                {editingProcessId ? 'Rename Process' : 'Save Post Process'}
+              </h3>
+              <button onClick={() => setShowSaveProcessDialog(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              This saves all current settings (content type, carousel, caption, hashtags, variation toggles, AI prompt) as a reusable template.
+            </p>
+            <input
+              type="text"
+              value={processNameInput}
+              onChange={(e) => setProcessNameInput(e.target.value)}
+              placeholder="Process name (e.g. Reels with quotes)"
+              autoFocus
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                onClick={() => setShowSaveProcessDialog(false)}
+                className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProcess}
+                disabled={!processNameInput.trim()}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-40"
+              >
+                {editingProcessId ? 'Update' : 'Save'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Staging */}
       {subView === 'staging' && (
         <div>
-          {batches.length > 1 && (
-            <div className="mb-4">
+          <div className="mb-4 flex items-center gap-3 flex-wrap">
+            {batches.length > 1 && (
               <select
                 value={activeBatchId || ''}
                 onChange={(e) => { setActiveBatchId(e.target.value); fetchVariations(e.target.value); }}
@@ -1280,8 +2377,36 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                   </option>
                 ))}
               </select>
-            </div>
-          )}
+            )}
+            <button
+              onClick={async () => {
+                if (stagedCount === 0) {
+                  toast.error('No staged variations to delete');
+                  return;
+                }
+                if (!confirm(`Delete all ${stagedCount} staged variation${stagedCount !== 1 ? 's' : ''} across all batches? This cannot be undone.`)) return;
+                try {
+                  const { error } = await supabase
+                    .from('instagram_post_variations')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('status', 'staged');
+                  if (error) throw error;
+                  setVariations(prev => prev.filter(v => v.status !== 'staged'));
+                  setStagedCount(0);
+                  toast.success(`Deleted all ${stagedCount} staged variation${stagedCount !== 1 ? 's' : ''}`);
+                } catch (error) {
+                  console.error('Error deleting staged variations:', error);
+                  toast.error('Failed to delete variations');
+                }
+              }}
+              disabled={stagedCount === 0}
+              className="px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete All Staged ({stagedCount})
+            </button>
+          </div>
 
           {batches.length === 0 ? (
             <div className="text-center py-12">
@@ -1299,7 +2424,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           ) : (
             <>
               {variations.some(v => v.status === 'approved') && (
-                <div className="flex justify-end mb-4">
+                <div className="flex justify-end gap-2 mb-4">
+                  <button
+                    onClick={handlePublishApprovedNow}
+                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center gap-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    Publish All Approved Now ({variations.filter(v => v.status === 'approved').length})
+                  </button>
                   <button
                     onClick={handleScheduleApproved}
                     className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center gap-2"
@@ -1316,6 +2448,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                   const carouselUrls = variation.carousel_urls && variation.carousel_urls.length > 0
                     ? variation.carousel_urls
                     : [variation.cloudfront_url];
+                  const carouselIndex = carouselImageIndex[variation.id] ?? 0;
+                  const currentUrl = carouselUrls[carouselIndex] || carouselUrls[0];
+                  const isVideo = currentUrl.endsWith('.mp4') || currentUrl.endsWith('.mov');
                   return (
                     <div key={variation.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
                       <div className="flex items-center gap-2 p-3 border-b border-gray-100 dark:border-gray-700">
@@ -1332,31 +2467,45 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         </span>
                       </div>
 
-                      {/* Carousel preview */}
-                      <div className="aspect-square bg-gray-100 dark:bg-gray-900 relative">
+                      {/* Carousel preview with navigation */}
+                      <div className="bg-gray-100 dark:bg-gray-900 relative group overflow-hidden">
                         {carouselUrls.length > 1 && (
-                          <div className="absolute top-2 right-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <Layers className="w-3 h-3" /> {carouselUrls.length} photos
-                          </div>
+                          <>
+                            <div className="absolute top-2 right-2 z-20 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Layers className="w-3 h-3" /> {carouselIndex + 1}/{carouselUrls.length}
+                            </div>
+                            {carouselIndex > 0 && (
+                              <button
+                                onClick={() => setCarouselImageIndex(prev => ({ ...prev, [variation.id]: carouselIndex - 1 }))}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                              >
+                                <ChevronLeft className="w-5 h-5" />
+                              </button>
+                            )}
+                            {carouselIndex < carouselUrls.length - 1 && (
+                              <button
+                                onClick={() => setCarouselImageIndex(prev => ({ ...prev, [variation.id]: carouselIndex + 1 }))}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                              >
+                                <ChevronRight className="w-5 h-5" />
+                              </button>
+                            )}
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1">
+                              {carouselUrls.map((_, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`w-1.5 h-1.5 rounded-full transition-colors ${idx === carouselIndex ? 'bg-white' : 'bg-white/40'}`}
+                                />
+                              ))}
+                            </div>
+                          </>
                         )}
-                        {(variation.s3_key.endsWith('.mp4') || variation.s3_key.endsWith('.mov')) ? (
-                          <video src={variation.cloudfront_url} className="w-full h-full object-cover" controls preload="metadata" />
+                        {isVideo ? (
+                          <video src={currentUrl} className="w-full h-auto" controls preload="metadata" />
                         ) : (
-                          <img src={variation.cloudfront_url} alt="" className="w-full h-full object-cover" />
+                          <img src={currentUrl} alt="" className="w-full h-auto" />
                         )}
                       </div>
-
-                      {/* Carousel text preview */}
-                      {variation.carousel_texts && variation.carousel_texts.length > 0 && (
-                        <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
-                          <p className="text-[10px] text-gray-400 mb-1">Text on photos:</p>
-                          {variation.carousel_texts.map((text, i) => (
-                            <p key={i} className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                              <span className="text-gray-400">{i + 1}.</span> {text}
-                            </p>
-                          ))}
-                        </div>
-                      )}
 
                       <div className="p-3">
                         <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">{variation.caption}</p>
@@ -1388,8 +2537,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           </a>
                         )}
 
-                        <div className="flex items-center gap-2 mt-3">
-                          {(variation.status === 'staged' || variation.status === 'rejected') && (
+                        <div className="flex items-center gap-2 mt-3 flex-wrap">
+                          {variation.status === 'staged' && (
                             <>
                               <button
                                 onClick={() => handleApproveVariation(variation.id)}
@@ -1404,6 +2553,22 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                 <X className="w-3 h-3" /> Reject
                               </button>
                             </>
+                          )}
+                          {variation.status === 'approved' && (
+                            <button
+                              onClick={() => handlePublishNow(variation.id)}
+                              className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center justify-center gap-1"
+                            >
+                              <Send className="w-3 h-3" /> Publish Now
+                            </button>
+                          )}
+                          {variation.status === 'scheduled' && (
+                            <button
+                              onClick={() => handlePublishNow(variation.id)}
+                              className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center justify-center gap-1"
+                            >
+                              <Send className="w-3 h-3" /> Publish Now
+                            </button>
                           )}
                           {variation.status === 'failed' && (
                             <button
@@ -1506,6 +2671,21 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                     </div>
 
                     <div className="mt-3">
+                      <label className="block text-xs text-gray-500 mb-1">Post Process</label>
+                      <select
+                        value={schedule.default_process_id || ''}
+                        onChange={(e) => handleScheduleUpdate(schedule.id, { default_process_id: e.target.value || null })}
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">No process (use defaults)</option>
+                        {postProcesses.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-gray-400 mt-1">This process will be used for automated daily posts on this account.</p>
+                    </div>
+
+                    <div className="mt-3">
                       <label className="block text-xs text-gray-500 mb-2">Active days</label>
                       <div className="flex gap-1">
                         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
@@ -1540,24 +2720,63 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           {feedPosts.length === 0 ? (
             <div className="text-center py-12">
               <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No posts with comments yet</h3>
-              <p className="text-gray-500 dark:text-gray-400">
-                Comments on your posts and reels will appear here automatically. Click a post to expand and reply to comments.
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No published posts yet</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">
+                Posts you publish through the auto-posting system will appear here, along with any comments they receive.
               </p>
+              {selectedAccount && (
+                <button
+                  onClick={handleSyncFeed}
+                  disabled={isSyncingFeed}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-pink-500 hover:bg-pink-600 rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  {isSyncingFeed ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  Sync Now
+                </button>
+              )}
             </div>
           ) : (
-            <div className="space-y-4">
+            <>
+              <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Sort:</span>
+                  {([['recent', 'Most recent'], ['comments', 'With comments'], ['no-comments', 'No comments']] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      onClick={() => setFeedSortMode(mode)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                        feedSortMode === mode
+                          ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300'
+                          : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {selectedAccount && (
+                  <button
+                    onClick={handleSyncFeed}
+                    disabled={isSyncingFeed}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {isSyncingFeed ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Sync Now
+                  </button>
+                )}
+              </div>
+              <div className="space-y-4 max-w-full overflow-x-hidden">
               {feedPosts.map((post) => {
                 const isExpanded = expandedPostId === post.mediaId;
                 const { topLevel, repliesByParent } = buildCommentThread(post.events);
                 return (
-                  <div key={post.mediaId} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                  <div key={post.mediaId} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden min-w-0">
                     {/* Post header — click to expand */}
                     <button
                       onClick={() => setExpandedPostId(isExpanded ? null : post.mediaId)}
                       className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
                     >
-                      <div className="w-10 h-10 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      <div className="w-10 h-10 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
                         {post.mediaImageUrl ? (
                           post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
                             <video src={post.mediaImageUrl} className="w-full h-full object-cover" preload="metadata" muted />
@@ -1569,13 +2788,35 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         ) : (
                           <ImageIcon className="w-5 h-5 text-pink-500" />
                         )}
+                        {post.carouselUrls && post.carouselUrls.length > 1 && (
+                          <span className="absolute top-0 right-0 bg-black/60 text-white text-[8px] font-bold px-1 rounded-bl leading-tight">
+                            {post.carouselUrls.length}
+                          </span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-900 dark:text-white">
                             {post.mediaType === 'REEL' ? 'Reel' : 'Post'}
                           </span>
-                          <span className="text-xs text-gray-400">{post.events.length} comment{post.events.length !== 1 ? 's' : ''}</span>
+                          {post.igCommentCount > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30 px-2 py-0.5 rounded-full">
+                              <MessageSquare className="w-3 h-3" />
+                              {post.igCommentCount} comment{post.igCommentCount !== 1 ? 's' : ''}
+                            </span>
+                          ) : post.hasComments ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30 px-2 py-0.5 rounded-full">
+                              <MessageSquare className="w-3 h-3" />
+                              {post.events.length} comment{post.events.length !== 1 ? 's' : ''}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-gray-400 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">No comments</span>
+                          )}
+                          {post.likeCount > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                              <Heart className="w-3 h-3" /> {post.likeCount}
+                            </span>
+                          )}
                         </div>
                         {post.mediaCaption && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{post.mediaCaption}</p>
@@ -1592,6 +2833,16 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           View on Instagram
                         </a>
                       )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteFeedPost(post.mediaId);
+                        }}
+                        className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 p-1"
+                        title="Remove from feed"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                       {isExpanded ? (
                         <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
                       ) : (
@@ -1602,26 +2853,83 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                     {/* Expanded comment threads */}
                     {isExpanded && (
                       <div className="border-t border-gray-200 dark:border-gray-700">
-                        {/* Post image/video preview */}
-                        {post.mediaImageUrl && (
-                          <div className="px-4 pt-3 pb-2">
-                            {post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
-                              <video
-                                src={post.mediaImageUrl}
-                                className="w-full max-h-64 rounded-lg object-cover"
-                                controls
-                                preload="metadata"
-                              />
+                        {/* Post image/video — full size with carousel support */}
+                        {(() => {
+                          const carousel = post.carouselUrls && post.carouselUrls.length > 0 ? post.carouselUrls : (post.mediaImageUrl ? [post.mediaImageUrl] : []);
+                          if (carousel.length === 0) return null;
+                          const currentIdx = feedCarouselIndex[post.mediaId] ?? 0;
+                          const currentUrl = carousel[Math.min(currentIdx, carousel.length - 1)];
+                          const isVideo = post.mediaType === 'REEL' || post.mediaType === 'VIDEO';
+                          return (
+                            <div className="px-4 pt-3 pb-2 max-w-full overflow-x-hidden">
+                              <div className="relative rounded-lg overflow-hidden bg-black w-full">
+                                {isVideo ? (
+                                  <video
+                                    src={currentUrl}
+                                    className="w-full max-w-full h-auto max-h-[600px] object-contain block"
+                                    controls
+                                    preload="metadata"
+                                  />
+                                ) : (
+                                  <img
+                                    src={currentUrl}
+                                    alt=""
+                                    className="w-full max-w-full h-auto max-h-[600px] object-contain block"
+                                    loading="lazy"
+                                  />
+                                )}
+                                {carousel.length > 1 && (
+                                  <>
+                                    {/* Always-visible navigation arrows */}
+                                    <button
+                                      onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: currentIdx === 0 ? carousel.length - 1 : currentIdx - 1 }))}
+                                      className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center shadow-lg hover:bg-white dark:hover:bg-gray-700 hover:scale-110 active:scale-95 transition-all z-10"
+                                    >
+                                      <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+                                    </button>
+                                    <button
+                                      onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: currentIdx === carousel.length - 1 ? 0 : currentIdx + 1 }))}
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center shadow-lg hover:bg-white dark:hover:bg-gray-700 hover:scale-110 active:scale-95 transition-all z-10"
+                                    >
+                                      <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+                                    </button>
+                                    {/* Slide counter */}
+                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 text-white text-xs font-medium">
+                                      {currentIdx + 1} / {carousel.length}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              {/* Thumbnail strip for carousels */}
+                              {carousel.length > 1 && (
+                                <div className="flex justify-center gap-2 mt-2 overflow-x-auto pb-1">
+                                  {carousel.map((url, idx) => (
+                                    <button
+                                      key={idx}
+                                      onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: idx }))}
+                                      className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${idx === currentIdx ? 'border-pink-500 opacity-100 scale-105' : 'border-transparent opacity-50 hover:opacity-80'}`}
+                                    >
+                                      {post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
+                                        <video src={url} className="w-full h-full object-cover" preload="metadata" muted />
+                                      ) : (
+                                        <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        {post.events.length === 0 ? (
+                          <div className="px-4 py-6 text-center">
+                            {post.igCommentCount > 0 ? (
+                              <p className="text-sm text-gray-400">Instagram reports {post.igCommentCount} comment{post.igCommentCount !== 1 ? 's' : ''} on this post. Click "Sync with Instagram" above to pull them into the feed.</p>
                             ) : (
-                              <img
-                                src={post.mediaImageUrl}
-                                alt=""
-                                className="w-full max-h-64 rounded-lg object-cover"
-                                loading="lazy"
-                              />
+                              <p className="text-sm text-gray-400">No comments on this post yet.</p>
                             )}
                           </div>
-                        )}
+                        ) : (
                         <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
                         {topLevel.map((comment) => {
                           const commentReplies = repliesByParent.get(comment.comment_id ?? '') ?? [];
@@ -1717,12 +3025,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           );
                         })}
                         </div>
+                        )}
                       </div>
                     )}
                   </div>
                 );
               })}
-            </div>
+              </div>
+            </>
           )}
         </div>
       )}
