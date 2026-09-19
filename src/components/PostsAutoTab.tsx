@@ -257,6 +257,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [showSaveProcessDialog, setShowSaveProcessDialog] = useState(false);
   const [processNameInput, setProcessNameInput] = useState('');
   const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
+  const [loadedProcessId, setLoadedProcessId] = useState<string | null>(null);
 
   // Account selection state
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
@@ -413,6 +414,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       setShowSaveProcessDialog(false);
       setProcessNameInput('');
       setEditingProcessId(null);
+      setLoadedProcessId(editingProcessId || null);
       fetchPostProcesses();
     } catch (error) {
       console.error('Error saving process:', error);
@@ -437,7 +439,47 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     if (process.overlay_settings) {
       setOverlaySettings({ ...DEFAULT_OVERLAY_SETTINGS, ...process.overlay_settings });
     }
+    setLoadedProcessId(process.id);
     toast.success(`Loaded process: ${process.name}`);
+  };
+
+  const handleQuickUpdateProcess = async () => {
+    if (!loadedProcessId) return;
+    const proc = postProcesses.find(p => p.id === loadedProcessId);
+    if (!proc) return;
+    const hashtags = hashtagsText
+      .split(/[,\n\s]+/)
+      .map(h => h.trim().replace(/^#/, ''))
+      .filter(h => h.length > 0)
+      .map(h => `#${h}`);
+    const textLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
+    const processData = {
+      name: proc.name,
+      content_type: contentType,
+      carousel_size: carouselSize,
+      carousel_text_lines: textLines,
+      base_caption: baseCaption,
+      hashtags,
+      variation_settings: { caption: varyCaption, hashtags: varyHashtags, font: varyFont },
+      randomize_content: randomizeContent,
+      prompt_mode: promptMode,
+      prompt_id: promptMode === 'select' ? selectedPromptId : null,
+      custom_prompt: promptMode === 'custom' ? customPrompt.trim() : null,
+      overlay_settings: overlaySettings,
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      const { error } = await supabase
+        .from('instagram_post_processes')
+        .update(processData)
+        .eq('id', loadedProcessId);
+      if (error) throw error;
+      toast.success(`Saved changes to "${proc.name}"`);
+      fetchPostProcesses();
+    } catch (error) {
+      console.error('Error updating process:', error);
+      toast.error(`Failed to save changes: ${error.message}`);
+    }
   };
 
   const handleDeleteProcess = async (processId: string) => {
@@ -1727,99 +1769,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 </button>
               </div>
 
-              {/* Account Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Select Accounts to Post To
-                </label>
-                <p className="text-xs text-gray-500 mb-3">
-                  Check the accounts you want to create posts for. Each account can use a different saved process and schedule.
-                </p>
-                <div className="space-y-2">
-                  {accounts.map(a => {
-                    const isChecked = selectedAccountIds.includes(a.id);
-                    const assignment = accountAssignments.find(asg => asg.account_id === a.id);
-                    return (
-                      <div key={a.id} className={`rounded-lg border transition-colors ${
-                        isChecked ? 'border-pink-300 bg-pink-50/50 dark:bg-pink-900/10' : 'border-gray-200 dark:border-gray-700'
-                      }`}>
-                        <label className="flex items-center gap-3 p-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedAccountIds(prev => [...prev, a.id]);
-                                const schedule = schedules.find(s => s.account_id === a.id);
-                                setAccountAssignments(prev => [...prev, {
-                                  account_id: a.id,
-                                  process_id: schedule?.default_process_id ?? null,
-                                  scheduled_for: null,
-                                }]);
-                              } else {
-                                setSelectedAccountIds(prev => prev.filter(id => id !== a.id));
-                                setAccountAssignments(prev => prev.filter(asg => asg.account_id !== a.id));
-                              }
-                            }}
-                            className="rounded border-gray-300 text-pink-600"
-                          />
-                          {a.profile_picture_url ? (
-                            <img src={a.profile_picture_url} alt="" className="w-8 h-8 rounded-full" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                              <ImageIcon className="w-4 h-4 text-gray-400" />
-                            </div>
-                          )}
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">@{a.username || 'Unknown'}</span>
-                        </label>
-
-                        {/* Per-account process & schedule */}
-                        {isChecked && (
-                          <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-[10px] text-gray-500 mb-1">Process</label>
-                              <select
-                                value={assignment?.process_id ?? ''}
-                                onChange={(e) => {
-                                  const pid = e.target.value || null;
-                                  if (pid) {
-                                    const proc = postProcesses.find(p => p.id === pid);
-                                    if (proc) handleLoadProcess(proc);
-                                  }
-                                  setAccountAssignments(prev => prev.map(asg =>
-                                    asg.account_id === a.id ? { ...asg, process_id: pid } : asg
-                                  ));
-                                }}
-                                className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                              >
-                                <option value="">Use form settings</option>
-                                {postProcesses.map(p => (
-                                  <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] text-gray-500 mb-1">Schedule</label>
-                              <input
-                                type="datetime-local"
-                                value={assignment?.scheduled_for ? toLocalDatetimeInput(assignment.scheduled_for) : ''}
-                                onChange={(e) => {
-                                  const val = e.target.value ? fromLocalDatetimeInput(e.target.value) : null;
-                                  setAccountAssignments(prev => prev.map(asg =>
-                                    asg.account_id === a.id ? { ...asg, scheduled_for: val } : asg
-                                  ));
-                                }}
-                                className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
               {/* Variation settings */}
               <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">What to Vary</h4>
@@ -1960,10 +1909,103 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 )}
               </div>
 
+              {/* Account Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Accounts to Post To
+                </label>
+                <p className="text-xs text-gray-500 mb-3">
+                  Check the accounts you want to create posts for. Each account can use a different saved process and schedule.
+                </p>
+                <div className="space-y-2">
+                  {accounts.map(a => {
+                    const isChecked = selectedAccountIds.includes(a.id);
+                    const assignment = accountAssignments.find(asg => asg.account_id === a.id);
+                    return (
+                      <div key={a.id} className={`rounded-lg border transition-colors ${
+                        isChecked ? 'border-pink-300 bg-pink-50/50 dark:bg-pink-900/10' : 'border-gray-200 dark:border-gray-700'
+                      }`}>
+                        <label className="flex items-center gap-3 p-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAccountIds(prev => [...prev, a.id]);
+                                const schedule = schedules.find(s => s.account_id === a.id);
+                                setAccountAssignments(prev => [...prev, {
+                                  account_id: a.id,
+                                  process_id: schedule?.default_process_id ?? null,
+                                  scheduled_for: null,
+                                }]);
+                              } else {
+                                setSelectedAccountIds(prev => prev.filter(id => id !== a.id));
+                                setAccountAssignments(prev => prev.filter(asg => asg.account_id !== a.id));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-pink-600"
+                          />
+                          {a.profile_picture_url ? (
+                            <img src={a.profile_picture_url} alt="" className="w-8 h-8 rounded-full" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                              <ImageIcon className="w-4 h-4 text-gray-400" />
+                            </div>
+                          )}
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">@{a.username || 'Unknown'}</span>
+                        </label>
+
+                        {/* Per-account process & schedule */}
+                        {isChecked && (
+                          <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-1">Process</label>
+                              <select
+                                value={assignment?.process_id ?? ''}
+                                onChange={(e) => {
+                                  const pid = e.target.value || null;
+                                  if (pid) {
+                                    const proc = postProcesses.find(p => p.id === pid);
+                                    if (proc) handleLoadProcess(proc);
+                                  }
+                                  setAccountAssignments(prev => prev.map(asg =>
+                                    asg.account_id === a.id ? { ...asg, process_id: pid } : asg
+                                  ));
+                                }}
+                                className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              >
+                                <option value="">Use form settings</option>
+                                {postProcesses.map(p => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-1">Schedule</label>
+                              <input
+                                type="datetime-local"
+                                value={assignment?.scheduled_for ? toLocalDatetimeInput(assignment.scheduled_for) : ''}
+                                onChange={(e) => {
+                                  const val = e.target.value ? fromLocalDatetimeInput(e.target.value) : null;
+                                  setAccountAssignments(prev => prev.map(asg =>
+                                    asg.account_id === a.id ? { ...asg, scheduled_for: val } : asg
+                                  ));
+                                }}
+                                className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Generate button */}
               <button
                 onClick={handleCreateBatch}
-                disabled={isGenerating || !baseCaption.trim()}
+                disabled={isGenerating || (!baseCaption.trim() && !selectedAccountIds.every(accId => accountAssignments.find(a => a.account_id === accId)?.process_id)) || selectedAccountIds.length === 0}
                 className="w-full px-6 py-3 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-2"
               >
                 {isGenerating ? (
@@ -1974,6 +2016,69 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                   <><Wand2 className="w-4 h-4" /> Generate Preview Variations</>
                 )}
               </button>
+
+              {/* Status panel */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+                <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Ready to Generate</h4>
+                <div className="space-y-1.5">
+                  {(() => {
+                    const checks: Array<{ label: string; done: boolean }> = [
+                      { label: 'Content in library', done: assets.length > 0 },
+                      { label: 'Base caption or process per account', done: baseCaption.trim() !== '' || selectedAccountIds.every(accId => accountAssignments.find(a => a.account_id === accId)?.process_id) },
+                      { label: 'At least one account selected', done: selectedAccountIds.length > 0 },
+                      { label: 'Carousel text (for multi-slide)', done: carouselSize === 1 || carouselTextLines.some(t => t.trim()) },
+                    ];
+                    return checks.map((c, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        {c.done ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 flex-shrink-0" />
+                        )}
+                        <span className={c.done ? 'text-gray-600 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}>
+                          {c.label}
+                        </span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+
+                {/* Unsaved changes warning */}
+                {loadedProcessId && (() => {
+                  const proc = postProcesses.find(p => p.id === loadedProcessId);
+                  if (!proc) return null;
+                  const currentHashtags = hashtagsText.split(/[,\n\s]+/).map(h => h.trim().replace(/^#/, '')).filter(h => h.length > 0).map(h => `#${h}`);
+                  const currentTextLines = carouselTextLines.map(t => t.trim()).filter(t => t.length > 0);
+                  const procTextLines = (proc.carousel_text_lines || []).filter(t => t.length > 0);
+                  const hasChanges =
+                    proc.content_type !== contentType ||
+                    proc.carousel_size !== carouselSize ||
+                    JSON.stringify(procTextLines) !== JSON.stringify(currentTextLines) ||
+                    proc.base_caption !== baseCaption ||
+                    JSON.stringify(proc.hashtags || []) !== JSON.stringify(currentHashtags) ||
+                    JSON.stringify(proc.variation_settings || {}) !== JSON.stringify({ caption: varyCaption, hashtags: varyHashtags, font: varyFont }) ||
+                    proc.randomize_content !== randomizeContent ||
+                    proc.prompt_mode !== promptMode ||
+                    (proc.prompt_id || null) !== (promptMode === 'select' ? selectedPromptId || null : null) ||
+                    (proc.custom_prompt || null) !== (promptMode === 'custom' ? customPrompt.trim() || null : null) ||
+                    JSON.stringify(proc.overlay_settings || {}) !== JSON.stringify(overlaySettings);
+                  if (!hasChanges) return null;
+                  return (
+                    <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">
+                      <span className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        Unsaved changes to "{proc.name}"
+                      </span>
+                      <button
+                        onClick={handleQuickUpdateProcess}
+                        className="px-2.5 py-1 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg flex items-center gap-1"
+                      >
+                        <Save className="w-3 h-3" /> Save changes
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
             </>
           )}
         </div>
