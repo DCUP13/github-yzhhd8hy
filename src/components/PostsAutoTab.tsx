@@ -1202,16 +1202,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const feedPosts = useMemo(() => {
     const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; carouselUrls: string[] | null; events: CommentEvent[]; hasComments: boolean; publishedAt: string | null }>();
 
-    // Build a set of live Instagram media IDs from the latest snapshot
+    // Seed with ALL posts from the latest Instagram snapshot (same data as stats tab)
     const latestSnapshot = snapshots[0] || null;
-    const liveMediaIds = new Set<string>();
-    if (latestSnapshot?.posts_data) {
-      for (const p of latestSnapshot.posts_data) {
-        if (p.media_id) liveMediaIds.add(p.media_id);
-      }
-    }
-
-    // Seed with ALL posts from the latest Instagram snapshot (not just app-posted ones)
     if (latestSnapshot?.posts_data) {
       for (const p of latestSnapshot.posts_data) {
         if (!p.media_id) continue;
@@ -1229,13 +1221,9 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       }
     }
 
-    // Merge in published variations (for posts made via the app — adds created_at if no snapshot)
+    // Merge in published variations (for posts made via the app — enriches feed)
     for (const pub of publishedPosts) {
       const key = pub.ig_media_id || pub.id;
-      if (liveMediaIds.size > 0 && pub.ig_media_id && !liveMediaIds.has(pub.ig_media_id)) {
-        // This variation's post is no longer on Instagram — skip it
-        continue;
-      }
       const existing = postMap.get(key);
       if (existing) {
         // Enrich with variation data if snapshot was missing fields
@@ -1249,8 +1237,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
         if (!existing.mediaType) existing.mediaType = pub.media_type || null;
         if (!existing.mediaPermalink) existing.mediaPermalink = pub.permalink;
         if (!existing.mediaCaption) existing.mediaCaption = pub.caption;
-      } else if (liveMediaIds.size === 0) {
-        // No snapshot available — include variation as fallback
+      } else {
+        // Not in snapshot — include as extra post
         const urls = pub.carousel_urls && pub.carousel_urls.length > 0 ? pub.carousel_urls : (pub.cloudfront_url ? [pub.cloudfront_url] : []);
         const igImageUrl = pub.media_image_url || urls[0] || null;
         postMap.set(key, {
@@ -1288,23 +1276,29 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
 
     const posts = Array.from(postMap.values());
+    // Filter based on mode, then sort
+    let filtered = posts;
     if (feedSortMode === 'comments') {
-      posts.sort((a, b) => b.events.length - a.events.length);
+      // Only show posts that have comments
+      filtered = posts.filter(p => p.hasComments);
+      filtered.sort((a, b) => b.events.length - a.events.length);
     } else if (feedSortMode === 'no-comments') {
-      posts.sort((a, b) => {
-        if (a.hasComments !== b.hasComments) return a.hasComments ? 1 : -1;
+      // Only show posts without comments
+      filtered = posts.filter(p => !p.hasComments);
+      filtered.sort((a, b) => {
         const aDate = a.publishedAt || a.events[0]?.created_at || '';
         const bDate = b.publishedAt || b.events[0]?.created_at || '';
         return bDate.localeCompare(aDate);
       });
     } else {
-      posts.sort((a, b) => {
+      // 'recent' — show all, sorted by most recent activity
+      filtered.sort((a, b) => {
         const aLast = a.events.reduce((max, e) => e.created_at > max ? e.created_at : max, a.publishedAt || '');
         const bLast = b.events.reduce((max, e) => e.created_at > max ? e.created_at : max, b.publishedAt || '');
         return bLast.localeCompare(aLast);
       });
     }
-    return posts;
+    return filtered;
   }, [commentEvents, publishedPosts, feedSortMode, snapshots]);
 
   function buildCommentThread(postEvents: CommentEvent[]) {
@@ -2731,8 +2725,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
             <>
               <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Sort:</span>
-                  {([['recent', 'Most recent'], ['comments', 'With comments'], ['no-comments', 'No comments']] as const).map(([mode, label]) => (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Filter:</span>
+                  {([['recent', 'All posts'], ['comments', 'With comments'], ['no-comments', 'No comments']] as const).map(([mode, label]) => (
                     <button
                       key={mode}
                       onClick={() => setFeedSortMode(mode)}
