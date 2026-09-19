@@ -269,6 +269,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   const [replyDialogCommentId, setReplyDialogCommentId] = useState<string | null>(null);
   const [replyDialogText, setReplyDialogText] = useState('');
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [publishedPosts, setPublishedPosts] = useState<Array<{ id: string; ig_media_id: string | null; permalink: string | null; caption: string; cloudfront_url: string | null; carousel_urls: string[] | null; account_id: string; created_at: string; is_test_post: boolean }>>([]);
+  const [feedSortMode, setFeedSortMode] = useState<'recent' | 'comments' | 'no-comments'>('recent');
 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -352,8 +354,22 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
   }, []);
 
-  const fetchPostProcesses = useCallback(async () => {
-    setIsLoadingProcesses(true);
+  const fetchPublishedPosts = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('instagram_post_variations')
+        .select('id, ig_media_id, permalink, caption, cloudfront_url, carousel_urls, account_id, created_at, is_test_post')
+        .eq('user_id', userId)
+        .eq('status', 'published')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setPublishedPosts(data || []);
+    } catch (error) {
+      console.error('Error fetching published posts:', error);
+    }
+  }, [userId]);
+
+  const fetchPostProcesses = useCallback(async () => {    setIsLoadingProcesses(true);
     try {
       const { data, error } = await supabase
         .from('instagram_post_processes')
@@ -505,6 +521,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     fetchBatches();
     fetchSchedules();
     fetchPostProcesses();
+    fetchPublishedPosts();
   }, [fetchAssets, fetchBatches, fetchSchedules, fetchPostProcesses]);
 
   useEffect(() => {
@@ -1134,25 +1151,63 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     });
   }, [carouselSize]);
 
-  // Feed: group comment events by post (media_id)
+  // Feed: merge comment events with published variations, group by post (media_id)
   const feedPosts = useMemo(() => {
-    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; events: CommentEvent[] }>();
+    const postMap = new Map<string, { mediaId: string; mediaType: string | null; mediaPermalink: string | null; mediaCaption: string | null; mediaImageUrl: string | null; events: CommentEvent[]; hasComments: boolean; publishedAt: string | null }>();
+
+    // Seed with published variations (posts that were posted via the auto-posting system)
+    for (const pub of publishedPosts) {
+      const key = pub.ig_media_id || pub.id;
+      if (!postMap.has(key)) {
+        const urls = pub.carousel_urls && pub.carousel_urls.length > 0 ? pub.carousel_urls : (pub.cloudfront_url ? [pub.cloudfront_url] : []);
+        postMap.set(key, {
+          mediaId: key,
+          mediaType: null,
+          mediaPermalink: pub.permalink,
+          mediaCaption: pub.caption,
+          mediaImageUrl: urls[0] || null,
+          events: [],
+          hasComments: false,
+          publishedAt: pub.created_at,
+        });
+      }
+    }
+
+    // Merge in comment events
     for (const event of commentEvents) {
       const key = event.media_id ?? event.id;
       const existing = postMap.get(key);
       if (existing) {
         existing.events.push(event);
+        existing.hasComments = true;
         if (event.media_image_url && !existing.mediaImageUrl) existing.mediaImageUrl = event.media_image_url;
+        if (event.media_type && !existing.mediaType) existing.mediaType = event.media_type;
+        if (event.media_permalink && !existing.mediaPermalink) existing.mediaPermalink = event.media_permalink;
+        if (event.media_caption && !existing.mediaCaption) existing.mediaCaption = event.media_caption;
       } else {
-        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, events: [event] });
+        postMap.set(key, { mediaId: key, mediaType: event.media_type, mediaPermalink: event.media_permalink, mediaCaption: event.media_caption, mediaImageUrl: event.media_image_url, events: [event], hasComments: true, publishedAt: null });
       }
     }
-    return Array.from(postMap.values()).sort((a, b) => {
-      const aLast = a.events.reduce((max, e) => e.created_at > max ? e.created_at : max, '');
-      const bLast = b.events.reduce((max, e) => e.created_at > max ? e.created_at : max, '');
-      return bLast.localeCompare(aLast);
-    });
-  }, [commentEvents]);
+
+    const posts = Array.from(postMap.values());
+    if (feedSortMode === 'comments') {
+      posts.sort((a, b) => b.events.length - a.events.length);
+    } else if (feedSortMode === 'no-comments') {
+      posts.sort((a, b) => {
+        if (a.hasComments !== b.hasComments) return a.hasComments ? 1 : -1;
+        const aDate = a.publishedAt || a.events[0]?.created_at || '';
+        const bDate = b.publishedAt || b.events[0]?.created_at || '';
+        return bDate.localeCompare(aDate);
+      });
+    } else {
+      posts.sort((a, b) => {
+        const aLast = a.events.reduce((max, e) => e.created_at > max ? e.created_at : max, a.publishedAt || '');
+        const bLast = b.events.reduce((max, e) => e.created_at > max ? e.created_at : max, b.publishedAt || '');
+        return bLast.localeCompare(aLast);
+      });
+    }
+    return posts;
+  }, [commentEvents, publishedPosts, feedSortMode]);
 
   function buildCommentThread(postEvents: CommentEvent[]) {
     const sorted = postEvents.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -2168,7 +2223,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       {subView === 'staging' && (
         <div>
           {batches.length > 1 && (
-            <div className="mb-4">
+            <div className="mb-4 flex items-center gap-3">
               <select
                 value={activeBatchId || ''}
                 onChange={(e) => { setActiveBatchId(e.target.value); fetchVariations(e.target.value); }}
@@ -2180,6 +2235,12 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                   </option>
                 ))}
               </select>
+              <button
+                onClick={() => { setActiveBatchId(null); setVariations([]); }}
+                className="px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Clear selection
+              </button>
             </div>
           )}
 
@@ -2495,13 +2556,30 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           {feedPosts.length === 0 ? (
             <div className="text-center py-12">
               <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No posts with comments yet</h3>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No published posts yet</h3>
               <p className="text-gray-500 dark:text-gray-400">
-                Comments on your posts and reels will appear here automatically. Click a post to expand and reply to comments.
+                Posts you publish through the auto-posting system will appear here, along with any comments they receive.
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Sort:</span>
+                {([['recent', 'Most recent'], ['comments', 'With comments'], ['no-comments', 'No comments']] as const).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    onClick={() => setFeedSortMode(mode)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                      feedSortMode === mode
+                        ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300'
+                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="space-y-4">
               {feedPosts.map((post) => {
                 const isExpanded = expandedPostId === post.mediaId;
                 const { topLevel, repliesByParent } = buildCommentThread(post.events);
@@ -2530,7 +2608,12 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           <span className="text-sm font-medium text-gray-900 dark:text-white">
                             {post.mediaType === 'REEL' ? 'Reel' : 'Post'}
                           </span>
-                          <span className="text-xs text-gray-400">{post.events.length} comment{post.events.length !== 1 ? 's' : ''}</span>
+                          <span className={`text-xs ${post.hasComments ? 'text-pink-500' : 'text-gray-400'}`}>
+                            {post.events.length} comment{post.events.length !== 1 ? 's' : ''}
+                          </span>
+                          {!post.hasComments && (
+                            <span className="text-[10px] text-gray-400 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">No comments</span>
+                          )}
                         </div>
                         {post.mediaCaption && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{post.mediaCaption}</p>
@@ -2577,6 +2660,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                             )}
                           </div>
                         )}
+                        {post.events.length === 0 ? (
+                          <div className="px-4 py-6 text-center">
+                            <p className="text-sm text-gray-400">No comments on this post yet.</p>
+                          </div>
+                        ) : (
                         <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
                         {topLevel.map((comment) => {
                           const commentReplies = repliesByParent.get(comment.comment_id ?? '') ?? [];
@@ -2672,12 +2760,14 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           );
                         })}
                         </div>
+                        )}
                       </div>
                     )}
                   </div>
                 );
               })}
-            </div>
+              </div>
+            </>
           )}
         </div>
       )}
