@@ -16,7 +16,7 @@ let cachedFont: Uint8Array | null = null;
 async function loadFont(): Promise<Uint8Array> {
   if (cachedFont) return cachedFont;
   const res = await fetch(
-    "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.ttf",
+    "https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-700-normal.ttf",
   );
   if (!res.ok) throw new Error(`Font download failed: ${res.status}`);
   cachedFont = new Uint8Array(await res.arrayBuffer());
