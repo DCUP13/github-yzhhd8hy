@@ -1276,29 +1276,27 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
     }
 
     const posts = Array.from(postMap.values());
-    // Filter based on mode, then sort
-    let filtered = posts;
+    // Sort based on mode — all posts stay visible, just reordered
     if (feedSortMode === 'comments') {
-      // Only show posts that have comments
-      filtered = posts.filter(p => p.hasComments);
-      filtered.sort((a, b) => b.events.length - a.events.length);
+      posts.sort((a, b) => {
+        if (a.hasComments !== b.hasComments) return a.hasComments ? -1 : 1;
+        return b.events.length - a.events.length;
+      });
     } else if (feedSortMode === 'no-comments') {
-      // Only show posts without comments
-      filtered = posts.filter(p => !p.hasComments);
-      filtered.sort((a, b) => {
+      posts.sort((a, b) => {
+        if (a.hasComments !== b.hasComments) return a.hasComments ? 1 : -1;
         const aDate = a.publishedAt || a.events[0]?.created_at || '';
         const bDate = b.publishedAt || b.events[0]?.created_at || '';
         return bDate.localeCompare(aDate);
       });
     } else {
-      // 'recent' — show all, sorted by most recent activity
-      filtered.sort((a, b) => {
+      posts.sort((a, b) => {
         const aLast = a.events.reduce((max, e) => e.created_at > max ? e.created_at : max, a.publishedAt || '');
         const bLast = b.events.reduce((max, e) => e.created_at > max ? e.created_at : max, b.publishedAt || '');
         return bLast.localeCompare(aLast);
       });
     }
-    return filtered;
+    return posts;
   }, [commentEvents, publishedPosts, feedSortMode, snapshots]);
 
   function buildCommentThread(postEvents: CommentEvent[]) {
@@ -2725,8 +2723,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
             <>
               <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Filter:</span>
-                  {([['recent', 'All posts'], ['comments', 'With comments'], ['no-comments', 'No comments']] as const).map(([mode, label]) => (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Sort:</span>
+                  {([['recent', 'Most recent'], ['comments', 'With comments'], ['no-comments', 'No comments']] as const).map(([mode, label]) => (
                     <button
                       key={mode}
                       onClick={() => setFeedSortMode(mode)}
@@ -2785,10 +2783,12 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           <span className="text-sm font-medium text-gray-900 dark:text-white">
                             {post.mediaType === 'REEL' ? 'Reel' : 'Post'}
                           </span>
-                          <span className={`text-xs ${post.hasComments ? 'text-pink-500' : 'text-gray-400'}`}>
-                            {post.events.length} comment{post.events.length !== 1 ? 's' : ''}
-                          </span>
-                          {!post.hasComments && (
+                          {post.hasComments ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/30 px-2 py-0.5 rounded-full">
+                              <MessageSquare className="w-3 h-3" />
+                              {post.events.length} comment{post.events.length !== 1 ? 's' : ''}
+                            </span>
+                          ) : (
                             <span className="text-[10px] text-gray-400 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">No comments</span>
                           )}
                         </div>
@@ -2854,23 +2854,19 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                 )}
                                 {carousel.length > 1 && (
                                   <>
-                                    {/* Navigation arrows */}
-                                    {currentIdx > 0 && (
-                                      <button
-                                        onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: Math.max(0, currentIdx - 1) }))}
-                                        className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 dark:bg-gray-800/80 flex items-center justify-center shadow-md hover:bg-white dark:hover:bg-gray-700 transition-colors"
-                                      >
-                                        <ChevronLeft className="w-5 h-5 text-gray-700 dark:text-gray-200" />
-                                      </button>
-                                    )}
-                                    {currentIdx < carousel.length - 1 && (
-                                      <button
-                                        onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: Math.min(carousel.length - 1, currentIdx + 1) }))}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 dark:bg-gray-800/80 flex items-center justify-center shadow-md hover:bg-white dark:hover:bg-gray-700 transition-colors"
-                                      >
-                                        <ChevronRight className="w-5 h-5 text-gray-700 dark:text-gray-200" />
-                                      </button>
-                                    )}
+                                    {/* Always-visible navigation arrows */}
+                                    <button
+                                      onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: currentIdx === 0 ? carousel.length - 1 : currentIdx - 1 }))}
+                                      className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center shadow-lg hover:bg-white dark:hover:bg-gray-700 hover:scale-110 active:scale-95 transition-all z-10"
+                                    >
+                                      <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+                                    </button>
+                                    <button
+                                      onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: currentIdx === carousel.length - 1 ? 0 : currentIdx + 1 }))}
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center shadow-lg hover:bg-white dark:hover:bg-gray-700 hover:scale-110 active:scale-95 transition-all z-10"
+                                    >
+                                      <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+                                    </button>
                                     {/* Slide counter */}
                                     <div className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 text-white text-xs font-medium">
                                       {currentIdx + 1} / {carousel.length}
@@ -2878,15 +2874,21 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                                   </>
                                 )}
                               </div>
-                              {/* Thumbnail dots for carousels */}
+                              {/* Thumbnail strip for carousels */}
                               {carousel.length > 1 && (
-                                <div className="flex justify-center gap-1.5 mt-2">
+                                <div className="flex justify-center gap-2 mt-2 overflow-x-auto pb-1">
                                   {carousel.map((url, idx) => (
                                     <button
                                       key={idx}
                                       onClick={() => setFeedCarouselIndex(prev => ({ ...prev, [post.mediaId]: idx }))}
-                                      className={`w-2 h-2 rounded-full transition-colors ${idx === currentIdx ? 'bg-pink-500' : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400'}`}
-                                    />
+                                      className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${idx === currentIdx ? 'border-pink-500 opacity-100 scale-105' : 'border-transparent opacity-50 hover:opacity-80'}`}
+                                    >
+                                      {post.mediaType === 'REEL' || post.mediaType === 'VIDEO' ? (
+                                        <video src={url} className="w-full h-full object-cover" preload="metadata" muted />
+                                      ) : (
+                                        <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                      )}
+                                    </button>
                                   ))}
                                 </div>
                               )}
