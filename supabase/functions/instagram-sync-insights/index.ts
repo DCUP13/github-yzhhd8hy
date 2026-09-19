@@ -528,8 +528,6 @@ Deno.serve(async (req: Request) => {
     }
 
     // 8. Sync feed: update published variations with real Instagram data, remove deleted posts
-    const liveMediaIds = new Set(mediaItems.map((m: any) => m.id));
-
     // Fetch all published variations for this account
     const { data: publishedVariations } = await supabaseClient
       .from("instagram_post_variations")
