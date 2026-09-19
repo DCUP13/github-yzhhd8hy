@@ -25,8 +25,9 @@ async function ensureWasmInit() {
 let cachedFont: Uint8Array | null = null;
 async function ensureFont(): Promise<Uint8Array> {
   if (cachedFont) return cachedFont;
-  const fontUrl = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.woff";
+  const fontUrl = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/files/inter-latin-700-normal.ttf";
   const fontResponse = await fetch(fontUrl);
+  if (!fontResponse.ok) throw new Error(`Failed to download font: ${fontResponse.status}`);
   cachedFont = new Uint8Array(await fontResponse.arrayBuffer());
   return cachedFont;
 }
@@ -156,20 +157,6 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
   return lines;
 }
 
-function buildOrientationTransform(orientation: number, w: number, h: number): string {
-  switch (orientation) {
-    case 1: return '';
-    case 2: return `transform="scale(-1,1) translate(${-w},0)"`;
-    case 3: return `transform="rotate(180 ${w / 2} ${h / 2})"`;
-    case 4: return `transform="scale(1,-1) translate(0,${-h})"`;
-    case 5: return `transform="rotate(90) scale(1,-1)"`;
-    case 6: return `transform="rotate(90 ${w / 2} ${h / 2}) translate(${(h - w) / 2},${(w - h) / 2})"`;
-    case 7: return `transform="rotate(-90) scale(-1,1)"`;
-    case 8: return `transform="rotate(-90 ${w / 2} ${h / 2}) translate(${(h - w) / 2},${(w - h) / 2})"`;
-    default: return '';
-  }
-}
-
 async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Array> {
   await ensureWasmInit();
   const fontData = await ensureFont();
@@ -181,40 +168,58 @@ async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Ar
   const base64Image = bytesToBase64(imageBuffer);
 
   const orientation = mimeType === 'image/jpeg' ? getExifOrientation(imageBuffer) : 1;
-  let { w, h } = getImageDimensions(imageBuffer, mimeType);
+  let { w: rawW, h: rawH } = getImageDimensions(imageBuffer, mimeType);
 
   const isRotated = orientation >= 5 && orientation <= 8;
-  if (isRotated) { const tmp = w; w = h; h = tmp; }
+  let canvasW = isRotated ? rawH : rawW;
+  let canvasH = isRotated ? rawW : rawH;
 
-  if (w > MAX_DIM || h > MAX_DIM) {
-    const scale = Math.min(MAX_DIM / w, MAX_DIM / h);
-    w = Math.round(w * scale);
-    h = Math.round(h * scale);
+  if (canvasW > MAX_DIM || canvasH > MAX_DIM) {
+    const scale = Math.min(MAX_DIM / canvasW, MAX_DIM / canvasH);
+    canvasW = Math.round(canvasW * scale);
+    canvasH = Math.round(canvasH * scale);
   }
 
-  const fontSize = Math.round(w * 0.06);
-  const maxCharsPerLine = Math.floor((w * 0.85) / (fontSize * 0.55));
+  const fontSize = Math.round(canvasW * 0.06);
+  const maxCharsPerLine = Math.floor((canvasW * 0.85) / (fontSize * 0.55));
   const lines = wrapText(text, maxCharsPerLine);
 
   const lineHeight = fontSize * 1.3;
   const totalTextHeight = lines.length * lineHeight;
-  const startY = h - totalTextHeight - Math.round(h * 0.08);
+  const startY = canvasH - totalTextHeight - Math.round(canvasH * 0.08);
   const bgPadding = Math.round(fontSize * 0.4);
   const bgRectY = startY - bgPadding;
   const bgRectHeight = totalTextHeight + bgPadding * 2;
 
   const textElements = lines.map((line, i) => {
     const y = Math.round(startY + (i * lineHeight) + fontSize * 0.65);
-    return `<text x="${Math.round(w / 2)}" y="${y}" font-family="Inter" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`;
+    return `<text x="${Math.round(canvasW / 2)}" y="${y}" font-family="Inter" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`;
   }).join('\n  ');
 
-  const origW = isRotated ? h : w;
-  const origH = isRotated ? w : h;
-  const orientationTransform = buildOrientationTransform(orientation, origW, origH);
+  let imageElement: string;
+  if (orientation === 1) {
+    imageElement = `<image href="data:${mimeType};base64,${base64Image}" width="${canvasW}" height="${canvasH}" preserveAspectRatio="xMidYMid meet"/>`;
+  } else {
+    const origW = rawW;
+    const origH = rawH;
+    const scaleX = canvasW / (isRotated ? origH : origW);
+    const scaleY = canvasH / (isRotated ? origW : origH);
+    let transform = '';
+    switch (orientation) {
+      case 2: transform = `scale(${-scaleX},${scaleY}) translate(${-origW},0)`; break;
+      case 3: transform = `scale(${scaleX},${scaleY}) rotate(180 ${origW / 2} ${origH / 2})`; break;
+      case 4: transform = `scale(${scaleX},${-scaleY}) translate(0,${-origH})`; break;
+      case 5: transform = `scale(${scaleY},${-scaleX}) rotate(90)`; break;
+      case 6: transform = `scale(${scaleY},${scaleX}) rotate(90)`; break;
+      case 7: transform = `scale(${-scaleY},${scaleX}) rotate(-90)`; break;
+      case 8: transform = `scale(${scaleY},${scaleX}) rotate(-90)`; break;
+    }
+    imageElement = `<g transform="${transform}"><image href="data:${mimeType};base64,${base64Image}" width="${origW}" height="${origH}"/></g>`;
+  }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-  <image href="data:${mimeType};base64,${base64Image}" width="${origW}" height="${origH}" ${orientationTransform}/>
-  <rect x="0" y="${Math.round(bgRectY)}" width="${w}" height="${Math.round(bgRectHeight)}" fill="black" fill-opacity="0.45"/>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasW}" height="${canvasH}" viewBox="0 0 ${canvasW} ${canvasH}">
+  ${imageElement}
+  <rect x="0" y="${Math.round(bgRectY)}" width="${canvasW}" height="${Math.round(bgRectHeight)}" fill="black" fill-opacity="0.45"/>
   ${textElements}
 </svg>`;
 
@@ -223,7 +228,6 @@ async function createOverlayPng(imageUrl: string, text: string): Promise<Uint8Ar
       fontFiles: [fontData],
       loadSystemFonts: false,
     },
-    fitTo: { mode: 'width', value: w },
   });
   const pngBuffer = resvg.render().asPng();
   return pngBuffer;
