@@ -1406,10 +1406,11 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
       await fetchPublishedPosts();
       if (onSynced) onSynced();
       const synced = data.feed_sync;
+      const commentsSynced = synced?.comments_synced ?? 0;
       if (synced && synced.removed > 0) {
-        toast.success(`Synced with Instagram — ${synced.updated} posts updated, ${synced.removed} removed (no longer on Instagram)`);
+        toast.success(`Synced with Instagram — ${synced.updated} posts updated, ${synced.removed} removed${commentsSynced > 0 ? `, ${commentsSynced} new comments pulled` : ''}`);
       } else {
-        toast.success(`Synced with Instagram — ${synced?.updated ?? 0} posts updated`);
+        toast.success(`Synced with Instagram — ${synced?.updated ?? 0} posts updated${commentsSynced > 0 ? `, ${commentsSynced} new comments pulled` : ''}`);
       }
     } catch {
       toast.error('Failed to sync with Instagram');
@@ -2918,7 +2919,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                         {post.events.length === 0 ? (
                           <div className="px-4 py-6 text-center">
                             {post.igCommentCount > 0 ? (
-                              <p className="text-sm text-gray-400">Instagram reports {post.igCommentCount} comment{post.igCommentCount !== 1 ? 's' : ''} on this post. Sync comments from the Inbox tab to view them here.</p>
+                              <p className="text-sm text-gray-400">Instagram reports {post.igCommentCount} comment{post.igCommentCount !== 1 ? 's' : ''} on this post. Click "Sync with Instagram" above to pull them into the feed.</p>
                             ) : (
                               <p className="text-sm text-gray-400">No comments on this post yet.</p>
                             )}

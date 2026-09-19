@@ -360,7 +360,100 @@ Deno.serve(async (req: Request) => {
         }, { onConflict: "user_id" });
     }
 
-    // 7. Sync feed: update published variations with real Instagram data, remove deleted posts
+    // 7. Pull comments from Instagram for posts that have them, so the feed
+    //    shows actual comment text — not just the count from the snapshot.
+    //    We only insert comments that aren't already in instagram_webhook_events
+    //    (deduplicated by event_id = comment_id).
+    let commentsSynced = 0;
+    const igPageScopedId = account.page_scoped_id ?? effectiveUserId;
+
+    for (const item of mediaItems) {
+      const commentsCount = item.comments_count ?? 0;
+      if (commentsCount === 0) continue;
+
+      try {
+        let commentsRes: Response;
+        const commentsUrl = `${baseUrl}/v21.0/${item.id}/comments?fields=id,text,from,timestamp,parent_id&limit=50`;
+        if (isInstagramToken(accessToken)) {
+          commentsRes = await fetch(commentsUrl, { headers: authHeaders(accessToken) });
+        } else {
+          commentsRes = await fetch(graphUrl(commentsUrl, accessToken));
+        }
+        if (!commentsRes.ok) continue;
+        const commentsBody = await commentsRes.json();
+        const comments: any[] = commentsBody.data ?? [];
+        if (comments.length === 0) continue;
+
+        // Fetch media meta once for this post so stored events have full context
+        const mediaMeta = {
+          media_type: item.media_type ?? null,
+          permalink: item.permalink ?? null,
+          caption: (item.caption ?? "").substring(0, 500),
+          media_image_url: item.thumbnail_url ?? item.media_url ?? null,
+        };
+
+        // Collect all comment IDs to check which ones already exist
+        const commentIds = comments.map((c: any) => c.id).filter(Boolean);
+        let existingIds = new Set<string>();
+        if (commentIds.length > 0) {
+          const { data: existing } = await supabaseClient
+            .from("instagram_webhook_events")
+            .select("event_id")
+            .in("event_id", commentIds)
+            .eq("event_type", "comment");
+          if (existing) {
+            for (const row of existing) {
+              if (row.event_id) existingIds.add(row.event_id);
+            }
+          }
+        }
+
+        const newRows: any[] = [];
+        for (const c of comments) {
+          if (!c.id || existingIds.has(c.id)) continue;
+          newRows.push({
+            user_id: account.user_id,
+            event_id: c.id,
+            event_type: "comment",
+            ig_user_id: igPageScopedId,
+            sender_id: c.from?.id ?? null,
+            sender_username: c.from?.username ?? null,
+            sender_name: null,
+            sender_profile_url: null,
+            media_id: item.id,
+            media_type: mediaMeta.media_type,
+            media_permalink: mediaMeta.permalink,
+            media_caption: mediaMeta.caption,
+            media_image_url: mediaMeta.media_image_url,
+            comment_id: c.id,
+            message_text: c.text ?? null,
+            direction: "incoming",
+            recipient_id: null,
+            raw_event: { synced_from_insights: true, comment: c },
+            parent_comment_id: c.parent_id ?? null,
+          });
+        }
+
+        if (newRows.length > 0) {
+          const { error: insertError } = await supabaseClient
+            .from("instagram_webhook_events")
+            .insert(newRows);
+          if (insertError) {
+            console.error("Error inserting synced comments:", insertError);
+          } else {
+            commentsSynced += newRows.length;
+          }
+        }
+      } catch (err) {
+        console.error(`Error fetching comments for media ${item.id}:`, err);
+      }
+    }
+
+    if (commentsSynced > 0) {
+      console.log(`Synced ${commentsSynced} new comments from Instagram`);
+    }
+
+    // 8. Sync feed: update published variations with real Instagram data, remove deleted posts
     const liveMediaIds = new Set(mediaItems.map((m: any) => m.id));
 
     // Fetch all published variations for this account
@@ -438,6 +531,7 @@ Deno.serve(async (req: Request) => {
       feed_sync: {
         updated: toUpdate.length,
         removed: toDelete.length,
+        comments_synced: commentsSynced,
       },
     }), {
       status: 200,
