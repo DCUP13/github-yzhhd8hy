@@ -2765,7 +2765,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                   </button>
                 )}
               </div>
-              <div className="space-y-4">
+              <div className="space-y-4 max-w-full overflow-x-hidden">
               {feedPosts.map((post) => {
                 const isExpanded = expandedPostId === post.mediaId;
                 const { topLevel, repliesByParent } = buildCommentThread(post.events);
@@ -2861,8 +2861,8 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                           const currentUrl = carousel[Math.min(currentIdx, carousel.length - 1)];
                           const isVideo = post.mediaType === 'REEL' || post.mediaType === 'VIDEO';
                           return (
-                            <div className="px-4 pt-3 pb-2">
-                              <div className="relative rounded-lg overflow-hidden bg-black">
+                            <div className="px-4 pt-3 pb-2 max-w-full overflow-x-hidden">
+                              <div className="relative rounded-lg overflow-hidden bg-black max-w-full">
                                 {isVideo ? (
                                   <video
                                     src={currentUrl}
