@@ -637,6 +637,50 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       const result = await response.json();
 
+      // Apply text overlays — one image per function call to stay within CPU limits
+      const { data: newVariations } = await supabase
+        .from('instagram_post_variations')
+        .select('id, carousel_urls, carousel_texts')
+        .eq('batch_id', batch.id);
+
+      if (newVariations) {
+        for (const v of newVariations) {
+          const urls = [...(v.carousel_urls || [])];
+          let anyOverlay = false;
+          for (let i = 0; i < urls.length; i++) {
+            const slideText = (v.carousel_texts?.[i] || '').trim();
+            if (!slideText) continue;
+            try {
+              const overlayResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overlay-text-on-image`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                  apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+                },
+                body: JSON.stringify({ source_url: urls[i], text: slideText }),
+              });
+              if (overlayResponse.ok) {
+                const overlayData = await overlayResponse.json();
+                urls[i] = overlayData.cloudfront_url;
+                anyOverlay = true;
+              } else {
+                const err = await overlayResponse.json().catch(() => ({}));
+                console.error(`Overlay failed for variation ${v.id} slide ${i}:`, err.error);
+              }
+            } catch (e) {
+              console.error(`Overlay error for variation ${v.id} slide ${i}:`, e);
+            }
+          }
+          if (anyOverlay) {
+            await supabase
+              .from('instagram_post_variations')
+              .update({ carousel_urls: urls, cloudfront_url: urls[0], updated_at: new Date().toISOString() })
+              .eq('id', v.id);
+          }
+        }
+      }
+
       if (postNow && result.publish_variation_ids?.length > 0) {
         toast.success(`${result.variations_created} variations generated. Publishing now...`);
 
