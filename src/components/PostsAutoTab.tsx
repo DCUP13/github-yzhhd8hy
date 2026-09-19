@@ -1842,60 +1842,58 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
               </div>
 
               {/* Prompt mode selector */}
-              {varyCaption && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Caption Variation Prompt
-                  </label>
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      onClick={() => setPromptMode('none')}
-                      className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'none' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
-                    >
-                      No AI
-                    </button>
-                    <button
-                      onClick={() => setPromptMode('select')}
-                      className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'select' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
-                    >
-                      Select from saved
-                    </button>
-                    <button
-                      onClick={() => setPromptMode('custom')}
-                      className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'custom' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
-                    >
-                      Type custom prompt
-                    </button>
-                  </div>
-
-                  {promptMode === 'select' && (
-                    <select
-                      value={selectedPromptId}
-                      onChange={(e) => setSelectedPromptId(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="">Select a prompt...</option>
-                      {availablePrompts.map(p => (
-                        <option key={p.id} value={p.id}>{p.title}</option>
-                      ))}
-                    </select>
-                  )}
-
-                  {promptMode === 'custom' && (
-                    <textarea
-                      value={customPrompt}
-                      onChange={(e) => setCustomPrompt(e.target.value)}
-                      rows={4}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="Type your own prompt for AI caption variation. Use {{original_caption}}, {{account_name}}, {{hashtags}}, {{transcript}} as placeholders."
-                    />
-                  )}
-
-                  {promptMode === 'none' && (
-                    <p className="text-xs text-gray-500">Captions will only be varied by shuffling words mechanically, no AI.</p>
-                  )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Caption Variation Prompt
+                </label>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setPromptMode('none')}
+                    className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'none' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                  >
+                    No AI
+                  </button>
+                  <button
+                    onClick={() => setPromptMode('select')}
+                    className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'select' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                  >
+                    Select from saved
+                  </button>
+                  <button
+                    onClick={() => setPromptMode('custom')}
+                    className={`px-3 py-1.5 text-xs rounded-lg ${promptMode === 'custom' ? 'bg-pink-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                  >
+                    Type custom prompt
+                  </button>
                 </div>
-              )}
+
+                {promptMode === 'select' && (
+                  <select
+                    value={selectedPromptId}
+                    onChange={(e) => setSelectedPromptId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Select a prompt...</option>
+                    {availablePrompts.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                )}
+
+                {promptMode === 'custom' && (
+                  <textarea
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Type your own prompt for AI caption variation. Use {{original_caption}}, {{account_name}}, {{hashtags}}, {{transcript}} as placeholders."
+                  />
+                )}
+
+                {promptMode === 'none' && (
+                  <p className="text-xs text-gray-500">Captions will only be varied by shuffling words mechanically, no AI.</p>
+                )}
+              </div>
 
               {/* Post now toggle */}
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
