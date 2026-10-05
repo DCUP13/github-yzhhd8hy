@@ -1187,77 +1187,63 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         {/* Tabs */}
         <div className="mb-6">
           <div className="border-b border-gray-200 dark:border-gray-700">
-            <nav className="flex space-x-8 overflow-x-auto">
+            <nav className="flex flex-wrap gap-2 py-3">
               <button
                 onClick={() => handleTabChange('inbox')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'inbox' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${activeTab === 'inbox' ? 'bg-pink-500 text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
               >
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  Inbox ({events.length})
-                  {newEventCount > 0 && activeTab !== 'inbox' && (
-                    <span className="flex items-center justify-center min-w-[18px] h-4 px-1 text-xs font-semibold text-white bg-red-500 rounded-full">{newEventCount}</span>
-                  )}
-                </div>
+                <MessageSquare className="w-4 h-4" />
+                Inbox ({events.length})
+                {newEventCount > 0 && activeTab !== 'inbox' && (
+                  <span className="flex items-center justify-center min-w-[18px] h-4 px-1 text-xs font-semibold text-white bg-red-500 rounded-full">{newEventCount}</span>
+                )}
               </button>
               <button
                 onClick={() => handleTabChange('posts')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'posts' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${activeTab === 'posts' ? 'bg-pink-500 text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
               >
-                <div className="flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4" />
-                  Posts ({posts.length})
-                </div>
+                <ImageIcon className="w-4 h-4" />
+                Posts ({posts.length})
               </button>
               <button
                 onClick={() => handleTabChange('stats')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'stats' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${activeTab === 'stats' ? 'bg-pink-500 text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
               >
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4" />
-                  Stats
-                </div>
+                <BarChart3 className="w-4 h-4" />
+                Stats
               </button>
               <button
                 onClick={() => handleTabChange('rules')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'rules' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${activeTab === 'rules' ? 'bg-pink-500 text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
               >
-                <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4" />
-                  Auto Rules ({rules.length})
-                </div>
+                <Zap className="w-4 h-4" />
+                Auto Rules ({rules.length})
               </button>
               {accounts.some(a => a.id === selectedAccountId) && (
                 <button
                   onClick={() => handleTabChange('flows')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'flows' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${activeTab === 'flows' ? 'bg-pink-500 text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <GitBranch className="w-4 h-4" />
-                    Flows
-                  </div>
+                  <GitBranch className="w-4 h-4" />
+                  Flows
                 </button>
               )}
               {accounts.some(a => a.id === selectedAccountId) && (
                 <button
                   onClick={() => handleTabChange('autoresponder')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'autoresponder' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${activeTab === 'autoresponder' ? 'bg-pink-500 text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <Bot className="w-4 h-4" />
-                    AI Autoresponder
-                  </div>
+                  <Bot className="w-4 h-4" />
+                  AI Autoresponder
                 </button>
               )}
               {accounts.some(a => a.id === selectedAccountId) && (
                 <button
                   onClick={() => handleTabChange('sharing')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'sharing' ? 'border-pink-500 text-pink-600 dark:text-pink-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${activeTab === 'sharing' ? 'bg-pink-500 text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <Share2 className="w-4 h-4" />
-                    Sharing
-                  </div>
+                  <Share2 className="w-4 h-4" />
+                  Sharing
                 </button>
               )}
             </nav>
