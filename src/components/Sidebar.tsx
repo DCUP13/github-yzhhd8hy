@@ -1,4 +1,4 @@
-import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram, Headphones, X } from 'lucide-react';
+import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram, Linkedin, Headphones, X } from 'lucide-react';
 import type { FeatureFlags } from '../App';
 import type { AppView } from '../lib/router';
 
@@ -70,6 +70,11 @@ export function Sidebar({
         {(featureFlags?.instagram || isSuperAdmin) && (
           <button onClick={() => onNavigate('instagram')} className={navButtonClass(currentView === 'instagram')}>
             <Instagram className="w-4 h-4 flex-shrink-0" /> Instagram
+          </button>
+        )}
+        {(featureFlags?.linkedin || isSuperAdmin) && (
+          <button onClick={() => onNavigate('linkedin')} className={navButtonClass(currentView === 'linkedin')}>
+            <Linkedin className="w-4 h-4 flex-shrink-0" /> LinkedIn
           </button>
         )}
         <button onClick={() => onNavigate('analytics')} className={navButtonClass(currentView === 'analytics')}>
