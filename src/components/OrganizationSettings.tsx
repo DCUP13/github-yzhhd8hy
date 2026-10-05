@@ -304,7 +304,7 @@ export default function OrganizationSettings({ orgId, onClose, onSaved }: Organi
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-        <div className="app-card rounded-xl p-8 max-w-2xl w-full mx-4 shadow-xl">
+        <div className="app-card rounded-xl p-4 sm:p-6 lg:p-8 max-w-2xl w-full mx-4 shadow-xl">
           <div className="text-center text-gray-600 dark:text-gray-300">Loading...</div>
         </div>
       </div>
@@ -314,7 +314,7 @@ export default function OrganizationSettings({ orgId, onClose, onSaved }: Organi
   if (error && !organization) {
     return (
       <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-        <div className="app-card rounded-xl p-8 max-w-2xl w-full mx-4 shadow-xl">
+        <div className="app-card rounded-xl p-4 sm:p-6 lg:p-8 max-w-2xl w-full mx-4 shadow-xl">
           <div className="text-red-600 dark:text-red-400 mb-4">{error}</div>
           <button
             onClick={onClose}
@@ -331,7 +331,7 @@ export default function OrganizationSettings({ orgId, onClose, onSaved }: Organi
     <div className="fixed inset-0 bg-black/60 flex items-start justify-center z-50 overflow-y-auto py-4 px-4">
       <div className="app-card rounded-xl shadow-xl w-full max-w-2xl my-auto">
         {/* Header */}
-        <div className="flex justify-between items-center px-8 pt-8 pb-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex justify-between items-center px-4 sm:px-8 pt-4 sm:pt-8 pb-6 flex-wrap gap-3 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Building2 className="w-5 h-5" />
             Organization Settings
@@ -412,7 +412,7 @@ export default function OrganizationSettings({ orgId, onClose, onSaved }: Organi
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 flex items-center gap-1.5">
                   <Briefcase className="w-4 h-4" />
@@ -460,7 +460,7 @@ export default function OrganizationSettings({ orgId, onClose, onSaved }: Organi
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 flex items-center gap-1.5">
                   <Globe className="w-4 h-4" />
@@ -528,7 +528,7 @@ export default function OrganizationSettings({ orgId, onClose, onSaved }: Organi
               <div className="mb-3 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-sm">{domainSuccess}</div>
             )}
 
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-4 flex-wrap">
               <input
                 type="text"
                 value={newOrgDomain}

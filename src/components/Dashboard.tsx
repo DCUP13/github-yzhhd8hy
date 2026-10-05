@@ -202,8 +202,8 @@ export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: Dashb
   };
 
   return (
-    <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
-      <div className="max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+      <div className="max-w-5xl mx-auto w-full min-w-0">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
           {onNavigateAnalytics && (

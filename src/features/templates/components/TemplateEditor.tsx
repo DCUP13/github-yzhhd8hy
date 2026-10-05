@@ -85,7 +85,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
       </div>
       
       <div className="flex-1 p-6 overflow-auto">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto w-full min-w-0">
           {template.imported && !isDocx ? (
             <FilePreview format={template.format} content={template.content} />
           ) : (

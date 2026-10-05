@@ -1051,7 +1051,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -1059,8 +1059,8 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
   if (allAccounts.length === 0) {
     return (
-      <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
-        <div className="max-w-3xl mx-auto text-center py-16">
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen">
+        <div className="max-w-3xl mx-auto w-full min-w-0 text-center py-16">
           <InstagramIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">No Instagram Accounts Connected</h1>
           <p className="text-gray-500 dark:text-gray-400 mb-6">Go to Settings to connect your Instagram Business or Creator account.</p>
@@ -2258,7 +2258,7 @@ function StatsTab({ selectedAccount, snapshots, isRefreshing, lastSync, onSync }
       {/* Overview stat cards */}
       <div>
         <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Overview</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard title="Followers" value={fmt(latestSnapshot?.followers_count ?? selectedAccount?.followers_count)} icon={Users} color="text-pink-500" bg="bg-pink-100 dark:bg-pink-900/20" />
           <StatCard title="Following" value={fmt(latestSnapshot?.follows_count ?? selectedAccount?.follows_count)} icon={User} color="text-blue-500" bg="bg-blue-100 dark:bg-blue-900/20" />
           <StatCard title="Total Posts" value={fmt(latestSnapshot?.media_count ?? selectedAccount?.media_count)} icon={ImageIcon} color="text-green-500" bg="bg-green-100 dark:bg-green-900/20" />
@@ -2269,7 +2269,7 @@ function StatsTab({ selectedAccount, snapshots, isRefreshing, lastSync, onSync }
       {/* Reach & impressions */}
       <div>
         <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Reach & Impressions</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <StatCard title="Total Reach" value={fmt(latestSnapshot?.account_reach)} icon={Eye} color="text-cyan-500" bg="bg-cyan-100 dark:bg-cyan-900/20" />
           <StatCard title="Total Impressions" value={fmt(latestSnapshot?.account_impressions)} icon={BarChart3} color="text-teal-500" bg="bg-teal-100 dark:bg-teal-900/20" />
         </div>

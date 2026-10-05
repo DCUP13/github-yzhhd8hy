@@ -735,15 +735,15 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-white dark:bg-gray-900 flex items-center justify-center min-h-screen">
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 flex items-center justify-center min-h-screen overflow-x-hidden">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="p-8 bg-white dark:bg-gray-900">
-      <div className="max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 overflow-x-hidden">
+      <div className="max-w-5xl mx-auto w-full min-w-0">
         {!currentCampaign ? (
           <>
             <div className="flex items-center justify-between mb-6">
@@ -1000,7 +1000,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                         {currentCampaign.city}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             State
@@ -1254,7 +1254,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Sender City
@@ -1340,7 +1340,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Offer Price
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <select
                         value={currentCampaign.offerPriceType}
                         onChange={(e) => handleUpdateCampaign({ offerPriceType: e.target.value as 'percentage' | 'fixed' })}
@@ -1375,7 +1375,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                 <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Email Sending Schedule</h2>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         <Clock className="w-4 h-4 inline mr-1" />

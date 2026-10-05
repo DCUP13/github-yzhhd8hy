@@ -277,7 +277,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -294,15 +294,15 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
   ];
 
   return (
-    <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
-      <div className="max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+      <div className="max-w-6xl mx-auto w-full min-w-0">
         {/* Email Analytics Section */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Email Analytics</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Filter className="w-4 h-4 text-gray-400" />
             {(['today', '7d', '30d'] as Period[]).map(p => (
               <button
@@ -324,7 +324,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
         <div className="mb-2">
           <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Volume</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {statCards.map((card, i) => {
             const Icon = card.icon;
             return (
@@ -343,7 +343,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
         <div className="mb-2">
           <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Rates</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           {rateCards.map((card, i) => {
             const Icon = card.icon;
             return (
@@ -444,7 +444,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
 
         {/* Instagram Analytics Section */}
         <div className="border-t border-gray-200 dark:border-gray-700 pt-8 mb-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <InstagramIcon className="w-6 h-6 text-pink-600 dark:text-pink-400" />
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Instagram Analytics</h1>
@@ -514,7 +514,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
           ) : (
             <>
               {/* Instagram stat cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 {igStatCards.map((card, i) => {
                   const Icon = card.icon;
                   return (

@@ -1002,7 +1002,7 @@ function InlineStepEditor({
       </div>
 
       {/* Link + Media in a row */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <div>
           <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
             <span className="flex items-center gap-1"><LinkIcon className="w-3 h-3" /> Link URL</span>

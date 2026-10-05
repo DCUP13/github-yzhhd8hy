@@ -35,7 +35,7 @@ export function ContactPage({ currentRoute, onNavigate }: ContactPageProps) {
   return (
     <PublicLayout currentRoute={currentRoute} onNavigate={onNavigate}>
       <section className="pt-20 pb-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-4xl mx-auto text-center w-full min-w-0">
           <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
             Contact
           </p>
@@ -52,10 +52,10 @@ export function ContactPage({ currentRoute, onNavigate }: ContactPageProps) {
       </section>
 
       <section className="py-14 px-4 sm:px-6 bg-om-parchment">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="max-w-5xl mx-auto w-full min-w-0 grid grid-cols-1 lg:grid-cols-3 gap-12">
           {/* Form */}
           <div className="lg:col-span-2">
-            <div className="bg-om-cream border border-om-tan rounded-xl p-8">
+            <div className="bg-om-cream border border-om-tan rounded-xl p-4 sm:p-6 lg:p-8">
               {status === 'success' ? (
                 <div className="text-center py-12">
                   <div className="w-16 h-16 rounded-full bg-om-forest/10 border border-om-forest/30 flex items-center justify-center mx-auto mb-6">

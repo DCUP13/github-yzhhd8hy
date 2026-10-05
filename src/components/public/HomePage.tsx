@@ -39,7 +39,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
     <PublicLayout currentRoute={currentRoute} onNavigate={onNavigate}>
       {/* Hero */}
       <section className="pt-20 pb-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+        <div className="max-w-7xl mx-auto w-full min-w-0 grid lg:grid-cols-2 gap-12 items-center">
           <div className="text-center lg:text-left">
             <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
               AI-Powered Real Estate Outreach
@@ -72,7 +72,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
 
           {/* Platform Preview Card */}
           <div className="relative">
-            <div className="bg-om-parchment border border-om-tan rounded-xl p-8 shadow-lg">
+            <div className="bg-om-parchment border border-om-tan rounded-xl p-4 sm:p-6 lg:p-8 shadow-lg">
               <p className="text-sm md:text-base font-medium text-om-brown uppercase tracking-widest mb-5">
                 Platform Preview
               </p>
@@ -100,7 +100,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
 
       {/* Stats */}
       <section className="py-14 px-4 sm:px-6 bg-om-forest-deep">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="max-w-7xl mx-auto w-full min-w-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat) => (
             <div key={stat.title} className="border border-om-forest rounded-xl p-6">
               <h3 className="text-xl md:text-2xl font-display font-semibold text-om-gold mb-3">{stat.title}</h3>
@@ -117,7 +117,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
 
       {/* Features Preview */}
       <section className="py-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto w-full min-w-0">
           <div className="text-center mb-12">
             <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
               Features
@@ -139,7 +139,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
               return (
                 <div
                   key={feature.title}
-                  className="bg-om-parchment border border-om-tan rounded-xl p-8 hover:shadow-lg transition-shadow"
+                  className="bg-om-parchment border border-om-tan rounded-xl p-4 sm:p-6 lg:p-8 hover:shadow-lg transition-shadow"
                 >
                   <div className="w-12 h-12 rounded-lg bg-om-cream border border-om-tan/30 flex items-center justify-center mb-5">
                     <Icon className="w-6 h-6 text-om-gold" />
@@ -170,7 +170,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
 
       {/* How It Works */}
       <section className="py-14 px-4 sm:px-6 bg-om-parchment">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto w-full min-w-0">
           <div className="text-center mb-12">
             <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
               How It Works
@@ -204,7 +204,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
 
       {/* CTA */}
       <section className="py-14 px-4 sm:px-6 bg-om-forest">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-4xl mx-auto text-center w-full min-w-0">
           <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-parchment mb-6">
             Ready to Automate Your Outreach?
           </h2>

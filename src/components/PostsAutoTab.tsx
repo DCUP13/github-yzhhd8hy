@@ -1458,7 +1458,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
           <div
             onDragOver={(e) => { e.preventDefault(); }}
             onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length > 0) handleFileUpload(e.dataTransfer.files); }}
-            className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center hover:border-pink-400 dark:hover:border-pink-500 transition-colors cursor-pointer mb-6"
+            className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 sm:p-6 lg:p-8 text-center hover:border-pink-400 dark:hover:border-pink-500 transition-colors cursor-pointer mb-6"
             onClick={() => fileInputRef.current?.click()}
           >
             <input
@@ -1608,7 +1608,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
               <p className="text-gray-500 dark:text-gray-400">Upload images and videos to build your content library. The auto-poster will randomly select from here.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {filteredAssets.map(asset => (
                 <div
                   key={asset.id}
@@ -1667,7 +1667,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
 
       {/* Create Posts */}
       {subView === 'create' && (
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto w-full min-w-0 space-y-6">
           {assets.length === 0 ? (
             <div className="text-center py-12">
               <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -1934,7 +1934,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                 </div>
 
                 {/* Color pickers */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Text Color</label>
                     <div className="flex items-center gap-2">
@@ -2628,7 +2628,7 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Posts per day</label>
                         <input
