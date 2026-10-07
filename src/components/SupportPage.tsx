@@ -251,7 +251,7 @@ export function SupportPage({ onSignOut: _onSignOut, currentView: _currentView, 
 
   if (isInitializing) {
     return (
-      <div className="p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center overflow-x-hidden">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
       </div>
     );
@@ -266,8 +266,8 @@ export function SupportPage({ onSignOut: _onSignOut, currentView: _currentView, 
   const selectedConv = conversations.find(c => c.userId === selectedUserId);
 
   return (
-    <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
-      <div className="max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+      <div className="max-w-5xl mx-auto w-full min-w-0">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900/20">
             <Headphones className="w-6 h-6 text-blue-500" />

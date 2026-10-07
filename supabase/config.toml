@@ -42,3 +42,18 @@ verify_jwt = false
 
 [functions.instagram-autoresponder]
 verify_jwt = false
+
+[functions.linkedin-oauth-start]
+verify_jwt = true
+
+[functions.linkedin-oauth-callback]
+verify_jwt = false
+
+[functions.publish-linkedin-post]
+verify_jwt = true
+
+[functions.process-linkedin-queue]
+verify_jwt = false
+
+[functions.linkedin-sync-analytics]
+verify_jwt = true

@@ -53,7 +53,7 @@ export function AuthPage({ currentRoute, onNavigate }: AuthPageProps) {
   return (
     <PublicLayout currentRoute={currentRoute} onNavigate={onNavigate}>
       <section className="py-16 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="max-w-5xl mx-auto w-full min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           {/* Left side */}
           <div className="hidden lg:block">
             <h1 className="text-3xl md:text-4xl font-display font-bold text-om-forest-deep mb-4">
@@ -76,7 +76,7 @@ export function AuthPage({ currentRoute, onNavigate }: AuthPageProps) {
           </div>
 
           {/* Right side - form */}
-          <div className="bg-om-parchment border border-om-tan rounded-xl p-8 shadow-lg">
+          <div className="bg-om-parchment border border-om-tan rounded-xl p-4 sm:p-6 lg:p-8 shadow-lg">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-10 h-10 rounded-lg bg-om-forest flex items-center justify-center">
                 <LogIn className="w-5 h-5 text-om-cream" />

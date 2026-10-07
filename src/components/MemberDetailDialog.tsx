@@ -504,7 +504,7 @@ export function MemberDetailDialog({ memberId, memberName, memberEmail, organiza
                       <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                     </div>
                   ) : stats ? (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                         <div className="flex items-center gap-2 mb-1">
                           <Send className="w-4 h-4 text-blue-600 dark:text-blue-400" />

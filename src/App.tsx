@@ -10,6 +10,7 @@ import { Prompts } from './components/Prompts';
 import { Contacts } from './components/Contacts';
 import { Analytics } from './components/Analytics';
 import { Instagram } from './components/Instagram';
+import { LinkedIn } from './components/LinkedIn';
 import { TeamView as TeamPage } from './components/TeamPage';
 import { SupportPage } from './components/SupportPage';
 import { useUnreadChatCount } from './lib/useUnreadChatCount';
@@ -378,6 +379,13 @@ export default function App() {
                       <Instagram onSignOut={handleSignOut} currentView={appView} queryParams={queryParams} navigateToApp={navigateToApp} />
                     ) : (
                       <FeatureNotEnabled featureName="Instagram" />
+                    )
+                  )}
+                  {appView === 'linkedin' && (
+                    isSuperAdmin || featureFlags.linkedin ? (
+                      <LinkedIn onSignOut={handleSignOut} currentView={appView} queryParams={queryParams} navigateToApp={navigateToApp} />
+                    ) : (
+                      <FeatureNotEnabled featureName="LinkedIn" />
                     )
                   )}
                   {appView === 'team' && (

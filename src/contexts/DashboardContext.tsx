@@ -31,9 +31,38 @@ export interface EmailAnalytics {
   complainedCount: number;
 }
 
+export interface InstagramAccountDetail {
+  username: string;
+  followersCount: number;
+  profilePictureUrl: string | null;
+}
+
+export interface InstagramSummary {
+  accountCount: number;
+  totalFollowers: number;
+  totalReach: number;
+  totalImpressions: number;
+  avgEngagement: number;
+  accounts: InstagramAccountDetail[];
+}
+
+export interface LinkedInSummary {
+  accountCount: number;
+  totalImpressions: number;
+  totalUniqueImpressions: number;
+  totalReactions: number;
+  totalComments: number;
+  totalShares: number;
+  totalClicks: number;
+  avgEngagement: number;
+  postCount: number;
+}
+
 interface DashboardContextType {
   stats: DashboardStats;
   emailAnalytics: EmailAnalytics | null;
+  instagramSummary: InstagramSummary | null;
+  linkedinSummary: LinkedInSummary | null;
   refreshStats: () => Promise<void>;
 }
 
@@ -68,6 +97,27 @@ const emptyAnalytics: EmailAnalytics = {
   complainedCount: 0,
 };
 
+const emptyInstagramSummary: InstagramSummary = {
+  accountCount: 0,
+  totalFollowers: 0,
+  totalReach: 0,
+  totalImpressions: 0,
+  avgEngagement: 0,
+  accounts: [],
+};
+
+const emptyLinkedInSummary: LinkedInSummary = {
+  accountCount: 0,
+  totalImpressions: 0,
+  totalUniqueImpressions: 0,
+  totalReactions: 0,
+  totalComments: 0,
+  totalShares: 0,
+  totalClicks: 0,
+  avgEngagement: 0,
+  postCount: 0,
+};
+
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = useState<DashboardStats>({
     totalEmailsRemaining: 0,
@@ -78,6 +128,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     totalDomains: 0
   });
   const [emailAnalytics, setEmailAnalytics] = useState<EmailAnalytics | null>(null);
+  const [instagramSummary, setInstagramSummary] = useState<InstagramSummary | null>(null);
+  const [linkedinSummary, setLinkedInSummary] = useState<LinkedInSummary | null>(null);
 
   const fetchStats = async () => {
     try {
@@ -185,9 +237,128 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const fetchInstagramSummary = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: accounts } = await supabase
+        .from('instagram_accounts')
+        .select('id, username, followers_count, profile_picture_url')
+        .eq('user_id', user.id)
+        .eq('connected', true);
+
+      if (!accounts || accounts.length === 0) {
+        setInstagramSummary(emptyInstagramSummary);
+        return;
+      }
+
+      const accountIds = accounts.map(a => a.id);
+      const { data: snapshots } = await supabase
+        .from('instagram_insights_snapshots')
+        .select('account_id, followers_count, account_reach, account_impressions, engagement_rate')
+        .in('account_id', accountIds)
+        .order('created_at', { ascending: false });
+
+      const accountDetails: InstagramAccountDetail[] = accounts.map(a => ({
+        username: a.username || 'Unknown',
+        followersCount: a.followers_count ?? 0,
+        profilePictureUrl: a.profile_picture_url ?? null,
+      }));
+
+      if (!snapshots || snapshots.length === 0) {
+        setInstagramSummary({
+          ...emptyInstagramSummary,
+          accountCount: accounts.length,
+          totalFollowers: accountDetails.reduce((sum, a) => sum + a.followersCount, 0),
+          accounts: accountDetails,
+        });
+        return;
+      }
+
+      // Get latest snapshot per account
+      const seen = new Set<string>();
+      const latest: typeof snapshots = [];
+      for (const snap of snapshots) {
+        if (!seen.has(snap.account_id)) {
+          seen.add(snap.account_id);
+          latest.push(snap);
+        }
+      }
+
+      setInstagramSummary({
+        accountCount: latest.length,
+        totalFollowers: latest.reduce((sum, s) => sum + (s.followers_count ?? 0), 0),
+        totalReach: latest.reduce((sum, s) => sum + (s.account_reach ?? 0), 0),
+        totalImpressions: latest.reduce((sum, s) => sum + (s.account_impressions ?? 0), 0),
+        avgEngagement: latest.length > 0 ? latest.reduce((sum, s) => sum + (s.engagement_rate ?? 0), 0) / latest.length : 0,
+        accounts: accountDetails,
+      });
+    } catch (error) {
+      console.error('Error fetching Instagram summary:', error);
+    }
+  };
+
+  const fetchLinkedInSummary = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: accounts } = await supabase
+        .from('linkedin_accounts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('connected', true);
+
+      if (!accounts || accounts.length === 0) {
+        setLinkedInSummary(emptyLinkedInSummary);
+        return;
+      }
+
+      const accountIds = accounts.map(a => a.id);
+      const { data: snapshots } = await supabase
+        .from('linkedin_analytics_snapshots')
+        .select('post_urn, impressions, unique_impressions, likes, comments, shares, reactions_total, clicks, engagement_rate')
+        .in('account_id', accountIds)
+        .order('snapshot_time', { ascending: false })
+        .limit(200);
+
+      if (!snapshots || snapshots.length === 0) {
+        setLinkedInSummary({ ...emptyLinkedInSummary, accountCount: accounts.length });
+        return;
+      }
+
+      // Get latest snapshot per post
+      const seen = new Set<string>();
+      const latest: typeof snapshots = [];
+      for (const snap of snapshots) {
+        if (!seen.has(snap.post_urn)) {
+          seen.add(snap.post_urn);
+          latest.push(snap);
+        }
+      }
+
+      setLinkedInSummary({
+        accountCount: accounts.length,
+        totalImpressions: latest.reduce((sum, s) => sum + (s.impressions ?? 0), 0),
+        totalUniqueImpressions: latest.reduce((sum, s) => sum + (s.unique_impressions ?? 0), 0),
+        totalReactions: latest.reduce((sum, s) => sum + (s.reactions_total ?? s.likes ?? 0), 0),
+        totalComments: latest.reduce((sum, s) => sum + (s.comments ?? 0), 0),
+        totalShares: latest.reduce((sum, s) => sum + (s.shares ?? 0), 0),
+        totalClicks: latest.reduce((sum, s) => sum + (s.clicks ?? 0), 0),
+        avgEngagement: latest.length > 0 ? latest.reduce((sum, s) => sum + (s.engagement_rate ?? 0), 0) / latest.length : 0,
+        postCount: latest.length,
+      });
+    } catch (error) {
+      console.error('Error fetching LinkedIn summary:', error);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
     fetchEmailAnalytics();
+    fetchInstagramSummary();
+    fetchLinkedInSummary();
 
     const channel = supabase.channel('dashboard_stats')
       .on(
@@ -220,9 +391,13 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const value = {
     stats,
     emailAnalytics,
+    instagramSummary,
+    linkedinSummary,
     refreshStats: async () => {
       await fetchStats();
       await fetchEmailAnalytics();
+      await fetchInstagramSummary();
+      await fetchLinkedInSummary();
     }
   };
 

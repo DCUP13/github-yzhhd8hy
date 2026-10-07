@@ -336,15 +336,15 @@ export function TemplatesPage({ onSignOut: _onSignOut, currentView: _currentView
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center overflow-x-hidden">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
-      <div className="max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+      <div className="max-w-4xl mx-auto w-full min-w-0">
         {!currentTemplate && (
           <>
             <div className="flex items-center justify-between mb-6">

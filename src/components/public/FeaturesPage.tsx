@@ -82,7 +82,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
     <PublicLayout currentRoute={currentRoute} onNavigate={onNavigate}>
       {/* Hero */}
       <section className="pt-20 pb-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-4xl mx-auto text-center w-full min-w-0">
           <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
             Features
           </p>
@@ -100,7 +100,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
 
       {/* Core Features */}
       <section className="py-14 px-4 sm:px-6 bg-om-parchment">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto w-full min-w-0">
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-forest-deep mb-4">
               Core Platform
@@ -115,7 +115,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
               return (
                 <div
                   key={feature.title}
-                  className="bg-om-cream border border-om-tan rounded-xl p-8 hover:shadow-lg transition-shadow"
+                  className="bg-om-cream border border-om-tan rounded-xl p-4 sm:p-6 lg:p-8 hover:shadow-lg transition-shadow"
                 >
                   <div className="w-12 h-12 rounded-lg bg-om-parchment border border-om-tan/30 flex items-center justify-center mb-5">
                     <Icon className={`w-6 h-6 ${feature.iconColor}`} />
@@ -136,7 +136,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
 
       {/* How It Works - Pipeline */}
       <section className="py-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto w-full min-w-0">
           <div className="text-center mb-12">
             <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
               The Pipeline
@@ -170,7 +170,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
 
       {/* Additional Features */}
       <section className="py-14 px-4 sm:px-6 bg-om-parchment">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto w-full min-w-0">
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-forest-deep mb-4">
               And So Much More
@@ -198,7 +198,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
 
       {/* Integrations */}
       <section className="py-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto w-full min-w-0">
           <div className="text-center mb-10">
             <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-forest-deep mb-4">
               Integrated Capabilities
@@ -207,7 +207,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
               Connect the tools and services you already use — all in one place.
             </p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {integrations.map((integration) => {
               const Icon = integration.icon;
               return (
@@ -224,7 +224,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
 
       {/* CTA */}
       <section className="py-14 px-4 sm:px-6 bg-om-forest">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-4xl mx-auto text-center w-full min-w-0">
           <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-parchment mb-6">
             Start Automating Today
           </h2>

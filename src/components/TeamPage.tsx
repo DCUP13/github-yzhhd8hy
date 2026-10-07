@@ -723,7 +723,7 @@ function OrgTab({ orgId, currentUserId, currentRole, onMemberCountChange, onStar
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-4 md:px-8 py-6 space-y-8">
+      <div className="max-w-5xl mx-auto w-full min-w-0 px-4 md:px-8 py-6 space-y-8">
 
         {status && (
           <div className={`p-3 rounded-lg flex items-center gap-2 text-sm ${status.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'}`}>

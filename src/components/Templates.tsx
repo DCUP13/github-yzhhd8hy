@@ -279,15 +279,15 @@ export function Templates({ onSignOut, currentView }: TemplatesProps) {
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center overflow-x-hidden">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
-      <div className="max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+      <div className="max-w-6xl mx-auto w-full min-w-0">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -442,7 +442,7 @@ export function Templates({ onSignOut, currentView }: TemplatesProps) {
                         <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 capitalize">
                           {category} Fields
                         </h4>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {categoryFields.map(field => (
                             <button
                               key={field.name}

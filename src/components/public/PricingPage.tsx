@@ -43,7 +43,7 @@ export function PricingPage({ currentRoute, onNavigate }: PricingPageProps) {
     <PublicLayout currentRoute={currentRoute} onNavigate={onNavigate}>
       {/* Hero */}
       <section className="pt-20 pb-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-3xl mx-auto text-center">
+        <div className="max-w-3xl mx-auto text-center w-full min-w-0">
           <p className="text-om-gold text-sm font-medium tracking-widest uppercase mb-4">
             Investment
           </p>
@@ -58,10 +58,10 @@ export function PricingPage({ currentRoute, onNavigate }: PricingPageProps) {
 
       {/* Pricing Cards */}
       <section className="pb-20 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-6 items-start">
+        <div className="max-w-5xl mx-auto w-full min-w-0 grid md:grid-cols-2 gap-6 items-start">
 
           {/* Individual Card */}
-          <div className="bg-om-parchment border border-om-tan rounded-2xl p-8 flex flex-col">
+          <div className="bg-om-parchment border border-om-tan rounded-2xl p-4 sm:p-6 lg:p-8 flex flex-col">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-lg bg-om-cream border border-om-tan flex items-center justify-center flex-shrink-0">
                 <User className="w-5 h-5 text-om-forest" />
@@ -103,7 +103,7 @@ export function PricingPage({ currentRoute, onNavigate }: PricingPageProps) {
           </div>
 
           {/* Teams Card */}
-          <div className="bg-om-forest-deep border border-om-forest rounded-2xl p-8 flex flex-col relative">
+          <div className="bg-om-forest-deep border border-om-forest rounded-2xl p-4 sm:p-6 lg:p-8 flex flex-col relative">
             <div className="absolute top-5 right-5">
               <span className="text-xs font-semibold tracking-wide bg-om-parchment text-om-forest-deep px-3 py-1 rounded border border-om-tan">
                 Most Popular
@@ -159,7 +159,7 @@ export function PricingPage({ currentRoute, onNavigate }: PricingPageProps) {
 
       {/* CTA */}
       <section className="py-14 px-4 sm:px-6 bg-om-forest">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-4xl mx-auto text-center w-full min-w-0">
           <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-parchment mb-6">
             Still Have Questions?
           </h2>

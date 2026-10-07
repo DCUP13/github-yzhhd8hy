@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { BarChart3, Send, CheckCircle, Eye, MousePointer, MessageSquare, AlertCircle, TrendingUp, Calendar, Filter, Instagram as InstagramIcon, Users, Image as ImageIcon, Heart, Bookmark, Play, ChevronDown } from 'lucide-react';
+import { BarChart3, Send, CheckCircle, Eye, MousePointer, MessageSquare, AlertCircle, TrendingUp, Calendar, Filter, Instagram as InstagramIcon, Linkedin as LinkedinIcon, Users, Image as ImageIcon, Heart, Bookmark, Play, ChevronDown, ThumbsUp, Share2, Link2, RefreshCw, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
 
@@ -51,6 +51,32 @@ interface IgSnapshot {
   created_at: string;
 }
 
+interface LinkedInAccountRow {
+  id: string;
+  member_name: string;
+  profile_picture_url: string | null;
+  connected: boolean;
+}
+
+interface LinkedInSnapshot {
+  id: string;
+  account_id: string;
+  post_urn: string;
+  impressions: number | null;
+  unique_impressions: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  reactions_total: number | null;
+  clicks: number | null;
+  video_views: number | null;
+  engagement_rate: number | null;
+  post_permalink: string | null;
+  post_content: string | null;
+  snapshot_time: string;
+  created_at: string;
+}
+
 type Period = 'today' | '7d' | '30d';
 
 export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }: AnalyticsProps) {
@@ -65,6 +91,13 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
   const [selectedIgAccountId, setSelectedIgAccountId] = useState<string>('all');
   const [showIgDropdown, setShowIgDropdown] = useState(false);
   const [igLoading, setIgLoading] = useState(true);
+
+  // LinkedIn analytics state
+  const [liAccounts, setLiAccounts] = useState<LinkedInAccountRow[]>([]);
+  const [liSnapshots, setLiSnapshots] = useState<LinkedInSnapshot[]>([]);
+  const [liLoading, setLiLoading] = useState(true);
+  const [liSyncing, setLiSyncing] = useState(false);
+  const [liLastSync, setLiLastSync] = useState<string | null>(null);
 
   const fetchAnalytics = async () => {
     try {
@@ -123,10 +156,78 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
     }
   }, []);
 
+  const fetchLinkedInAnalytics = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: accounts } = await supabase
+        .from('linkedin_accounts')
+        .select('id, member_name, profile_picture_url, connected')
+        .eq('user_id', user.id)
+        .eq('connected', true)
+        .order('created_at', { ascending: true });
+
+      setLiAccounts(accounts || []);
+
+      if (accounts && accounts.length > 0) {
+        const accountIds = accounts.map(a => a.id);
+        const { data: snapshots } = await supabase
+          .from('linkedin_analytics_snapshots')
+          .select('*')
+          .in('account_id', accountIds)
+          .order('snapshot_time', { ascending: false })
+          .limit(200);
+
+        setLiSnapshots(snapshots || []);
+
+        if (snapshots && snapshots.length > 0) {
+          setLiLastSync(snapshots[0].snapshot_time);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching LinkedIn analytics:', error);
+    } finally {
+      setLiLoading(false);
+    }
+  }, []);
+
+  const handleSyncLinkedIn = async () => {
+    try {
+      setLiSyncing(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/linkedin-sync-analytics`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to sync LinkedIn analytics');
+      }
+
+      await fetchLinkedInAnalytics();
+    } catch (error) {
+      console.error('LinkedIn sync error:', error);
+    } finally {
+      setLiSyncing(false);
+    }
+  };
+
   useEffect(() => {
     fetchAnalytics();
     fetchInstagramAnalytics();
-  }, [fetchInstagramAnalytics]);
+    fetchLinkedInAnalytics();
+  }, [fetchInstagramAnalytics, fetchLinkedInAnalytics]);
 
   // Filter snapshots by selected account
   const filteredIgSnapshots = useMemo(() => {
@@ -256,6 +357,67 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
   const pct = (n: number) => `${n.toFixed(1)}%`;
   const fmt = (n: number) => n.toLocaleString();
 
+  // LinkedIn analytics: get latest snapshot per post
+  const liLatestPerPost = useMemo(() => {
+    const seen = new Set<string>();
+    const result: LinkedInSnapshot[] = [];
+    for (const snap of liSnapshots) {
+      if (!seen.has(snap.post_urn)) {
+        seen.add(snap.post_urn);
+        result.push(snap);
+      }
+    }
+    return result;
+  }, [liSnapshots]);
+
+  const liCombinedMetrics = useMemo(() => {
+    return {
+      totalImpressions: liLatestPerPost.reduce((sum, s) => sum + (s.impressions ?? 0), 0),
+      totalUniqueImpressions: liLatestPerPost.reduce((sum, s) => sum + (s.unique_impressions ?? 0), 0),
+      totalLikes: liLatestPerPost.reduce((sum, s) => sum + (s.likes ?? 0), 0),
+      totalComments: liLatestPerPost.reduce((sum, s) => sum + (s.comments ?? 0), 0),
+      totalShares: liLatestPerPost.reduce((sum, s) => sum + (s.shares ?? 0), 0),
+      totalReactions: liLatestPerPost.reduce((sum, s) => sum + (s.reactions_total ?? 0), 0),
+      totalClicks: liLatestPerPost.reduce((sum, s) => sum + (s.clicks ?? 0), 0),
+      totalVideoViews: liLatestPerPost.reduce((sum, s) => sum + (s.video_views ?? 0), 0),
+      avgEngagement: liLatestPerPost.length > 0 && liLatestPerPost.reduce((sum, s) => sum + (s.impressions ?? 0), 0) > 0
+        ? (liLatestPerPost.reduce((sum, s) => sum + (s.likes ?? 0) + (s.comments ?? 0) + (s.shares ?? 0) + (s.clicks ?? 0), 0) / liLatestPerPost.reduce((sum, s) => sum + (s.impressions ?? 0), 0)) * 100
+        : 0,
+      postCount: liLatestPerPost.length,
+    };
+  }, [liLatestPerPost]);
+
+  // LinkedIn trend data: total engagement per day from snapshots
+  const liTrendData = useMemo(() => {
+    const days: Record<string, { impressions: number; engagement: number }> = {};
+    const now = new Date();
+    const numDays = period === 'today' ? 1 : period === '7d' ? 7 : 30;
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      days[key] = { impressions: 0, engagement: 0 };
+    }
+    for (const snap of liSnapshots) {
+      const key = new Date(snap.snapshot_time).toISOString().split('T')[0];
+      if (days[key]) {
+        days[key].impressions += snap.impressions ?? 0;
+        days[key].engagement += (snap.likes ?? 0) + (snap.comments ?? 0) + (snap.shares ?? 0) + (snap.clicks ?? 0);
+      }
+    }
+    return Object.entries(days).map(([date, data]) => ({ date, ...data }));
+  }, [liSnapshots, period]);
+
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const maxTrendSent = Math.max(...trendData.map(d => d.sent), 1);
+
   const statCards = [
     { title: 'Total Sent', value: fmt(metrics.total), icon: Send, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
     { title: 'Delivered', value: fmt(metrics.delivered), icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
@@ -275,16 +437,6 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
     { title: 'Bounce Rate', value: pct(metrics.bounceRate), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/20' },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  const maxTrendSent = Math.max(...trendData.map(d => d.sent), 1);
-
   // Instagram stat cards
   const igStatCards = [
     { title: 'Followers', value: fmt(combinedMetrics.totalFollowers), icon: Users, color: 'text-pink-500', bg: 'bg-pink-100 dark:bg-pink-900/20' },
@@ -293,16 +445,29 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
     { title: 'Avg Engagement', value: pct(combinedMetrics.avgEngagement), icon: TrendingUp, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/20' },
   ];
 
+  const maxLiTrendImpressions = Math.max(...liTrendData.map(d => d.impressions), 1);
+
+  const liStatCards = [
+    { title: 'Impressions', value: fmt(liCombinedMetrics.totalImpressions), icon: Eye, color: 'text-[#0A66C2]', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+    { title: 'Unique Views', value: fmt(liCombinedMetrics.totalUniqueImpressions), icon: Users, color: 'text-teal-500', bg: 'bg-teal-100 dark:bg-teal-900/20' },
+    { title: 'Reactions', value: fmt(liCombinedMetrics.totalReactions), icon: ThumbsUp, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/20' },
+    { title: 'Comments', value: fmt(liCombinedMetrics.totalComments), icon: MessageSquare, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/20' },
+    { title: 'Shares', value: fmt(liCombinedMetrics.totalShares), icon: Share2, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
+    { title: 'Clicks', value: fmt(liCombinedMetrics.totalClicks), icon: MousePointer, color: 'text-cyan-500', bg: 'bg-cyan-100 dark:bg-cyan-900/20' },
+    { title: 'Video Views', value: fmt(liCombinedMetrics.totalVideoViews), icon: Play, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/20' },
+    { title: 'Engagement Rate', value: pct(liCombinedMetrics.avgEngagement), icon: TrendingUp, color: 'text-[#0A66C2]', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+  ];
+
   return (
-    <div className="p-8 bg-white dark:bg-gray-900 min-h-screen">
-      <div className="max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+      <div className="max-w-6xl mx-auto w-full min-w-0">
         {/* Email Analytics Section */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Email Analytics</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Filter className="w-4 h-4 text-gray-400" />
             {(['today', '7d', '30d'] as Period[]).map(p => (
               <button
@@ -324,7 +489,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
         <div className="mb-2">
           <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Volume</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {statCards.map((card, i) => {
             const Icon = card.icon;
             return (
@@ -343,7 +508,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
         <div className="mb-2">
           <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Rates</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           {rateCards.map((card, i) => {
             const Icon = card.icon;
             return (
@@ -444,7 +609,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
 
         {/* Instagram Analytics Section */}
         <div className="border-t border-gray-200 dark:border-gray-700 pt-8 mb-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <InstagramIcon className="w-6 h-6 text-pink-600 dark:text-pink-400" />
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Instagram Analytics</h1>
@@ -514,7 +679,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
           ) : (
             <>
               {/* Instagram stat cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 {igStatCards.map((card, i) => {
                   const Icon = card.icon;
                   return (
@@ -607,6 +772,212 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
                   ))}
                 </div>
               </div>
+            </>
+          )}
+        </div>
+
+        {/* LinkedIn Analytics Section */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-8 mb-6">
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <LinkedinIcon className="w-6 h-6 text-[#0A66C2]" />
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">LinkedIn Analytics</h1>
+            </div>
+            {liAccounts.length > 0 && (
+              <div className="flex items-center gap-3">
+                {liLastSync && (
+                  <span className="text-xs text-gray-400">Last sync: {new Date(liLastSync).toLocaleString()}</span>
+                )}
+                <button
+                  onClick={handleSyncLinkedIn}
+                  disabled={liSyncing}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#0A66C2] border border-[#0A66C2]/30 rounded-lg hover:bg-[#0A66C2]/5 transition-colors disabled:opacity-50"
+                >
+                  {liSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  Sync Analytics
+                </button>
+              </div>
+            )}
+          </div>
+
+          {liLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-[#0A66C2] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : liAccounts.length === 0 ? (
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-12 text-center">
+              <LinkedinIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No LinkedIn Accounts Connected</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">Connect a LinkedIn account to see analytics here.</p>
+              <button
+                onClick={() => navigateToApp('linkedin')}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#0A66C2] hover:bg-[#004182] rounded-lg"
+              >
+                Go to LinkedIn
+              </button>
+            </div>
+          ) : liLatestPerPost.length === 0 ? (
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-12 text-center">
+              <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No LinkedIn Analytics Data Yet</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">Sync your LinkedIn analytics to pull post engagement data.</p>
+              <button
+                onClick={handleSyncLinkedIn}
+                disabled={liSyncing}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#0A66C2] hover:bg-[#004182] rounded-lg disabled:opacity-50"
+              >
+                {liSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                Sync Now
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* LinkedIn stat cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                {liStatCards.map((card, i) => {
+                  const Icon = card.icon;
+                  return (
+                    <div key={i} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+                      <div className={`inline-flex p-2 rounded-lg ${card.bg} mb-3`}>
+                        <Icon className={`w-5 h-5 ${card.color}`} />
+                      </div>
+                      <p className="text-2xl font-semibold text-gray-900 dark:text-white">{card.value}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{card.title}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* LinkedIn trend chart */}
+              {liTrendData.some(d => d.impressions > 0) && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Impressions & Engagement Trend</h2>
+                  </div>
+                  <div className="flex items-end gap-1 h-40">
+                    {liTrendData.map((d, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                        <div className="w-full flex flex-col items-center justify-end h-full gap-0.5">
+                          <div
+                            className="w-full max-w-[24px] bg-[#0A66C2] rounded-t transition-all hover:bg-[#004182]"
+                            style={{ height: `${(d.impressions / maxLiTrendImpressions) * 70}%`, minHeight: d.impressions > 0 ? '4px' : '0' }}
+                            title={`Impressions: ${fmt(d.impressions)}`}
+                          />
+                          <div
+                            className="w-full max-w-[24px] bg-amber-400 rounded-t transition-all hover:bg-amber-500"
+                            style={{ height: `${(d.engagement / maxLiTrendImpressions) * 30}%`, minHeight: d.engagement > 0 ? '4px' : '0' }}
+                            title={`Engagement: ${fmt(d.engagement)}`}
+                          />
+                        </div>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(d.date).toLocaleDateString([], { month: 'numeric', day: 'numeric' })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-4 mt-4 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-[#0A66C2] rounded" /> Impressions</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-amber-400 rounded" /> Engagement</span>
+                  </div>
+                </div>
+              )}
+
+              {/* LinkedIn post performance table */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden mb-6">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                  <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Post Performance</h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                      <tr>
+                        <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Post</th>
+                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Impressions</th>
+                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Likes</th>
+                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Comments</th>
+                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Shares</th>
+                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Clicks</th>
+                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Engagement</th>
+                        <th className="text-right px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Snapshotted</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {liLatestPerPost.slice(0, 15).map((snap, i) => (
+                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                          <td className="px-6 py-3 text-gray-900 dark:text-white max-w-xs truncate">
+                            {snap.post_permalink ? (
+                              <a href={snap.post_permalink} target="_blank" rel="noopener noreferrer" className="text-[#0A66C2] hover:underline">
+                                {snap.post_content || '(no text)'}
+                              </a>
+                            ) : (
+                              snap.post_content || '(no text)'
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(snap.impressions ?? 0)}</td>
+                          <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(snap.likes ?? 0)}</td>
+                          <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(snap.comments ?? 0)}</td>
+                          <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(snap.shares ?? 0)}</td>
+                          <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(snap.clicks ?? 0)}</td>
+                          <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{pct(snap.engagement_rate ?? 0)}</td>
+                          <td className="px-6 py-3 text-right text-gray-400 text-xs">{new Date(snap.snapshot_time).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* LinkedIn per-post trend: show posts with multiple snapshots */}
+              {(() => {
+                const postsWithTrends = liSnapshots.reduce((acc, snap) => {
+                  if (!acc[snap.post_urn]) acc[snap.post_urn] = [];
+                  acc[snap.post_urn].push(snap);
+                  return acc;
+                }, {} as Record<string, LinkedInSnapshot[]>);
+                const multiSnapshotPosts = Object.entries(postsWithTrends)
+                  .filter(([, snaps]) => snaps.length > 1)
+                  .slice(0, 5);
+                if (multiSnapshotPosts.length === 0) return null;
+                return (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                      <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Post Trends Over Time</h2>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Tracking how engagement grows on your posts across syncs</p>
+                    </div>
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {multiSnapshotPosts.map(([urn, snaps]) => (
+                        <div key={urn} className="p-4">
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 line-clamp-1">
+                            {snaps[0].post_permalink ? (
+                              <a href={snaps[0].post_permalink} target="_blank" rel="noopener noreferrer" className="text-[#0A66C2] hover:underline">
+                                {snaps[0].post_content || '(no text)'}
+                              </a>
+                            ) : (
+                              snaps[0].post_content || '(no text)'
+                            )}
+                          </p>
+                          <div className="flex items-end gap-2 h-20">
+                            {[...snaps].reverse().map((s, i) => {
+                              const total = (s.likes ?? 0) + (s.comments ?? 0) + (s.shares ?? 0) + (s.clicks ?? 0);
+                              const maxTotal = Math.max(...[...snaps].reverse().map(x => (x.likes ?? 0) + (x.comments ?? 0) + (x.shares ?? 0) + (x.clicks ?? 0)), 1);
+                              return (
+                                <div key={i} className="flex flex-col items-center gap-1 flex-1">
+                                  <div className="w-full max-w-[40px] bg-[#0A66C2]/70 rounded-t hover:bg-[#0A66C2] transition-colors"
+                                    style={{ height: `${(total / maxTotal) * 60}px`, minHeight: total > 0 ? '4px' : '0' }}
+                                    title={`Engagement: ${fmt(total)}`}
+                                  />
+                                  <span className="text-[9px] text-gray-400">{new Date(s.snapshot_time).toLocaleDateString([], { month: 'numeric', day: 'numeric' })}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>

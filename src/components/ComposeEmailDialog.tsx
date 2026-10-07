@@ -238,7 +238,7 @@ export function ComposeEmailDialog({ onClose, onSend }: ComposeEmailDialogProps)
             <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden flex-1 flex flex-col m-4">
               {/* Header Fields */}
               <div className="p-4 space-y-4 flex-shrink-0 bg-gray-50 dark:bg-gray-700/30">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* From Field */}
                   <div>
                     <label htmlFor="fromEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

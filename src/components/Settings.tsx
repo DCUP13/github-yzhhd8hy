@@ -256,14 +256,14 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView, mem
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
+      <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center overflow-x-hidden">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="p-8 bg-gray-50 dark:bg-gray-900 min-h-screen">
+    <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900 min-h-screen overflow-x-hidden">
       <div className="max-w-2xl mx-auto">
         {isManagingMember && onBackToTeam && (
           <button

@@ -315,8 +315,8 @@ export function Contacts({ onSignOut: _onSignOut, currentView: _currentView }: C
   };
 
   return (
-    <div className="p-8 bg-gray-50 dark:bg-gray-900 min-h-screen">
-      <div className="max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900 min-h-screen overflow-x-hidden">
+      <div className="max-w-7xl mx-auto w-full min-w-0">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />

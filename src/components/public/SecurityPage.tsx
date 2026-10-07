@@ -82,7 +82,7 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
     <PublicLayout currentRoute={currentRoute} onNavigate={onNavigate}>
       {/* Hero */}
       <section className="pt-20 pb-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-4xl mx-auto text-center w-full min-w-0">
           <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
             Security
           </p>
@@ -100,11 +100,11 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
 
       {/* Security Measures */}
       <section className="py-14 px-4 sm:px-6 bg-om-parchment">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="max-w-7xl mx-auto w-full min-w-0 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {measures.map((measure) => {
             const Icon = measure.icon;
             return (
-              <div key={measure.title} className="bg-om-cream border border-om-tan rounded-xl p-8">
+              <div key={measure.title} className="bg-om-cream border border-om-tan rounded-xl p-4 sm:p-6 lg:p-8">
                 <div className="w-12 h-12 rounded-lg bg-om-parchment border border-om-tan/30 flex items-center justify-center mb-5">
                   <Icon className="w-6 h-6 text-om-forest" />
                 </div>
@@ -123,7 +123,7 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
 
       {/* Third-Party Security */}
       <section className="py-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto w-full min-w-0">
           <div className="text-center mb-10">
             <Cloud className="w-10 h-10 text-om-forest mx-auto mb-4" />
             <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-forest-deep mb-4">
@@ -154,8 +154,8 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
 
       {/* Key Handling */}
       <section className="py-14 px-4 sm:px-6 bg-om-parchment">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-om-cream border border-om-tan rounded-xl p-8">
+        <div className="max-w-4xl mx-auto w-full min-w-0">
+          <div className="bg-om-cream border border-om-tan rounded-xl p-4 sm:p-6 lg:p-8">
             <div className="flex items-center gap-3 mb-6">
               <Key className="w-8 h-8 text-om-gold" />
               <h2 className="text-xl md:text-2xl font-display font-semibold text-om-forest-deep">
@@ -182,7 +182,7 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
 
       {/* Trust Banner */}
       <section className="py-14 px-4 sm:px-6 bg-om-cream">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto w-full min-w-0">
           <div className="bg-om-forest-deep border border-om-forest rounded-xl p-10 text-center">
             <Shield className="w-12 h-12 text-om-gold mx-auto mb-6" />
             <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-parchment mb-4">

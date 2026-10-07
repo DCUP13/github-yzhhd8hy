@@ -735,15 +735,15 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-white dark:bg-gray-900 flex items-center justify-center min-h-screen">
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 flex items-center justify-center min-h-screen overflow-x-hidden">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="p-8 bg-white dark:bg-gray-900">
-      <div className="max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 overflow-x-hidden">
+      <div className="max-w-5xl mx-auto w-full min-w-0">
         {!currentCampaign ? (
           <>
             <div className="flex items-center justify-between mb-6">
@@ -802,63 +802,21 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     <div
                       key={campaign.id}
                       onClick={(e) => handleCampaignClick(e, campaign)}
-                      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 ${
+                      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-6 ${
                         !campaign.isActive ? 'cursor-pointer hover:shadow-md transition-shadow' : ''
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Layout className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                          <div>
-                            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      <div className="flex flex-col gap-4">
+                        {/* Top row: icon + name + menu controls */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <Layout className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                            <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white truncate">
                               {campaign.name}
                             </h3>
-                            <div className="flex items-center gap-4 mt-1">
-                              <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                                <MapPin className="w-4 h-4" />
-                                {campaign.city}
-                              </div>
-                              <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                                <FileText className="w-4 h-4" />
-                                {campaign.templates.length} templates
-                                {hasBodyTemplate && (
-                                  <span className="text-xs text-green-500">(has body)</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                                <Mail className="w-4 h-4" />
-                                {campaign.emails.length} emails
-                              </div>
-                              {campaign.daysTillClose !== 'NA' && (
-                                <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                                  <Calendar className="w-4 h-4" />
-                                  {campaign.daysTillClose} days till close
-                                </div>
-                              )}
-                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right text-xs leading-tight text-gray-500 dark:text-gray-400 max-w-[200px]">
-                            {campaign.scrapeListComplete && campaign.scrapeIndex >= campaign.scrapeTotalAgents ? (
-                              <div>
-                                <div>Complete - {campaign.scrapeTotalAgents} agents</div>
-                              </div>
-                            ) : campaign.scrapeTeamMembers.length > 0 && campaign.scrapeTeamIndex < campaign.scrapeTeamMembers.length ? (
-                              <div>
-                                <div>Page {campaign.scrapeListPage} - Agent {campaign.scrapeIndex}/{campaign.scrapeTotalAgents}</div>
-                                <div>Team member {campaign.scrapeTeamIndex + 1} of {campaign.scrapeTeamMembers.length}</div>
-                              </div>
-                            ) : campaign.scrapeListPage > 0 ? (
-                              <div>
-                                <div>Page {campaign.scrapeListPage} - {campaign.scrapeLastPageCount} new</div>
-                                <div>Agent {Math.min(campaign.scrapeIndex + 1, Math.max(campaign.scrapeTotalAgents, 1))} of {campaign.scrapeTotalAgents}</div>
-                              </div>
-                            ) : (
-                              <div>Not started</div>
-                            )}
-                          </div>
-                          <div className="campaign-menu relative">
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="campaign-menu relative">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -898,39 +856,84 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                                 </div>
                               )}
                             </div>
-                          <div className="toggle-wrapper">
-                            <div className="flex items-center gap-2">
-                              <div className="relative inline-block w-11 align-middle select-none">
-                                <input
-                                  type="checkbox"
-                                  checked={campaign.isActive}
-                                  onChange={(e) => handleToggleActive(campaign.id, e.target.checked)}
-                                  className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
-                                />
-                                <div className={`toggle-label block overflow-hidden h-6 rounded-full ${
-                                  !validation.valid
-                                    ? 'bg-gray-300 dark:bg-gray-600'
-                                    : campaign.isActive
-                                      ? 'bg-blue-600'
-                                      : 'bg-gray-300 dark:bg-gray-600'
-                                }`}></div>
+                            <div className="toggle-wrapper">
+                              <div className="flex items-center gap-2">
+                                <div className="relative inline-block w-11 align-middle select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={campaign.isActive}
+                                    onChange={(e) => handleToggleActive(campaign.id, e.target.checked)}
+                                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                                  />
+                                  <div className={`toggle-label block overflow-hidden h-6 rounded-full ${
+                                    !validation.valid
+                                      ? 'bg-gray-300 dark:bg-gray-600'
+                                      : campaign.isActive
+                                        ? 'bg-blue-600'
+                                        : 'bg-gray-300 dark:bg-gray-600'
+                                  }`}></div>
+                                </div>
+                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                  {campaign.isActive ? 'Active' : 'Inactive'}
+                                </span>
                               </div>
-                              <span className="text-sm text-gray-700 dark:text-gray-300">
-                                {campaign.isActive ? 'Active' : 'Inactive'}
-                              </span>
                             </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm('Are you sure you want to delete this campaign?')) {
+                                  handleDeleteCampaign(campaign.id);
+                                }
+                              }}
+                              className="delete-button p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
                           </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.confirm('Are you sure you want to delete this campaign?')) {
-                                handleDeleteCampaign(campaign.id);
-                              }
-                            }}
-                            className="delete-button p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
+                        </div>
+
+                        {/* Info rows - stacked on mobile, inline on desktop */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="w-4 h-4 flex-shrink-0" />
+                            {campaign.city}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <FileText className="w-4 h-4 flex-shrink-0" />
+                            {campaign.templates.length} templates
+                            {hasBodyTemplate && (
+                              <span className="text-xs text-green-500">(has body)</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Mail className="w-4 h-4 flex-shrink-0" />
+                            {campaign.emails.length} emails
+                          </div>
+                          {campaign.daysTillClose !== 'NA' && (
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="w-4 h-4 flex-shrink-0" />
+                              {campaign.daysTillClose} days till close
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Scrape status - full width, easy to read */}
+                        <div className="text-xs leading-relaxed text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/30 rounded-lg px-3 py-2">
+                          {campaign.scrapeListComplete && campaign.scrapeIndex >= campaign.scrapeTotalAgents ? (
+                            <span className="text-green-600 dark:text-green-400 font-medium">Complete - {campaign.scrapeTotalAgents} agents</span>
+                          ) : campaign.scrapeTeamMembers.length > 0 && campaign.scrapeTeamIndex < campaign.scrapeTeamMembers.length ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span>Page {campaign.scrapeListPage} - Agent {campaign.scrapeIndex}/{campaign.scrapeTotalAgents}</span>
+                              <span>Team member {campaign.scrapeTeamIndex + 1} of {campaign.scrapeTeamMembers.length}</span>
+                            </div>
+                          ) : campaign.scrapeListPage > 0 ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span>Page {campaign.scrapeListPage} - {campaign.scrapeLastPageCount} new</span>
+                              <span>Agent {Math.min(campaign.scrapeIndex + 1, Math.max(campaign.scrapeTotalAgents, 1))} of {campaign.scrapeTotalAgents}</span>
+                            </div>
+                          ) : (
+                            <span>Not started</span>
+                          )}
                         </div>
                       </div>
                       {!validation.valid && (
@@ -1000,7 +1003,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                         {currentCampaign.city}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                             State
@@ -1254,7 +1257,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Sender City
@@ -1340,7 +1343,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Offer Price
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <select
                         value={currentCampaign.offerPriceType}
                         onChange={(e) => handleUpdateCampaign({ offerPriceType: e.target.value as 'percentage' | 'fixed' })}
@@ -1375,7 +1378,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                 <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Email Sending Schedule</h2>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         <Clock className="w-4 h-4 inline mr-1" />
