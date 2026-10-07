@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, FileText, Send, Users, LayoutGrid as Layout, Globe, Eye, MousePointer, MessageSquare, CheckCircle, AlertCircle, TrendingUp, ChevronDown } from 'lucide-react';
+import { Mail, FileText, Send, Users, LayoutGrid as Layout, Globe, Eye, MousePointer, MessageSquare, CheckCircle, AlertCircle, TrendingUp, ChevronDown, Instagram as InstagramIcon, Linkedin as LinkedinIcon, ThumbsUp, Share2, BarChart3 } from 'lucide-react';
 import { useDashboard, type EmailAnalytics } from '../contexts/DashboardContext';
 
 interface DashboardProps {
@@ -18,7 +18,7 @@ interface CardData {
 }
 
 export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: DashboardProps) {
-  const { stats, emailAnalytics } = useDashboard();
+  const { stats, emailAnalytics, instagramSummary, linkedinSummary } = useDashboard();
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
   const fmt = (n: number) => n.toLocaleString();
@@ -249,6 +249,44 @@ export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: Dashb
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {analyticsCards.map((card, index) => renderCard(card, index, true))}
+            </div>
+          </>
+        )}
+
+        {/* Instagram Summary */}
+        {instagramSummary && instagramSummary.accountCount > 0 && (
+          <>
+            <div className="mb-2 mt-8 sm:mt-10">
+              <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                <InstagramIcon className="w-4 h-4 text-pink-500" /> Instagram
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              {[
+                { title: 'IG Accounts', value: fmt(instagramSummary.accountCount), icon: InstagramIcon, color: 'text-pink-500', bgColor: 'bg-pink-100 dark:bg-pink-900/20', details: [] as { label: string; value: string }[] },
+                { title: 'IG Followers', value: fmt(instagramSummary.totalFollowers), icon: Users, color: 'text-pink-500', bgColor: 'bg-pink-100 dark:bg-pink-900/20', details: [{ label: 'Accounts', value: fmt(instagramSummary.accountCount) }] },
+                { title: 'IG Reach', value: fmt(instagramSummary.totalReach), icon: Eye, color: 'text-cyan-500', bgColor: 'bg-cyan-100 dark:bg-cyan-900/20', details: [{ label: 'Impressions', value: fmt(instagramSummary.totalImpressions) }] },
+                { title: 'IG Engagement', value: pct(instagramSummary.avgEngagement), icon: TrendingUp, color: 'text-amber-500', bgColor: 'bg-amber-100 dark:bg-amber-900/20', details: [{ label: 'Accounts', value: fmt(instagramSummary.accountCount) }] },
+              ].map((card, index) => renderCard(card, index, false))}
+            </div>
+          </>
+        )}
+
+        {/* LinkedIn Summary */}
+        {linkedinSummary && linkedinSummary.accountCount > 0 && (
+          <>
+            <div className="mb-2 mt-8 sm:mt-10">
+              <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                <LinkedinIcon className="w-4 h-4 text-[#0A66C2]" /> LinkedIn
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              {[
+                { title: 'LI Impressions', value: fmt(linkedinSummary.totalImpressions), icon: Eye, color: 'text-[#0A66C2]', bgColor: 'bg-blue-100 dark:bg-blue-900/20', details: [{ label: 'Unique views', value: fmt(linkedinSummary.totalUniqueImpressions) }, { label: 'Posts tracked', value: fmt(linkedinSummary.postCount) }] },
+                { title: 'LI Reactions', value: fmt(linkedinSummary.totalReactions), icon: ThumbsUp, color: 'text-amber-500', bgColor: 'bg-amber-100 dark:bg-amber-900/20', details: [{ label: 'Comments', value: fmt(linkedinSummary.totalComments) }] },
+                { title: 'LI Shares & Clicks', value: fmt(linkedinSummary.totalShares + linkedinSummary.totalClicks), icon: Share2, color: 'text-green-500', bgColor: 'bg-green-100 dark:bg-green-900/20', details: [{ label: 'Shares', value: fmt(linkedinSummary.totalShares) }, { label: 'Clicks', value: fmt(linkedinSummary.totalClicks) }] },
+                { title: 'LI Engagement', value: pct(linkedinSummary.avgEngagement), icon: BarChart3, color: 'text-[#0A66C2]', bgColor: 'bg-blue-100 dark:bg-blue-900/20', details: [{ label: 'Posts tracked', value: fmt(linkedinSummary.postCount) }] },
+              ].map((card, index) => renderCard(card, index, false))}
             </div>
           </>
         )}

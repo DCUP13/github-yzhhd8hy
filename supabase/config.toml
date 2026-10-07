@@ -54,3 +54,6 @@ verify_jwt = true
 
 [functions.process-linkedin-queue]
 verify_jwt = false
+
+[functions.linkedin-sync-analytics]
+verify_jwt = true
