@@ -31,12 +31,19 @@ export interface EmailAnalytics {
   complainedCount: number;
 }
 
+export interface InstagramAccountDetail {
+  username: string;
+  followersCount: number;
+  profilePictureUrl: string | null;
+}
+
 export interface InstagramSummary {
   accountCount: number;
   totalFollowers: number;
   totalReach: number;
   totalImpressions: number;
   avgEngagement: number;
+  accounts: InstagramAccountDetail[];
 }
 
 export interface LinkedInSummary {
@@ -96,6 +103,7 @@ const emptyInstagramSummary: InstagramSummary = {
   totalReach: 0,
   totalImpressions: 0,
   avgEngagement: 0,
+  accounts: [],
 };
 
 const emptyLinkedInSummary: LinkedInSummary = {
@@ -236,7 +244,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
       const { data: accounts } = await supabase
         .from('instagram_accounts')
-        .select('id')
+        .select('id, username, followers_count, profile_picture_url')
         .eq('user_id', user.id)
         .eq('connected', true);
 
@@ -252,8 +260,19 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         .in('account_id', accountIds)
         .order('created_at', { ascending: false });
 
+      const accountDetails: InstagramAccountDetail[] = accounts.map(a => ({
+        username: a.username || 'Unknown',
+        followersCount: a.followers_count ?? 0,
+        profilePictureUrl: a.profile_picture_url ?? null,
+      }));
+
       if (!snapshots || snapshots.length === 0) {
-        setInstagramSummary({ ...emptyInstagramSummary, accountCount: accounts.length });
+        setInstagramSummary({
+          ...emptyInstagramSummary,
+          accountCount: accounts.length,
+          totalFollowers: accountDetails.reduce((sum, a) => sum + a.followersCount, 0),
+          accounts: accountDetails,
+        });
         return;
       }
 
@@ -273,6 +292,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         totalReach: latest.reduce((sum, s) => sum + (s.account_reach ?? 0), 0),
         totalImpressions: latest.reduce((sum, s) => sum + (s.account_impressions ?? 0), 0),
         avgEngagement: latest.length > 0 ? latest.reduce((sum, s) => sum + (s.engagement_rate ?? 0), 0) / latest.length : 0,
+        accounts: accountDetails,
       });
     } catch (error) {
       console.error('Error fetching Instagram summary:', error);

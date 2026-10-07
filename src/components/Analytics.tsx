@@ -357,43 +357,6 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
   const pct = (n: number) => `${n.toFixed(1)}%`;
   const fmt = (n: number) => n.toLocaleString();
 
-  const statCards = [
-    { title: 'Total Sent', value: fmt(metrics.total), icon: Send, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
-    { title: 'Delivered', value: fmt(metrics.delivered), icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
-    { title: 'Opens (Unique)', value: fmt(metrics.opened), icon: Eye, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
-    { title: 'Total Open Events', value: fmt(metrics.totalOpenEvents), icon: TrendingUp, color: 'text-cyan-500', bg: 'bg-cyan-100 dark:bg-cyan-900/20' },
-    { title: 'Clicked', value: fmt(metrics.clicked), icon: MousePointer, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/20' },
-    { title: 'Replies', value: fmt(replyCount), icon: MessageSquare, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/20' },
-    { title: 'Bounced', value: fmt(metrics.bounced), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-100 dark:bg-amber-900/20' },
-    { title: 'Failed', value: fmt(metrics.failed), icon: AlertCircle, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/20' },
-  ];
-
-  const rateCards = [
-    { title: 'Delivery Rate', value: pct(metrics.deliveryRate), icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
-    { title: 'Open Rate', value: pct(metrics.openRate), icon: Eye, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
-    { title: 'Click Rate', value: pct(metrics.clickRate), icon: MousePointer, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/20' },
-    { title: 'Reply Rate', value: pct(metrics.replyRate), icon: MessageSquare, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/20' },
-    { title: 'Bounce Rate', value: pct(metrics.bounceRate), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/20' },
-  ];
-
-  if (isLoading) {
-    return (
-      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  const maxTrendSent = Math.max(...trendData.map(d => d.sent), 1);
-
-  // Instagram stat cards
-  const igStatCards = [
-    { title: 'Followers', value: fmt(combinedMetrics.totalFollowers), icon: Users, color: 'text-pink-500', bg: 'bg-pink-100 dark:bg-pink-900/20' },
-    { title: 'Total Reach', value: fmt(combinedMetrics.totalReach), icon: Eye, color: 'text-cyan-500', bg: 'bg-cyan-100 dark:bg-cyan-900/20' },
-    { title: 'Total Impressions', value: fmt(combinedMetrics.totalImpressions), icon: BarChart3, color: 'text-teal-500', bg: 'bg-teal-100 dark:bg-teal-900/20' },
-    { title: 'Avg Engagement', value: pct(combinedMetrics.avgEngagement), icon: TrendingUp, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/20' },
-  ];
-
   // LinkedIn analytics: get latest snapshot per post
   const liLatestPerPost = useMemo(() => {
     const seen = new Set<string>();
@@ -444,6 +407,43 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
     }
     return Object.entries(days).map(([date, data]) => ({ date, ...data }));
   }, [liSnapshots, period]);
+
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const maxTrendSent = Math.max(...trendData.map(d => d.sent), 1);
+
+  const statCards = [
+    { title: 'Total Sent', value: fmt(metrics.total), icon: Send, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+    { title: 'Delivered', value: fmt(metrics.delivered), icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
+    { title: 'Opens (Unique)', value: fmt(metrics.opened), icon: Eye, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+    { title: 'Total Open Events', value: fmt(metrics.totalOpenEvents), icon: TrendingUp, color: 'text-cyan-500', bg: 'bg-cyan-100 dark:bg-cyan-900/20' },
+    { title: 'Clicked', value: fmt(metrics.clicked), icon: MousePointer, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/20' },
+    { title: 'Replies', value: fmt(replyCount), icon: MessageSquare, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/20' },
+    { title: 'Bounced', value: fmt(metrics.bounced), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-100 dark:bg-amber-900/20' },
+    { title: 'Failed', value: fmt(metrics.failed), icon: AlertCircle, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/20' },
+  ];
+
+  const rateCards = [
+    { title: 'Delivery Rate', value: pct(metrics.deliveryRate), icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
+    { title: 'Open Rate', value: pct(metrics.openRate), icon: Eye, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+    { title: 'Click Rate', value: pct(metrics.clickRate), icon: MousePointer, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/20' },
+    { title: 'Reply Rate', value: pct(metrics.replyRate), icon: MessageSquare, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/20' },
+    { title: 'Bounce Rate', value: pct(metrics.bounceRate), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/20' },
+  ];
+
+  // Instagram stat cards
+  const igStatCards = [
+    { title: 'Followers', value: fmt(combinedMetrics.totalFollowers), icon: Users, color: 'text-pink-500', bg: 'bg-pink-100 dark:bg-pink-900/20' },
+    { title: 'Total Reach', value: fmt(combinedMetrics.totalReach), icon: Eye, color: 'text-cyan-500', bg: 'bg-cyan-100 dark:bg-cyan-900/20' },
+    { title: 'Total Impressions', value: fmt(combinedMetrics.totalImpressions), icon: BarChart3, color: 'text-teal-500', bg: 'bg-teal-100 dark:bg-teal-900/20' },
+    { title: 'Avg Engagement', value: pct(combinedMetrics.avgEngagement), icon: TrendingUp, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/20' },
+  ];
 
   const maxLiTrendImpressions = Math.max(...liTrendData.map(d => d.impressions), 1);
 

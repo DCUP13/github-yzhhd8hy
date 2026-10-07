@@ -263,8 +263,8 @@ export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: Dashb
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[
-                { title: 'IG Accounts', value: fmt(instagramSummary.accountCount), icon: InstagramIcon, color: 'text-pink-500', bgColor: 'bg-pink-100 dark:bg-pink-900/20', details: [] as { label: string; value: string }[] },
-                { title: 'IG Followers', value: fmt(instagramSummary.totalFollowers), icon: Users, color: 'text-pink-500', bgColor: 'bg-pink-100 dark:bg-pink-900/20', details: [{ label: 'Accounts', value: fmt(instagramSummary.accountCount) }] },
+                { title: 'IG Accounts', value: fmt(instagramSummary.accountCount), icon: InstagramIcon, color: 'text-pink-500', bgColor: 'bg-pink-100 dark:bg-pink-900/20', details: instagramSummary.accounts.map(a => ({ label: a.username, value: fmt(a.followersCount) })) },
+                { title: 'Followers Across Accounts', value: fmt(instagramSummary.totalFollowers), icon: Users, color: 'text-pink-500', bgColor: 'bg-pink-100 dark:bg-pink-900/20', details: instagramSummary.accounts.map(a => ({ label: a.username, value: fmt(a.followersCount) })) },
                 { title: 'IG Reach', value: fmt(instagramSummary.totalReach), icon: Eye, color: 'text-cyan-500', bgColor: 'bg-cyan-100 dark:bg-cyan-900/20', details: [{ label: 'Impressions', value: fmt(instagramSummary.totalImpressions) }] },
                 { title: 'IG Engagement', value: pct(instagramSummary.avgEngagement), icon: TrendingUp, color: 'text-amber-500', bgColor: 'bg-amber-100 dark:bg-amber-900/20', details: [{ label: 'Accounts', value: fmt(instagramSummary.accountCount) }] },
               ].map((card, index) => renderCard(card, index, true, 'ig'))}
