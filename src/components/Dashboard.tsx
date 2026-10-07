@@ -156,9 +156,9 @@ export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: Dashb
     setExpandedCard(prev => prev === id ? null : id);
   };
 
-  const renderCard = (card: CardData, index: number, isAnalytics: boolean) => {
+  const renderCard = (card: CardData, index: number, isAnalytics: boolean, section = '') => {
     const Icon = card.icon;
-    const cardId = `${isAnalytics ? 'a' : 'o'}-${index}`;
+    const cardId = `${isAnalytics ? 'a' : 'o'}-${section}-${index}`;
     const isExpanded = expandedCard === cardId;
 
     return (
@@ -267,7 +267,7 @@ export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: Dashb
                 { title: 'IG Followers', value: fmt(instagramSummary.totalFollowers), icon: Users, color: 'text-pink-500', bgColor: 'bg-pink-100 dark:bg-pink-900/20', details: [{ label: 'Accounts', value: fmt(instagramSummary.accountCount) }] },
                 { title: 'IG Reach', value: fmt(instagramSummary.totalReach), icon: Eye, color: 'text-cyan-500', bgColor: 'bg-cyan-100 dark:bg-cyan-900/20', details: [{ label: 'Impressions', value: fmt(instagramSummary.totalImpressions) }] },
                 { title: 'IG Engagement', value: pct(instagramSummary.avgEngagement), icon: TrendingUp, color: 'text-amber-500', bgColor: 'bg-amber-100 dark:bg-amber-900/20', details: [{ label: 'Accounts', value: fmt(instagramSummary.accountCount) }] },
-              ].map((card, index) => renderCard(card, index, false))}
+              ].map((card, index) => renderCard(card, index, true, 'ig'))}
             </div>
           </>
         )}
@@ -286,7 +286,7 @@ export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: Dashb
                 { title: 'LI Reactions', value: fmt(linkedinSummary.totalReactions), icon: ThumbsUp, color: 'text-amber-500', bgColor: 'bg-amber-100 dark:bg-amber-900/20', details: [{ label: 'Comments', value: fmt(linkedinSummary.totalComments) }] },
                 { title: 'LI Shares & Clicks', value: fmt(linkedinSummary.totalShares + linkedinSummary.totalClicks), icon: Share2, color: 'text-green-500', bgColor: 'bg-green-100 dark:bg-green-900/20', details: [{ label: 'Shares', value: fmt(linkedinSummary.totalShares) }, { label: 'Clicks', value: fmt(linkedinSummary.totalClicks) }] },
                 { title: 'LI Engagement', value: pct(linkedinSummary.avgEngagement), icon: BarChart3, color: 'text-[#0A66C2]', bgColor: 'bg-blue-100 dark:bg-blue-900/20', details: [{ label: 'Posts tracked', value: fmt(linkedinSummary.postCount) }] },
-              ].map((card, index) => renderCard(card, index, false))}
+              ].map((card, index) => renderCard(card, index, true, 'li'))}
             </div>
           </>
         )}
