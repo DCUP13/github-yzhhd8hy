@@ -175,7 +175,10 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
       }
 
       const { auth_url } = await response.json();
-      window.location.href = auth_url;
+      // Open LinkedIn login in a new tab — LinkedIn blocks iframe embedding,
+      // so it can't load inside the dev environment's iframe. The Supabase callback
+      // will redirect back to the app after the exchange completes.
+      window.open(auth_url, '_blank', 'noopener,noreferrer');
     } catch (error) {
       console.error('LinkedIn connect error:', error);
       setOauthMessage({ type: 'error', text: error.message || 'Failed to connect to LinkedIn.' });
