@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Linkedin, ArrowLeft, Image as ImageIcon, Link as LinkIcon, Sparkles, Send, Clock, Trash2, CheckCircle2, XCircle, AlertCircle, Globe, Users, Loader2, X, Video as VideoIcon, FileText, Pencil } from 'lucide-react';
+import { Linkedin, Image as ImageIcon, Link as LinkIcon, Sparkles, Send, Clock, Trash2, CheckCircle2, XCircle, AlertCircle, Globe, Users, Loader2, X, Video as VideoIcon, FileText, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
 
@@ -44,7 +44,7 @@ interface LinkedInPost {
 
 type PostType = 'text' | 'article' | 'image' | 'video' | 'document';
 
-export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
+export function LinkedIn({ queryParams }: LinkedInProps) {
   const [account, setAccount] = useState<LinkedInAccount | null>(null);
   const [posts, setPosts] = useState<LinkedInPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -653,24 +653,15 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
   }
 
   return (
-    <div className="flex-1 bg-gray-50 dark:bg-gray-900 min-h-screen">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigateToApp('dashboard')}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <Linkedin className="w-7 h-7 text-[#0A66C2]" />
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">LinkedIn</h1>
-          </div>
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+      <div className="max-w-4xl mx-auto w-full min-w-0">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <Linkedin className="w-6 h-6 text-[#0A66C2]" />
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">LinkedIn</h1>
         </div>
-      </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="space-y-6">
         {/* OAuth message */}
         {oauthMessage && (
           <div className={`flex items-start gap-3 p-4 rounded-lg ${oauthMessage.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'}`}>
@@ -1168,6 +1159,7 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );
