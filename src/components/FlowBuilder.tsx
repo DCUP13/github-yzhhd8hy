@@ -620,9 +620,9 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {flows.map((flow) => (
-                <div key={flow.id} className="p-4 flex items-start justify-between">
-                  <div className="flex-1 cursor-pointer" onClick={() => setSelectedFlowId(flow.id)}>
-                    <div className="flex items-center gap-2 mb-1">
+                <div key={flow.id} className="p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="flex-1 cursor-pointer min-w-0" onClick={() => setSelectedFlowId(flow.id)}>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-sm font-medium text-gray-900 dark:text-white">{flow.name}</span>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${flow.active ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
                         {flow.active ? 'Active' : 'Paused'}
@@ -636,7 +636,7 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
                       <span>Created {formatDate(flow.created_at)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
+                  <div className="flex items-center gap-2 sm:ml-4 flex-wrap">
                     <button
                       onClick={() => handleToggleFlow(flow)}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${flow.active ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
@@ -759,8 +759,8 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
   return (
     <div className="space-y-4">
       {/* Header bar */}
-      <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl shadow-sm px-4 py-3">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white dark:bg-gray-800 rounded-xl shadow-sm px-4 py-3 gap-3">
+        <div className="flex items-center gap-3 flex-wrap min-w-0">
           <button
             onClick={handleBackToList}
             className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
@@ -778,7 +778,7 @@ export function FlowBuilder({ accountId, userId, allAccounts = [] }: FlowBuilder
             <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Unsaved changes</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {selectedFlow.is_synced_copy && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
               <Link2 className="w-2.5 h-2.5" /> Synced — edits propagate
