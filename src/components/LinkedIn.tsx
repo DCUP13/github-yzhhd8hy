@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Linkedin, ArrowLeft, Image as ImageIcon, Link as LinkIcon, Sparkles, Send, Clock, Trash2, CheckCircle2, XCircle, AlertCircle, Globe, Users, Loader2, X } from 'lucide-react';
+import { Linkedin, ArrowLeft, Image as ImageIcon, Link as LinkIcon, Sparkles, Send, Clock, Trash2, CheckCircle2, XCircle, AlertCircle, Globe, Users, Loader2, X, Video as VideoIcon, FileText, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
 
@@ -29,6 +29,10 @@ interface LinkedInPost {
   article_description: string | null;
   image_url: string | null;
   image_asset_id: string | null;
+  video_url: string | null;
+  video_asset_id: string | null;
+  document_url: string | null;
+  document_asset_id: string | null;
   visibility: string;
   status: string;
   scheduled_for: string | null;
@@ -38,7 +42,7 @@ interface LinkedInPost {
   created_at: string;
 }
 
-type PostType = 'text' | 'article' | 'image';
+type PostType = 'text' | 'article' | 'image' | 'video' | 'document';
 
 export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
   const [account, setAccount] = useState<LinkedInAccount | null>(null);
@@ -62,6 +66,13 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
   const [aiPrompt, setAiPrompt] = useState('');
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoAssetId, setVideoAssetId] = useState<string | null>(null);
+  const [documentUrl, setDocumentUrl] = useState('');
+  const [documentAssetId, setDocumentAssetId] = useState<string | null>(null);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [isDeletingFromLinkedIn, setIsDeletingFromLinkedIn] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const fetchAccount = useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -210,7 +221,6 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      // Get upload URL from the existing generate-s3-upload-url function
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
         method: 'POST',
         headers: {
@@ -231,7 +241,6 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
 
       const { upload_url, public_url, asset_id } = await response.json();
 
-      // Upload the file to S3
       const uploadRes = await fetch(upload_url, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
@@ -248,6 +257,88 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
     } catch (error) {
       console.error('Image upload error:', error);
       setOauthMessage({ type: 'error', text: error.message || 'Failed to upload image.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleVideoUpload = async (file: File) => {
+    setIsUploading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          file_name: file.name,
+          file_type: file.type,
+          prefix: 'linkedin/videos',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to get upload URL');
+      const { upload_url, public_url, asset_id } = await response.json();
+
+      const uploadRes = await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+
+      if (!uploadRes.ok) throw new Error('Failed to upload video');
+
+      setVideoUrl(public_url);
+      setVideoAssetId(asset_id || null);
+      setPostType('video');
+    } catch (error) {
+      console.error('Video upload error:', error);
+      setOauthMessage({ type: 'error', text: error.message || 'Failed to upload video.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDocumentUpload = async (file: File) => {
+    setIsUploading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-s3-upload-url`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          file_name: file.name,
+          file_type: file.type,
+          prefix: 'linkedin/documents',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to get upload URL');
+      const { upload_url, public_url, asset_id } = await response.json();
+
+      const uploadRes = await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+
+      if (!uploadRes.ok) throw new Error('Failed to upload document');
+
+      setDocumentUrl(public_url);
+      setDocumentAssetId(asset_id || null);
+      setPostType('document');
+    } catch (error) {
+      console.error('Document upload error:', error);
+      setOauthMessage({ type: 'error', text: error.message || 'Failed to upload document.' });
     } finally {
       setIsUploading(false);
     }
@@ -301,9 +392,14 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
     setArticleDescription('');
     setImageUrl('');
     setImageAssetId(null);
+    setVideoUrl('');
+    setVideoAssetId(null);
+    setDocumentUrl('');
+    setDocumentAssetId(null);
     setVisibility('PUBLIC');
     setScheduledFor('');
     setPostType('text');
+    setEditingPostId(null);
   };
 
   const handleSavePost = async (schedule: boolean) => {
@@ -319,57 +415,106 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
 
     setIsSaving(true);
     try {
-      const postData: Record<string, unknown> = {
-        content_text: contentText,
-        article_url: postType === 'article' ? articleUrl : (articleUrl || null),
-        article_title: articleTitle || null,
-        article_description: articleDescription || null,
-        image_url: postType === 'image' ? imageUrl : (imageUrl || null),
-        image_asset_id: imageAssetId,
-        visibility,
-        status: schedule ? 'scheduled' : 'draft',
-        scheduled_for: schedule ? new Date(scheduledFor).toISOString() : null,
-      };
+      if (editingPostId) {
+        const { error: updateError } = await supabase
+          .from('linkedin_posts')
+          .update({
+            content_text: contentText,
+            article_url: postType === 'article' ? articleUrl : null,
+            article_title: articleTitle || null,
+            article_description: articleDescription || null,
+            image_url: postType === 'image' ? imageUrl : null,
+            image_asset_id: imageAssetId,
+            video_url: postType === 'video' ? videoUrl : null,
+            video_asset_id: videoAssetId,
+            document_url: postType === 'document' ? documentUrl : null,
+            document_asset_id: documentAssetId,
+            visibility,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingPostId);
 
-      const { data, error } = await supabase
-        .from('linkedin_posts')
-        .insert(postData)
-        .select()
-        .single();
+        if (updateError) throw updateError;
 
-      if (error) throw error;
-
-      if (!schedule) {
-        // Publish immediately
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('Not authenticated');
-
-        const publishRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-linkedin-post`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ post_id: data.id }),
-        });
-
-        if (!publishRes.ok) {
-          const errData = await publishRes.json().catch(() => ({}));
-          throw new Error(errData.error || 'Failed to publish post');
+        if (session) {
+          const editRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-linkedin-post`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ post_id: editingPostId, action: 'edit' }),
+          });
+          if (!editRes.ok) {
+            const errData = await editRes.json().catch(() => ({}));
+            throw new Error(errData.error || 'Failed to edit post on LinkedIn');
+          }
         }
-      }
 
-      // Refresh posts
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const updated = await fetchPosts(user.id);
-        setPosts(updated);
-      }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const updated = await fetchPosts(user.id);
+          setPosts(updated);
+        }
 
-      resetComposer();
-      setOauthMessage(schedule
-        ? { type: 'success', text: 'Post scheduled successfully!' }
-        : { type: 'success', text: 'Post published to LinkedIn!' });
+        resetComposer();
+        setOauthMessage({ type: 'success', text: 'Post updated successfully!' });
+      } else {
+        const postData: Record<string, unknown> = {
+          content_text: contentText,
+          article_url: postType === 'article' ? articleUrl : (articleUrl || null),
+          article_title: articleTitle || null,
+          article_description: articleDescription || null,
+          image_url: postType === 'image' ? imageUrl : (imageUrl || null),
+          image_asset_id: imageAssetId,
+          video_url: postType === 'video' ? videoUrl : (videoUrl || null),
+          video_asset_id: videoAssetId,
+          document_url: postType === 'document' ? documentUrl : (documentUrl || null),
+          document_asset_id: documentAssetId,
+          visibility,
+          status: schedule ? 'scheduled' : 'draft',
+          scheduled_for: schedule ? new Date(scheduledFor).toISOString() : null,
+        };
+
+        const { data, error } = await supabase
+          .from('linkedin_posts')
+          .insert(postData)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        if (!schedule) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error('Not authenticated');
+
+          const publishRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-linkedin-post`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ post_id: data.id }),
+          });
+
+          if (!publishRes.ok) {
+            const errData = await publishRes.json().catch(() => ({}));
+            throw new Error(errData.error || 'Failed to publish post');
+          }
+        }
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const updated = await fetchPosts(user.id);
+          setPosts(updated);
+        }
+
+        resetComposer();
+        setOauthMessage(schedule
+          ? { type: 'success', text: 'Post scheduled successfully!' }
+          : { type: 'success', text: 'Post published to LinkedIn!' });
+      }
     } catch (error) {
       console.error('Error saving LinkedIn post:', error);
       setOauthMessage({ type: 'error', text: error.message || 'Failed to save post.' });
@@ -378,14 +523,68 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
     }
   };
 
-  const handleDeletePost = async (postId: string) => {
-    if (!window.confirm('Delete this post?')) return;
+  const handleDeletePost = async (post: LinkedInPost) => {
+    const isPublished = post.status === 'published' && post.linkedin_post_urn;
+    const confirmMsg = isPublished
+      ? 'Delete this post? It will also be removed from LinkedIn.'
+      : 'Delete this post?';
+    if (!window.confirm(confirmMsg)) return;
+
+    if (isPublished) {
+      setIsDeletingFromLinkedIn(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Not authenticated');
+
+        const deleteRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publish-linkedin-post`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ post_id: post.id, action: 'delete' }),
+        });
+
+        if (!deleteRes.ok) {
+          const errData = await deleteRes.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to delete from LinkedIn');
+        }
+      } catch (error) {
+        console.error('LinkedIn delete error:', error);
+        setOauthMessage({ type: 'error', text: error.message || 'Failed to delete from LinkedIn.' });
+        setIsDeletingFromLinkedIn(false);
+        return;
+      }
+      setIsDeletingFromLinkedIn(false);
+    }
+
     try {
-      await supabase.from('linkedin_posts').delete().eq('id', postId);
-      setPosts(posts.filter(p => p.id !== postId));
+      await supabase.from('linkedin_posts').delete().eq('id', post.id);
+      setPosts(posts.filter(p => p.id !== post.id));
     } catch (error) {
       console.error('Error deleting post:', error);
     }
+  };
+
+  const handleEditPost = (post: LinkedInPost) => {
+    setEditingPostId(post.id);
+    setContentText(post.content_text || '');
+    setArticleUrl(post.article_url || '');
+    setArticleTitle(post.article_title || '');
+    setArticleDescription(post.article_description || '');
+    setImageUrl(post.image_url || '');
+    setImageAssetId(post.image_asset_id || null);
+    setVideoUrl(post.video_url || '');
+    setVideoAssetId(post.video_asset_id || null);
+    setDocumentUrl(post.document_url || '');
+    setDocumentAssetId(post.document_asset_id || null);
+    setVisibility((post.visibility as 'PUBLIC' | 'CONNECTIONS') || 'PUBLIC');
+    if (post.video_url) setPostType('video');
+    else if (post.document_url) setPostType('document');
+    else if (post.image_url) setPostType('image');
+    else if (post.article_url) setPostType('article');
+    else setPostType('text');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleRetryPost = async (postId: string) => {
@@ -541,7 +740,17 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
         {account && account.connected && (
           <>
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Create Post</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-medium text-gray-900 dark:text-white">{editingPostId ? 'Edit Post' : 'Create Post'}</h2>
+                {editingPostId && (
+                  <button
+                    onClick={() => resetComposer()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <X className="w-4 h-4" /> Cancel edit
+                  </button>
+                )}
+              </div>
 
               {/* Post type tabs */}
               <div className="flex flex-wrap gap-2 mb-4">
@@ -562,6 +771,18 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
                   className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${postType === 'image' ? 'bg-[#0A66C2] text-white' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                 >
                   <ImageIcon className="w-4 h-4" /> Image
+                </button>
+                <button
+                  onClick={() => setPostType('video')}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${postType === 'video' ? 'bg-[#0A66C2] text-white' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                >
+                  <VideoIcon className="w-4 h-4" /> Video
+                </button>
+                <button
+                  onClick={() => setPostType('document')}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${postType === 'document' ? 'bg-[#0A66C2] text-white' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                >
+                  <FileText className="w-4 h-4" /> Document
                 </button>
               </div>
 
@@ -652,6 +873,77 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
                 </div>
               )}
 
+              {/* Video upload */}
+              {postType === 'video' && (
+                <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                  {videoUrl ? (
+                    <div className="relative">
+                      <video src={videoUrl} controls className="w-full max-h-64 rounded-lg" />
+                      <button
+                        onClick={() => { setVideoUrl(''); setVideoAssetId(null); }}
+                        className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full hover:bg-black/80"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-[#0A66C2] transition-colors">
+                      {isUploading ? (
+                        <><Loader2 className="w-8 h-8 text-gray-400 animate-spin mb-2" /><span className="text-sm text-gray-500">Uploading...</span></>
+                      ) : (
+                        <><VideoIcon className="w-8 h-8 text-gray-400 mb-2" /><span className="text-sm text-gray-500 dark:text-gray-400">Click to upload a video</span><span className="text-xs text-gray-400 mt-1">MP4 up to 200MB</span></>
+                      )}
+                      <input
+                        type="file"
+                        accept="video/mp4,video/quicktime"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleVideoUpload(file);
+                        }}
+                        disabled={isUploading}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+
+              {/* Document upload */}
+              {postType === 'document' && (
+                <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                  {documentUrl ? (
+                    <div className="relative flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <FileText className="w-8 h-8 text-[#0A66C2] flex-shrink-0" />
+                      <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{documentUrl.split('/').pop()}</span>
+                      <button
+                        onClick={() => { setDocumentUrl(''); setDocumentAssetId(null); }}
+                        className="p-1.5 text-gray-400 hover:text-red-500 rounded"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-[#0A66C2] transition-colors">
+                      {isUploading ? (
+                        <><Loader2 className="w-8 h-8 text-gray-400 animate-spin mb-2" /><span className="text-sm text-gray-500">Uploading...</span></>
+                      ) : (
+                        <><FileText className="w-8 h-8 text-gray-400 mb-2" /><span className="text-sm text-gray-500 dark:text-gray-400">Click to upload a PDF</span><span className="text-xs text-gray-400 mt-1">PDF up to 100MB</span></>
+                      )}
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleDocumentUpload(file);
+                        }}
+                        disabled={isUploading}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+
               {/* Image upload */}
               {postType === 'image' && (
                 <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
@@ -715,20 +1007,22 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => handleSavePost(false)}
-                  disabled={isSaving || (!contentText.trim() && !articleUrl.trim() && !imageUrl)}
+                  disabled={isSaving || (!contentText.trim() && !articleUrl.trim() && !imageUrl && !videoUrl && !documentUrl)}
                   className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0A66C2] text-white text-sm font-medium rounded-lg hover:bg-[#004182] transition-colors disabled:opacity-50"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Post Now
+                  {editingPostId ? 'Save Changes' : 'Post Now'}
                 </button>
+                {editingPostId ? null : (
                 <button
                   onClick={() => handleSavePost(true)}
-                  disabled={isSaving || !scheduledFor || (!contentText.trim() && !articleUrl.trim() && !imageUrl)}
+                  disabled={isSaving || !scheduledFor || (!contentText.trim() && !articleUrl.trim() && !imageUrl && !videoUrl && !documentUrl)}
                   className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
                   Schedule Post
                 </button>
+                )}
               </div>
             </div>
 
@@ -760,6 +1054,15 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
                       )}
                       {postType === 'image' && imageUrl && (
                         <img src={imageUrl} alt="Preview" className="mt-3 w-full max-h-80 object-cover rounded-lg" />
+                      )}
+                      {postType === 'video' && videoUrl && (
+                        <video src={videoUrl} controls className="mt-3 w-full max-h-80 rounded-lg" />
+                      )}
+                      {postType === 'document' && documentUrl && (
+                        <div className="mt-3 flex items-center gap-2 p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
+                          <FileText className="w-5 h-5 text-[#0A66C2]" />
+                          <span className="text-xs text-gray-600 dark:text-gray-400">{documentUrl.split('/').pop()}</span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -801,12 +1104,22 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
                               <Loader2 className="w-4 h-4" />
                             </button>
                           )}
+                          {post.status === 'published' && (
+                            <button
+                              onClick={() => handleEditPost(post)}
+                              className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+                              title="Edit post"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleDeletePost(post.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded"
+                            onClick={() => handleDeletePost(post)}
+                            disabled={isDeletingFromLinkedIn}
+                            className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded disabled:opacity-50"
                             title="Delete post"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            {isDeletingFromLinkedIn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                           </button>
                         </div>
                       </div>
@@ -824,6 +1137,17 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
 
                       {post.image_url && (
                         <img src={post.image_url} alt="" className="mt-2 w-full max-h-48 object-cover rounded-lg" />
+                      )}
+
+                      {post.video_url && (
+                        <video src={post.video_url} controls className="mt-2 w-full max-h-48 rounded-lg" />
+                      )}
+
+                      {post.document_url && (
+                        <div className="mt-2 flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                          <FileText className="w-5 h-5 text-[#0A66C2]" />
+                          <span className="text-xs text-gray-600 dark:text-gray-400 truncate">{post.document_url.split('/').pop()}</span>
+                        </div>
                       )}
 
                       <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
