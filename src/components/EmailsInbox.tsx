@@ -962,7 +962,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
             {/* Tabs */}
             <div className="mb-6">
               <div className="border-b border-gray-200 dark:border-gray-700">
-                <nav className="flex space-x-8">
+                <nav className="flex flex-wrap gap-2">
                   <button
                     onClick={() => {
                       setActiveTab('inbox');
@@ -1078,21 +1078,21 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                       onClick={() => handleSelectEmail(email)}
                       className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                     >
-                      <div className="flex items-start justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
                                 {activeTab === 'inbox' ? (email as Email).sender :
                                  activeTab === 'outbox' ? (email as OutboxEmail).from_email :
                                  activeTab === 'sent' ? (email as SentEmail).from_email :
                                  (email as DraftEmail).from_email}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                              <span>to</span>
-                              <span>
+                            <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 min-w-0">
+                              <span className="flex-shrink-0">to</span>
+                              <span className="truncate">
                                 {activeTab === 'inbox' ? formatReceiverList((email as Email).receiver) :
                                  activeTab === 'outbox' ? (email as OutboxEmail).to_email :
                                  activeTab === 'sent' ? (email as SentEmail).to_email :
@@ -1121,7 +1121,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                               (activeTab === 'drafts' && hasAttachments((email as DraftEmail).attachments)) ||
                               (activeTab === 'outbox' && hasAttachments((email as OutboxEmail).attachments)) ||
                               (activeTab === 'sent' && hasAttachments((email as SentEmail).attachments))) && (
-                              <Paperclip className="w-4 h-4 text-gray-400" />
+                              <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
                             )}
                             {activeTab === 'sent' && renderEventIndicators(email as SentEmail)}
                           </div>
@@ -1134,7 +1134,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                             {truncateText(email.body, 100)}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 ml-4">
+                        <div className="flex items-center gap-2 sm:ml-4 flex-shrink-0">
                           <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                             <Clock className="w-3 h-3" />
                             {formatDate(

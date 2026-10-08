@@ -700,7 +700,7 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
                   <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                     <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Account Comparison</h2>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="hidden sm:block overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 dark:bg-gray-700/50">
                         <tr>
@@ -728,6 +728,23 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
                         })}
                       </tbody>
                     </table>
+                  </div>
+                  <div className="sm:hidden divide-y divide-gray-200 dark:divide-gray-700">
+                    {latestPerAccount.map((snap, i) => {
+                      const acct = igAccounts.find(a => a.id === snap.account_id);
+                      return (
+                        <div key={i} className="p-4">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">@{acct?.username || 'unknown'}</p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Followers</span><span className="text-gray-900 dark:text-gray-300">{fmt(snap.followers_count ?? 0)}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Posts</span><span className="text-gray-900 dark:text-gray-300">{fmt(snap.media_count ?? 0)}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Reach</span><span className="text-gray-900 dark:text-gray-300">{fmt(snap.account_reach ?? 0)}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Impressions</span><span className="text-gray-900 dark:text-gray-300">{fmt(snap.account_impressions ?? 0)}</span></div>
+                            <div className="flex justify-between col-span-2"><span className="text-gray-500 dark:text-gray-400">Engagement</span><span className="text-gray-900 dark:text-gray-300">{pct(snap.engagement_rate ?? 0)}</span></div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

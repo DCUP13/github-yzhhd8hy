@@ -871,6 +871,13 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
   }, [conversations, inboxFilter]);
 
   const selectedConversation = filteredConversations.find(c => c.id === selectedConversationId) || null;
+  const dmMessagesRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectedConversationId && dmMessagesRef.current) {
+      dmMessagesRef.current.scrollTop = dmMessagesRef.current.scrollHeight;
+    }
+  }, [selectedConversationId, selectedConversation?.events.length]);
 
   const handleSendTestToSelf = async () => {
     if (!selectedAccount) return;
@@ -1339,7 +1346,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                 )}
 
                 {/* Messages list — scrolls independently */}
-                <div className="overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30 max-h-[45vh]">
+                <div ref={dmMessagesRef} className="overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30 max-h-[45vh]">
                   {selectedConversation.type === 'media'
                     ? /* Threaded comment view — group by media, show replies indented with per-comment reply buttons */
                       (() => {

@@ -981,24 +981,24 @@ export function LinkedIn({ queryParams, navigateToApp }: LinkedInProps) {
 
               {/* Visibility and Scheduling */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <div>
+                <div className="min-w-0">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Visibility</label>
                   <select
                     value={visibility}
                     onChange={(e) => setVisibility(e.target.value as 'PUBLIC' | 'CONNECTIONS')}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                    className="w-full max-w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
                   >
                     <option value="PUBLIC"><Globe className="w-4 h-4 inline mr-1" /> Public — Anyone on LinkedIn</option>
                     <option value="CONNECTIONS"><Users className="w-4 h-4 inline mr-1" /> Connections only</option>
                   </select>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Schedule (optional)</label>
                   <input
                     type="datetime-local"
                     value={scheduledFor}
                     onChange={(e) => setScheduledFor(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                    className="w-full max-w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
                   />
                 </div>
               </div>
