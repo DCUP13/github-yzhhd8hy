@@ -1427,16 +1427,15 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
   return (
     <div className="space-y-6 max-w-full overflow-x-hidden">
       {/* Sub-tab navigation */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="flex flex-wrap gap-1">
+        <nav className="flex flex-wrap gap-2 mb-4">
           {subTabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setSubView(tab.id)}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${
                 subView === tab.id
-                  ? 'border-pink-500 text-pink-600 dark:text-pink-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  ? 'bg-pink-500 text-white'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -1449,7 +1448,6 @@ export function PostsAutoTab({ accounts, userId, commentEvents = [], selectedAcc
             </button>
           ))}
         </nav>
-      </div>
 
       {/* Content Library */}
       {subView === 'library' && (
