@@ -333,15 +333,15 @@ export function DataQualityTab() {
           {fieldConfigs.map((field) => (
             <div
               key={field.id}
-              className="flex items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
             >
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <span className="font-medium text-gray-900 dark:text-white">
                   {field.field_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                 </span>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <select
                   value={field.importance_level}
                   onChange={(e) => handleImportanceChange(field.id, e.target.value as any)}

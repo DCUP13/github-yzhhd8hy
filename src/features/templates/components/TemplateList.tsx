@@ -116,13 +116,13 @@ export function TemplateList({ templates, onEdit, onDelete, onExport, onShare }:
               className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 group hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => handleTemplateClick(template)}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`${formatColor}`}>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`${formatColor} flex-shrink-0`}>
                     <FormatIcon className="w-5 h-5" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                         {template.name || 'Untitled Template'}
                       </h3>
@@ -147,7 +147,7 @@ export function TemplateList({ templates, onEdit, onDelete, onExport, onShare }:
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-2 flex-wrap sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   {template.imported && (
                     <button
                       onClick={(e) => {

@@ -18,8 +18,12 @@
 
 html {
   scroll-behavior: smooth;
-  /* Fluid root font-size: scales from 14px (mobile) to 16px (desktop) */
-  font-size: clamp(14px, 0.375rem + 0.9vw, 16px);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
 }
 
 body {

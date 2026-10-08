@@ -52,6 +52,7 @@ Deno.serve(async (req: Request) => {
       const headers = {
         "Authorization": `Bearer ${accessToken}`,
         "X-Restli-Protocol-Version": "2.0.0",
+        "Linkedin-Version": "202401",
       };
 
       // 1. Fetch the user's UGC posts
