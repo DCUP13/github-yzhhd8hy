@@ -264,7 +264,7 @@ export function Settings({ onSignOut: _onSignOut, currentView: _currentView, mem
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900 min-h-screen overflow-x-hidden">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-5xl mx-auto w-full">
         {isManagingMember && onBackToTeam && (
           <button
             onClick={onBackToTeam}
