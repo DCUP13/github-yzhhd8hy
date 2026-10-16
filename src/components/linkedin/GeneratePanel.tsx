@@ -112,7 +112,7 @@ export function GeneratePanel({ researchLeadDays, hasAssignments, onGenerated }:
   ];
 
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 space-y-5">
+    <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-5 space-y-5">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl bg-[#0A66C2]/10 flex items-center justify-center flex-shrink-0">
           <Wand2 className="w-5 h-5 text-[#0A66C2]" />
@@ -138,7 +138,7 @@ export function GeneratePanel({ researchLeadDays, hasAssignments, onGenerated }:
       </div>
 
       {kind === 'custom' && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>From week of</label>
             <input type="date" value={from} onChange={(e) => e.target.value && setFrom(mondayOf(e.target.value))} className={inputClass} />
@@ -175,7 +175,7 @@ export function GeneratePanel({ researchLeadDays, hasAssignments, onGenerated }:
             const pct = active > 0 ? Math.round((finished / active) * 100) : 100;
             return (
               <div key={j.id} className="space-y-1.5">
-                <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center justify-between gap-2 text-sm">
                   <span className="text-gray-700 dark:text-gray-200">{formatDay(j.start_week)} - {formatDay(addDays(j.end_week, 6))}</span>
                   <span className="text-gray-500 tabular-nums">{total === 0 ? 'No new posts' : `${finished}/${active}`}</span>
                 </div>

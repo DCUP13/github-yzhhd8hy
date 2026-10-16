@@ -186,7 +186,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
           <div>
             <label className={labelClass}>{category === 'research' ? 'Research topic' : 'Topic'}</label>
             {addingTopic ? (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap sm:flex-nowrap gap-2">
                 <input value={newTopic} onChange={(e) => setNewTopic(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addTopic(); }} placeholder="New topic name" className={inputClass} autoFocus />
                 <button type="button" onClick={addTopic} className={primaryBtn}><Plus className="w-4 h-4" /></button>
                 <button type="button" onClick={() => setAddingTopic(false)} className={secondaryBtn}>Cancel</button>
@@ -232,7 +232,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
 
           <div>
             <label className={labelClass}>Attached document</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {docOptions.map((o) => (
                 <button
                   key={o.value}
@@ -274,7 +274,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
           {guideMode === 'upload' && (
             <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 p-4">
               {docUrl ? (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <FileText className="w-8 h-8 text-[#0A66C2]" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{docName || 'Document'}</p>

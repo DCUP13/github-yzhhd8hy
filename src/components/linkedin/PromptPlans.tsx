@@ -144,7 +144,7 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
           </button>
         </div>
         {plan && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={duplicatePlan} className={secondaryBtn}><Copy className="w-4 h-4" /> Duplicate</button>
             <button onClick={deletePlan} className={`${secondaryBtn} hover:!text-red-600 hover:!border-red-300`}><Trash2 className="w-4 h-4" /> Delete</button>
           </div>
@@ -205,7 +205,7 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
                         {sampleName(s.voice_sample_id) && (
                           <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400 truncate"><Mic className="w-3 h-3" /> {sampleName(s.voice_sample_id)}</p>
                         )}
-                        <div className="absolute top-1.5 right-1.5 hidden group-hover:flex gap-0.5 bg-white dark:bg-gray-900 rounded-md">
+                        <div className="absolute top-1.5 right-1.5 flex sm:hidden sm:group-hover:flex gap-0.5 bg-white dark:bg-gray-900 rounded-md">
                           <button onClick={(e) => { e.stopPropagation(); duplicateSlot(s); }} className="p-1 rounded text-gray-400 hover:text-[#0A66C2]" aria-label="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
                           <button onClick={(e) => { e.stopPropagation(); deleteSlot(s); }} className="p-1 rounded text-gray-400 hover:text-red-600" aria-label="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>

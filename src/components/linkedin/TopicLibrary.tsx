@@ -122,7 +122,7 @@ export function TopicLibrary({ topics, onChange }: TopicLibraryProps) {
               ) : (
                 <>
                   <span className="flex-1 text-sm text-gray-800 dark:text-gray-100">{t.name}</span>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <button onClick={() => { setEditId(t.id); setEditName(t.name); }} className="p-1.5 rounded-lg text-gray-500 hover:text-[#0A66C2] hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Rename">
                       <Pencil className="w-4 h-4" />
                     </button>

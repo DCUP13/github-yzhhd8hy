@@ -138,7 +138,7 @@ export function Timeline({ plans, assignments, skipDates, settings, onChange, on
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div className="xl:col-span-2 space-y-6">
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-5">
           <div className="flex items-center justify-between gap-4 mb-1">
             <div className="flex items-center gap-2">
               <CalendarRange className="w-5 h-5 text-[#0A66C2]" />
@@ -152,7 +152,7 @@ export function Timeline({ plans, assignments, skipDates, settings, onChange, on
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Click any week to start a plan there. A plan repeats every week until the next plan begins.</p>
 
-          <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(68px, 1fr))' }}>
+          <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))' }}>
             {weeks.map((w) => {
               const pid = planForWeek(w);
               const c = pid ? colorFor(pid) : null;
@@ -189,8 +189,8 @@ export function Timeline({ plans, assignments, skipDates, settings, onChange, on
                 const next = sorted[i + 1];
                 return (
                   <li key={a.id} className="flex items-center gap-3 py-2.5">
-                    <span className={`w-2.5 h-2.5 rounded-full ${colorFor(a.plan_id).solid}`} />
-                    <span className="flex-1 text-sm text-gray-800 dark:text-gray-100">
+                    <span className={`w-2.5 h-2.5 flex-shrink-0 rounded-full ${colorFor(a.plan_id).solid}`} />
+                    <span className="flex-1 min-w-0 text-sm text-gray-800 dark:text-gray-100">
                       <span className="font-medium">{planName(a.plan_id)}</span>
                       <span className="text-gray-500"> - week of {formatDay(a.start_week, { month: 'short', day: 'numeric', year: 'numeric' })} {next ? `until ${formatDay(addDays(next.start_week, -1))}` : 'onward'}</span>
                     </span>
@@ -202,7 +202,7 @@ export function Timeline({ plans, assignments, skipDates, settings, onChange, on
           )}
         </div>
 
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-5">
           <div className="flex items-center gap-2 mb-1">
             <CalendarOff className="w-5 h-5 text-red-500" />
             <h3 className="font-semibold text-gray-900 dark:text-white">Skip days</h3>
@@ -216,7 +216,7 @@ export function Timeline({ plans, assignments, skipDates, settings, onChange, on
           {upcomingSkips.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
               {upcomingSkips.map((s) => (
-                <span key={s.id} className="inline-flex items-center gap-2 pl-3 pr-1 py-1 rounded-full bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
+                <span key={s.id} className="inline-flex flex-wrap items-center gap-2 pl-3 pr-1 py-1 rounded-full bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
                   {formatDay(s.skip_date, { weekday: 'short', month: 'short', day: 'numeric' })}{s.note && <span className="text-red-500/70">- {s.note}</span>}
                   <button onClick={() => unskip(s)} className="px-2 py-0.5 rounded-full text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40">Un-skip</button>
                 </span>
@@ -229,7 +229,7 @@ export function Timeline({ plans, assignments, skipDates, settings, onChange, on
       <div className="space-y-6">
         <GeneratePanel researchLeadDays={settings.research_lead_days} hasAssignments={assignments.length > 0} onGenerated={() => { loadJobWeeks(); onPostsChanged(); }} />
 
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 space-y-4">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2">
             <Settings2 className="w-5 h-5 text-gray-500" />
             <h3 className="font-semibold text-gray-900 dark:text-white">Schedule settings</h3>

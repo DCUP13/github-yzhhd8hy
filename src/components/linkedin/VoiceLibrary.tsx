@@ -86,7 +86,7 @@ export function VoiceLibrary({ samples, onChange }: VoiceLibraryProps) {
             <div key={s.id} className="group flex flex-col rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all">
               <div className="flex items-start justify-between gap-3">
                 <h3 className="font-semibold text-gray-900 dark:text-white truncate">{s.name}</h3>
-                <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 flex-shrink-0 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
                   <button onClick={() => open(s)} className="p-1.5 rounded-lg text-gray-500 hover:text-[#0A66C2] hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Edit">
                     <Pencil className="w-4 h-4" />
                   </button>

@@ -21,11 +21,11 @@ export function Modal({ title, subtitle, onClose, children, footer, size = 'md' 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-gray-900/50 backdrop-blur-sm"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className={`w-full ${SIZES[size]} max-h-[92vh] flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-2xl`}>
-        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-100 dark:border-gray-700">
+      <div className={`w-full ${SIZES[size]} max-h-[94dvh] sm:max-h-[92vh] flex flex-col bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl`}>
+        <div className="flex items-start justify-between gap-4 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-gray-100 dark:border-gray-700">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate">{title}</h2>
             {subtitle && <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
@@ -34,8 +34,8 @@ export function Modal({ title, subtitle, onClose, children, footer, size = 'md' 
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-        {footer && <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-end gap-2">{footer}</div>}
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5">{children}</div>
+        {footer && <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );

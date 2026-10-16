@@ -156,7 +156,7 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
     return (
       <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div className="grid grid-cols-7 bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
-          {DAY_HEADERS.map((d) => <div key={d} className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 text-center">{d}</div>)}
+          {DAY_HEADERS.map((d) => <div key={d} className="px-0.5 sm:px-2 py-2 text-[10px] sm:text-xs font-semibold uppercase sm:tracking-wide text-gray-500 text-center">{d}</div>)}
         </div>
         <div className="grid grid-cols-7">
           {Array.from({ length: 42 }, (_, i) => {
@@ -168,7 +168,7 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
               <div
                 key={d}
                 onClick={() => openDay(d)}
-                className={`min-h-[112px] p-1.5 border-b border-r border-gray-100 dark:border-gray-700/60 cursor-pointer transition-colors hover:bg-blue-50/40 dark:hover:bg-gray-700/30 ${inMonth ? '' : 'bg-gray-50/60 dark:bg-gray-900/30'} ${skipped ? 'bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,rgba(148,163,184,0.12)_6px,rgba(148,163,184,0.12)_12px)]' : ''}`}
+                className={`min-h-[64px] sm:min-h-[112px] p-1 sm:p-1.5 border-b border-r border-gray-100 dark:border-gray-700/60 cursor-pointer transition-colors hover:bg-blue-50/40 dark:hover:bg-gray-700/30 ${inMonth ? '' : 'bg-gray-50/60 dark:bg-gray-900/30'} ${skipped ? 'bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,rgba(148,163,184,0.12)_6px,rgba(148,163,184,0.12)_12px)]' : ''}`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className={`text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full ${d === today ? 'bg-[#0A66C2] text-white' : inMonth ? 'text-gray-700 dark:text-gray-200' : 'text-gray-400'}`}>
@@ -176,10 +176,18 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
                   </span>
                   {skipped && <Ban className="w-3.5 h-3.5 text-gray-400" aria-label="Skipped" />}
                 </div>
-                <div className="space-y-1">
+                <div className="hidden sm:block space-y-1">
                   {list.slice(0, 3).map((p) => chip(p, true))}
                   {list.length > 3 && <p className="text-[11px] font-medium text-gray-500 px-1">+{list.length - 3} more</p>}
                 </div>
+                {list.length > 0 && (
+                  <div className="flex sm:hidden flex-wrap items-center gap-0.5 px-0.5">
+                    {list.slice(0, 4).map((p) => (
+                      <span key={p.id} className={`w-1.5 h-1.5 rounded-full ${p.category ? CATEGORY_STYLES[p.category].dot : 'bg-gray-400'}`} />
+                    ))}
+                    {list.length > 4 && <span className="text-[9px] font-medium text-gray-500">+{list.length - 4}</span>}
+                  </div>
+                )}
               </div>
             );
           })}

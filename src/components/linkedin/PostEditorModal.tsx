@@ -232,7 +232,7 @@ export function PostEditorModal({ post, leadDays, onClose, onChanged }: PostEdit
               readOnly={locked}
               rows={18}
               placeholder={post.generation_status === 'pending' ? 'This post is queued to be written.' : 'Write your post...'}
-              className={`${inputClass} leading-relaxed min-h-[420px]`}
+              className={`${inputClass} leading-relaxed min-h-[260px] sm:min-h-[420px]`}
             />
           )}
         </div>

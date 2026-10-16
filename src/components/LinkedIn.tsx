@@ -2,16 +2,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Linkedin, Image as ImageIcon, Link as LinkIcon, Sparkles, Send, Clock, Trash2, CheckCircle2, XCircle, AlertCircle, Globe, Users, Loader2, X, Video as VideoIcon, FileText, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
+import { CalendarDays, PenSquare, LayoutGrid, CalendarRange, Mic, Tags } from 'lucide-react';
 import { uploadFile } from './linkedin/api';
 import { ContentEngine, type EngineTab } from './linkedin/ContentEngine';
 
-const TABS: { id: EngineTab | 'compose'; label: string }[] = [
-  { id: 'calendar', label: 'Calendar' },
-  { id: 'compose', label: 'Compose & Posts' },
-  { id: 'plans', label: 'Prompt Plans' },
-  { id: 'timeline', label: 'Timeline' },
-  { id: 'voice', label: 'Voice Library' },
-  { id: 'topics', label: 'Topics' },
+const TABS: { id: EngineTab | 'compose'; label: string; icon: typeof Linkedin }[] = [
+  { id: 'calendar', label: 'Calendar', icon: CalendarDays },
+  { id: 'compose', label: 'Compose & Posts', icon: PenSquare },
+  { id: 'plans', label: 'Prompt Plans', icon: LayoutGrid },
+  { id: 'timeline', label: 'Timeline', icon: CalendarRange },
+  { id: 'voice', label: 'Voice Library', icon: Mic },
+  { id: 'topics', label: 'Topics', icon: Tags },
 ];
 
 interface LinkedInProps {
@@ -630,18 +631,20 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
         {/* Composer — only show when connected */}
         {account && account.connected && (
           <>
-            <nav className="-mx-1 flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-gray-700">
-              {TABS.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className={`relative whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors ${tab === t.id ? 'text-[#0A66C2]' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}
-                >
-                  {t.label}
-                  <span className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[#0A66C2] transition-opacity ${tab === t.id ? 'opacity-100' : 'opacity-0'}`} />
-                </button>
-              ))}
-            </nav>
+            <div className="border-b border-gray-200 dark:border-gray-700">
+              <nav className="flex flex-wrap gap-2 py-3">
+                {TABS.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${tab === t.id ? 'bg-[#0A66C2] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                  >
+                    <t.icon className="w-4 h-4" />
+                    {t.label}
+                  </button>
+                ))}
+              </nav>
+            </div>
             {tab !== 'compose' && <ContentEngine tab={tab} />}
             {tab === 'compose' && (
             <>
