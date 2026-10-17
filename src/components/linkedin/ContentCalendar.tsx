@@ -123,28 +123,28 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
 
   const openDay = (d: string) => { setCursor(d); setView('day'); };
 
-  const chip = (p: EnginePost, compact: boolean) => {
+  const chip = (p: EnginePost, compact: boolean, narrow = false) => {
     const st = displayStatus(p, leadDays);
     const cat = p.category ? CATEGORY_STYLES[p.category] : null;
     return (
       <button
         key={p.id}
         onClick={(e) => { e.stopPropagation(); setEditing(p); }}
-        className={`w-full text-left rounded-md border-l-[3px] ${cat ? cat.bar : 'border-gray-300'} bg-white dark:bg-gray-800 shadow-sm hover:shadow-md hover:-translate-y-px transition-all ${compact ? 'px-1.5 py-1' : 'px-3 py-2.5'}`}
+        className={`w-full text-left rounded-md border-l-[3px] ${cat ? cat.bar : 'border-gray-300'} bg-white dark:bg-gray-800 shadow-sm hover:shadow-md hover:-translate-y-px transition-all ${compact ? 'px-1.5 py-1' : narrow ? 'px-2 py-2' : 'px-3 py-2.5'}`}
       >
-        <div className="flex items-center gap-1.5">
+        <div className={narrow ? 'flex flex-col items-start gap-1' : 'flex items-center gap-1.5'}>
           <span className="text-[11px] font-semibold tabular-nums text-gray-500 dark:text-gray-400">{timeLabel(p)}</span>
           {compact ? (
             <span className={`ml-auto w-2 h-2 rounded-full ${st.key === 'needs_review' ? 'bg-amber-500' : st.key === 'published' ? 'bg-green-500' : st.key === 'failed' || st.key === 'write_failed' ? 'bg-red-500' : st.key === 'writing' ? 'bg-sky-400 animate-pulse' : 'bg-transparent'}`} title={st.label} />
           ) : (
-            <span className="ml-auto"><StatusBadge status={st} /></span>
+            <span className={narrow ? 'max-w-full' : 'ml-auto'}><StatusBadge status={st} /></span>
           )}
         </div>
-        <p className={`text-gray-800 dark:text-gray-100 ${compact ? 'text-xs truncate' : 'text-sm font-medium mt-1'}`}>{p.topic_name || 'Untitled'}</p>
+        <p className={`text-gray-800 dark:text-gray-100 ${compact ? 'text-xs truncate' : narrow ? 'text-[13px] font-medium leading-snug mt-1.5 break-words' : 'text-sm font-medium mt-1'}`}>{p.topic_name || 'Untitled'}</p>
         {!compact && (
           <>
-            <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400 line-clamp-3">{p.content_text || (p.generation_status === 'failed' ? 'Writing failed. Open to retry.' : 'Not written yet.')}</p>
-            {p.document_url && <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-[#0A66C2]"><FileText className="w-3 h-3" />{p.document_name || 'Document'}</p>}
+            <p className={`mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400 break-words ${narrow ? 'line-clamp-4' : 'line-clamp-3'}`}>{p.content_text || (p.generation_status === 'failed' ? 'Writing failed. Open to retry.' : 'Not written yet.')}</p>
+            {p.document_url && <p className="mt-1.5 flex items-center gap-1 text-xs text-[#0A66C2] min-w-0"><FileText className="w-3 h-3 flex-shrink-0" /><span className="truncate">{p.document_name || 'Document'}</span></p>}
           </>
         )}
       </button>
@@ -197,19 +197,19 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
   };
 
   const renderWeek = () => (
-    <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
       {Array.from({ length: 7 }, (_, i) => {
         const d = addDays(range.start, i);
         const list = byDay.get(d) || [];
         const skipped = skipSet.has(d);
         return (
-          <div key={d} className={`rounded-xl border p-2 min-h-[220px] ${d === today ? 'border-[#0A66C2]/40 bg-blue-50/40 dark:bg-blue-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
+          <div key={d} className={`min-w-0 rounded-xl border p-1.5 lg:min-h-[220px] ${d === today ? 'border-[#0A66C2]/40 bg-blue-50/40 dark:bg-blue-900/10' : 'border-gray-200 dark:border-gray-700'}`}>
             <button onClick={() => openDay(d)} className="w-full flex items-baseline justify-between mb-2 px-1 group">
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{DAY_HEADERS[i]}</span>
               <span className={`text-lg font-semibold group-hover:text-[#0A66C2] ${d === today ? 'text-[#0A66C2]' : 'text-gray-800 dark:text-gray-100'}`}>{parseISODate(d).getDate()}</span>
             </button>
             {skipped && <p className="flex items-center gap-1 text-xs text-gray-400 px-1 mb-2"><Ban className="w-3 h-3" /> Skipped</p>}
-            <div className="space-y-2">{list.map((p) => chip(p, false))}</div>
+            <div className="space-y-2">{list.map((p) => chip(p, false, true))}</div>
           </div>
         );
       })}
