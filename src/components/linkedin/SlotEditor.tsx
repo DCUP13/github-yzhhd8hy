@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Loader2, Plus, Upload, FileText, Sparkles, Ban, Quote } from 'lucide-react';
+import { Loader2, Plus, Upload, FileText, Sparkles, Ban, Quote, Mic } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
 import { uploadFile } from './api';
@@ -37,6 +37,8 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
   const guideRef = useRef<HTMLTextAreaElement>(null);
 
   const topicOptions = topics.filter((t) => t.category === category && (!t.is_hidden || t.id === topicId));
+  const selectedTopic = topics.find((t) => t.id === topicId);
+  const selectedSample = samples.find((s) => s.id === sampleId);
   const dayLabel = WEEK_DAYS.find((d) => d.value === dayOfWeek)?.long;
 
   const changeCategory = (c: Category) => {
@@ -122,8 +124,13 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
     <div className="flex flex-wrap items-center gap-1.5 mt-2">
       <span className="text-xs text-gray-400 mr-1">Insert:</span>
       <button type="button" onClick={() => insertToken(target, '{{topic}}')} className="px-2 py-0.5 text-xs rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-        Topic
+        Topic{selectedTopic ? `: ${selectedTopic.name}` : ''}
       </button>
+      {selectedSample && (
+        <button type="button" onClick={() => insertToken(target, '{{voice}}')} title={selectedSample.content.slice(0, 200)} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors">
+          <Mic className="w-3 h-3" /> Voice: {selectedSample.name}
+        </button>
+      )}
       {samples.map((s) => (
         <button
           key={s.id}
@@ -228,6 +235,9 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
               className={`${inputClass} leading-relaxed`}
             />
             <SampleChips target="prompt" />
+            <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+              The topic, voice, post type and posting date are always sent to the writer automatically. Use the buttons above only when you want to reference them at a specific spot in your instructions.
+            </p>
           </div>
 
           <div>
