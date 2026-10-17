@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
-import { Loader2, Plus, Upload, FileText, Sparkles, Ban, Quote, Mic } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Loader2, Plus, Upload, FileText, Sparkles, Ban, Quote, Mic, Download } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
+import { showConfirm } from '../../lib/confirm';
 import { uploadFile } from './api';
 import { Modal, inputClass, labelClass, primaryBtn, secondaryBtn } from './Modal';
 import { CATEGORIES, CATEGORY_STYLES, GUIDE_LENGTHS, WEEK_DAYS, type Category, type GuideLength, type GuideMode, type PlanSlot, type Topic, type VoiceSample } from './types';
@@ -18,6 +19,12 @@ interface SlotEditorProps {
 
 const ADD_NEW = '__add_new__';
 
+interface SavedPrompt {
+  id: string;
+  title: string;
+  content: string | null;
+}
+
 export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, onSaved }: SlotEditorProps) {
   const [postTime, setPostTime] = useState((slot?.post_time || '09:00').slice(0, 5));
   const [category, setCategory] = useState<Category>(slot?.category || 'mindset');
@@ -33,6 +40,8 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
   const [newTopic, setNewTopic] = useState('');
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
+  const [promptsLoading, setPromptsLoading] = useState(true);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const guideRef = useRef<HTMLTextAreaElement>(null);
 
@@ -40,6 +49,34 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
   const selectedTopic = topics.find((t) => t.id === topicId);
   const selectedSample = samples.find((s) => s.id === sampleId);
   const dayLabel = WEEK_DAYS.find((d) => d.value === dayOfWeek)?.long;
+
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from('prompts')
+      .select('id, title, content')
+      .eq('category', 'LinkedIn')
+      .order('title')
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) toast.error('Could not load your LinkedIn prompts');
+        setSavedPrompts((data || []).filter((p) => p.content?.trim()));
+        setPromptsLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const importPrompt = async (id: string) => {
+    const picked = savedPrompts.find((p) => p.id === id);
+    if (!picked?.content) return;
+    if (prompt.trim() && prompt.trim() !== picked.content.trim()) {
+      const ok = await showConfirm({ message: `Replace the current writing prompt with "${picked.title}"?`, confirmText: 'Replace' });
+      if (!ok) return;
+    }
+    setPrompt(picked.content);
+    toast.success(`Imported "${picked.title}". Edit it here if needed.`);
+    requestAnimationFrame(() => promptRef.current?.focus());
+  };
 
   const changeCategory = (c: Category) => {
     setCategory(c);
@@ -225,7 +262,21 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
 
         <div className="lg:col-span-3 space-y-5">
           <div>
-            <label className={labelClass}>Writing prompt</label>
+            <div className="flex flex-wrap items-end justify-between gap-2 mb-1.5">
+              <label className={`${labelClass} !mb-0`}>Writing prompt</label>
+              <div className="relative w-full sm:w-64">
+                <Download className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                <select
+                  value=""
+                  onChange={(e) => importPrompt(e.target.value)}
+                  disabled={promptsLoading || savedPrompts.length === 0}
+                  className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:border-[#0A66C2] focus:outline-none focus:ring-2 focus:ring-[#0A66C2]/30 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                >
+                  <option value="">{promptsLoading ? 'Loading prompts...' : savedPrompts.length === 0 ? 'No LinkedIn prompts saved' : 'Import from Prompts...'}</option>
+                  {savedPrompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                </select>
+              </div>
+            </div>
             <textarea
               ref={promptRef}
               value={prompt}
@@ -238,6 +289,9 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
             <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
               The topic, voice, post type and posting date are always sent to the writer automatically. Use the buttons above only when you want to reference them at a specific spot in your instructions.
             </p>
+            {!promptsLoading && savedPrompts.length === 0 && (
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">To reuse prompts, create one on the Prompts page and set its category to LinkedIn.</p>
+            )}
           </div>
 
           <div>

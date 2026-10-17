@@ -33,6 +33,7 @@ const categories = [
   'General',
   'Email Marketing',
   'Instagram',
+  'LinkedIn',
   'Real Estate',
   'Customer Service',
   'Sales',
@@ -308,20 +309,23 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
         .map(v => v.trim().toLowerCase())
         .filter(v => v.length > 0);
 
+      const isLinkedIn = formData.category === 'LinkedIn';
+      const replyMode = isLinkedIn ? 'single' : formData.replyMode;
+
       const promptData: Record<string, any> = {
         title: formData.title,
         category: formData.category,
         variables: variables,
         user_id: session.user.id,
         updated_at: new Date().toISOString(),
-        reply_mode: formData.replyMode,
-        use_business_data: formData.useBusinessData,
-        business_data: formData.useBusinessData ? formData.businessData : null,
-        routing_addresses: routingAddresses,
-        routing_domains: routingDomains,
+        reply_mode: replyMode,
+        use_business_data: isLinkedIn ? false : formData.useBusinessData,
+        business_data: !isLinkedIn && formData.useBusinessData ? formData.businessData : null,
+        routing_addresses: isLinkedIn ? [] : routingAddresses,
+        routing_domains: isLinkedIn ? [] : routingDomains,
       };
 
-      if (formData.replyMode === 'two_step') {
+      if (replyMode === 'two_step') {
         promptData.step1_content = formData.step1Content;
         promptData.step2_content = formData.step2Content;
         promptData.content = null;
@@ -636,7 +640,10 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   </label>
                   <select
                     value={formData.category}
-                    onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                    onChange={(e) => {
+                      const category = e.target.value;
+                      setFormData(prev => ({ ...prev, category, replyMode: category === 'LinkedIn' ? 'single' : prev.replyMode }));
+                    }}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     {categories.map(category => (
@@ -645,7 +652,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   </select>
                 </div>
 
-                {/* Reply Mode Toggle */}
+                {formData.category !== 'LinkedIn' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Reply Mode
@@ -675,6 +682,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     </button>
                   </div>
                 </div>
+                )}
 
                 {formData.replyMode === 'single' ? (
                   <div>
@@ -686,7 +694,9 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                       onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
                       rows={8}
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
-                      placeholder="Write your autoresponder prompt here. Use {{variable_name}} for dynamic content."
+                      placeholder={formData.category === 'LinkedIn'
+                        ? 'How should the post be written? e.g. Open with a contrarian hook about {{topic}}, share one personal story, end with a question.'
+                        : 'Write your autoresponder prompt here. Use {{variable_name}} for dynamic content.'}
                       required
                     />
                   </div>
@@ -725,7 +735,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   </>
                 )}
 
-                {/* Business Data Section */}
+                {formData.category !== 'LinkedIn' && (
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900/50">
                   <div className="flex items-center justify-between mb-3">
                     <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -759,9 +769,9 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     </>
                   )}
                 </div>
+                )}
 
-                {/* Routing Section — only relevant for email prompts */}
-                {formData.category !== 'Instagram' && (
+                {formData.category !== 'Instagram' && formData.category !== 'LinkedIn' && (
                 <div className="border border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
                   <label className="block text-sm font-medium text-green-800 dark:text-green-300 mb-2">
                     Email Routing (optional)
@@ -821,7 +831,11 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 )}
 
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-                  {formData.category === 'Instagram' ? (
+                  {formData.category === 'LinkedIn' ? (
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      <strong>LinkedIn placeholders:</strong> {`{{topic}}`} (the slot's topic), {`{{voice}}`} (the slot's voice sample), {`{{sample:Sample name}}`} (any voice sample by name). Import this prompt into a post slot from LinkedIn &gt; Prompt Plans.
+                    </p>
+                  ) : formData.category === 'Instagram' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
                       <strong>Instagram placeholders:</strong> {`{{message}}`} (incoming DM text), {`{{conversation}}`} (full DM history), {`{{sender_username}}`} (sender's IG username), {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, plus your custom variables.
                     </p>
@@ -832,6 +846,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   )}
                 </div>
 
+                {formData.category !== 'LinkedIn' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Custom Variables (comma-separated)
@@ -847,6 +862,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     List any extra variables you use in your prompt, separated by commas
                   </p>
                 </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 p-6 border-t border-gray-200 dark:border-gray-700 shrink-0">
