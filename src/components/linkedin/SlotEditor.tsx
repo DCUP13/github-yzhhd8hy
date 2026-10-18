@@ -66,16 +66,19 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
     return () => { active = false; };
   }, []);
 
-  const importPrompt = async (id: string) => {
+  const importPrompt = async (target: 'prompt' | 'guide', id: string) => {
     const picked = savedPrompts.find((p) => p.id === id);
     if (!picked?.content) return;
-    if (prompt.trim() && prompt.trim() !== picked.content.trim()) {
-      const ok = await showConfirm({ message: `Replace the current writing prompt with "${picked.title}"?`, confirmText: 'Replace' });
+    const current = target === 'prompt' ? prompt : guidePrompt;
+    if (current.trim() && current.trim() !== picked.content.trim()) {
+      const what = target === 'prompt' ? 'writing prompt' : 'guide structure prompt';
+      const ok = await showConfirm({ message: `Replace the current ${what} with "${picked.title}"?`, confirmText: 'Replace' });
       if (!ok) return;
     }
-    setPrompt(picked.content);
+    (target === 'prompt' ? setPrompt : setGuidePrompt)(picked.content);
     toast.success(`Imported "${picked.title}". Edit it here if needed.`);
-    requestAnimationFrame(() => promptRef.current?.focus());
+    const ref = target === 'prompt' ? promptRef : guideRef;
+    requestAnimationFrame(() => ref.current?.focus());
   };
 
   const changeCategory = (c: Category) => {
@@ -156,6 +159,21 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
     onSaved();
     onClose();
   };
+
+  const ImportSelect = ({ target }: { target: 'prompt' | 'guide' }) => (
+    <div className="relative w-full sm:w-64">
+      <Download className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+      <select
+        value=""
+        onChange={(e) => importPrompt(target, e.target.value)}
+        disabled={promptsLoading || savedPrompts.length === 0}
+        className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:border-[#0A66C2] focus:outline-none focus:ring-2 focus:ring-[#0A66C2]/30 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      >
+        <option value="">{promptsLoading ? 'Loading prompts...' : savedPrompts.length === 0 ? 'No LinkedIn prompts saved' : 'Import from Prompts...'}</option>
+        {savedPrompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+      </select>
+    </div>
+  );
 
   const SampleChips = ({ target }: { target: 'prompt' | 'guide' }) => (
     <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -264,18 +282,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
           <div>
             <div className="flex flex-wrap items-end justify-between gap-2 mb-1.5">
               <label className={`${labelClass} !mb-0`}>Writing prompt</label>
-              <div className="relative w-full sm:w-64">
-                <Download className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                <select
-                  value=""
-                  onChange={(e) => importPrompt(e.target.value)}
-                  disabled={promptsLoading || savedPrompts.length === 0}
-                  className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:border-[#0A66C2] focus:outline-none focus:ring-2 focus:ring-[#0A66C2]/30 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                >
-                  <option value="">{promptsLoading ? 'Loading prompts...' : savedPrompts.length === 0 ? 'No LinkedIn prompts saved' : 'Import from Prompts...'}</option>
-                  {savedPrompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-                </select>
-              </div>
+              <ImportSelect target="prompt" />
             </div>
             <textarea
               ref={promptRef}
@@ -321,7 +328,10 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Guide structure prompt</label>
+                <div className="flex flex-wrap items-end justify-between gap-2 mb-1.5">
+                  <label className={`${labelClass} !mb-0`}>Guide structure prompt</label>
+                  <ImportSelect target="guide" />
+                </div>
                 <textarea
                   ref={guideRef}
                   value={guidePrompt}
