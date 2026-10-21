@@ -466,7 +466,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
             </div>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" role="tablist" aria-label="Filter by category">
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter by category">
             {['All', ...filterCategories].map(cat => {
               const count = cat === 'All' ? visibleSource.length : (categoryCounts[cat] || 0);
               const active = categoryFilter === cat;
