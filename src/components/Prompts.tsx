@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileText, Plus, CreditCard as Edit, Trash2, Search, Info, Repeat, Zap, Copy, Share2, Globe, Building2, Users, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { FileText, Plus, CreditCard as Edit, Trash2, Search, Info, Repeat, Zap, Copy, Share2, Globe, Building2, Users, X, Loader2, CheckCircle2, AlertCircle, ArrowUpDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ShareDialog } from './ShareDialog';
 
@@ -41,12 +41,34 @@ const categories = [
   'Other'
 ];
 
+type SortKey = 'newest' | 'oldest' | 'updated' | 'az' | 'za';
+
+const sortOptions: { value: SortKey; label: string }[] = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'updated', label: 'Recently updated' },
+  { value: 'az', label: 'Title A-Z' },
+  { value: 'za', label: 'Title Z-A' },
+];
+
+const comparePrompts = (sort: SortKey) => (a: Prompt, b: Prompt) => {
+  switch (sort) {
+    case 'oldest': return a.created_at.localeCompare(b.created_at);
+    case 'updated': return (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at);
+    case 'az': return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+    case 'za': return b.title.localeCompare(a.title, undefined, { sensitivity: 'base' });
+    default: return b.created_at.localeCompare(a.created_at);
+  }
+};
+
 export function Prompts({ onSignOut, currentView }: PromptsProps) {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [sharedPrompts, setSharedPrompts] = useState<Prompt[]>([]);
   const [domains, setDomains] = useState<DomainRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [sortBy, setSortBy] = useState<SortKey>('newest');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showShared, setShowShared] = useState(false);
@@ -247,18 +269,34 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
     setShowCreateModal(true);
   };
 
-  const filteredPrompts = prompts.filter(prompt =>
-    prompt.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (prompt.content || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (prompt.step1_content || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    prompt.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const matchesSearch = (prompt: Prompt) => {
+    const q = searchQuery.toLowerCase();
+    return prompt.title.toLowerCase().includes(q) ||
+      (prompt.content || '').toLowerCase().includes(q) ||
+      (prompt.step1_content || '').toLowerCase().includes(q) ||
+      (prompt.category || '').toLowerCase().includes(q);
+  };
 
-  const filteredSharedPrompts = sharedPrompts.filter(prompt =>
-    prompt.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (prompt.content || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    prompt.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const visibleSource = showShared ? [...prompts, ...sharedPrompts] : prompts;
+  const categoryCounts = visibleSource.reduce<Record<string, number>>((acc, p) => {
+    const c = p.category || 'Other';
+    acc[c] = (acc[c] || 0) + 1;
+    return acc;
+  }, {});
+  const filterCategories = [
+    ...categories,
+    ...Object.keys(categoryCounts).filter(c => !categories.includes(c)).sort(),
+  ];
+
+  const applyView = (list: Prompt[]) =>
+    list
+      .filter(p => categoryFilter === 'All' || (p.category || 'Other') === categoryFilter)
+      .filter(matchesSearch)
+      .sort(comparePrompts(sortBy));
+
+  const filteredPrompts = applyView(prompts);
+  const filteredSharedPrompts = applyView(sharedPrompts);
+  const isFiltered = !!searchQuery || categoryFilter !== 'All';
 
   const resetForm = () => {
     setFormData({
@@ -403,16 +441,56 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
           </div>
         </div>
 
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search prompts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            />
+        <div className="mb-6 space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search prompts..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div className="relative sm:w-56">
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
+                aria-label="Sort prompts"
+                className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+              >
+                {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" role="tablist" aria-label="Filter by category">
+            {['All', ...filterCategories].map(cat => {
+              const count = cat === 'All' ? visibleSource.length : (categoryCounts[cat] || 0);
+              const active = categoryFilter === cat;
+              return (
+                <button
+                  key={cat}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-all duration-150 ${
+                    active
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      : count === 0
+                        ? 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:border-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
+                  }`}
+                >
+                  {cat}
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -427,7 +505,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
               <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                 <Users className="w-10 h-10 text-gray-400 mx-auto mb-3" />
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {searchQuery ? 'No shared prompts match your search' : 'No prompts have been shared with you yet'}
+                  {isFiltered ? 'No shared prompts match your filters' : 'No prompts have been shared with you yet'}
                 </p>
               </div>
             ) : (
@@ -482,11 +560,23 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
             <div className="col-span-full text-center py-12 bg-white dark:bg-gray-800 rounded-xl">
               <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                {searchQuery ? 'No prompts found' : 'No prompts yet'}
+                {isFiltered ? 'No prompts found' : 'No prompts yet'}
               </h3>
               <p className="text-gray-500 dark:text-gray-400">
-                {searchQuery ? 'Try adjusting your search' : 'Create your first prompt to get started'}
+                {isFiltered
+                  ? categoryFilter !== 'All' && !searchQuery
+                    ? `You don't have any ${categoryFilter} prompts yet`
+                    : 'Try adjusting your search or category'
+                  : 'Create your first prompt to get started'}
               </p>
+              {categoryFilter !== 'All' && (
+                <button
+                  onClick={() => setCategoryFilter('All')}
+                  className="mt-4 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Show all categories
+                </button>
+              )}
             </div>
           ) : (
             filteredPrompts.map((prompt) => (
