@@ -4,6 +4,9 @@ import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
 import { showConfirm } from '../../lib/confirm';
 import { SlotEditor } from './SlotEditor';
+import { MoveDayMenu } from './MoveDayMenu';
+import { TouchDragOverlay } from './TouchDragOverlay';
+import { useTouchDrag } from './useTouchDrag';
 import { formatTime } from './api';
 import { inputClass, primaryBtn, secondaryBtn } from './Modal';
 import { CATEGORY_STYLES, WEEK_DAYS, type PlanSlot, type PromptPlan, type Topic, type VoiceSample } from './types';
@@ -24,6 +27,8 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropDay, setDropDay] = useState<number | null>(null);
   const [movedDays, setMovedDays] = useState<Record<string, number>>({});
+  const [touchMode, setTouchMode] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     setMovedDays({});
@@ -116,21 +121,6 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
     else onChange();
   };
 
-  if (plans.length === 0) {
-    return (
-      <div className="rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 py-16 text-center">
-        <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#0A66C2]/10 flex items-center justify-center">
-          <LayoutGrid className="w-6 h-6 text-[#0A66C2]" />
-        </div>
-        <p className="font-medium text-gray-900 dark:text-white">Create your first weekly plan</p>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">A plan is a reusable week: what to post each day, when, about what, and how it should be written.</p>
-        <button onClick={createPlan} className={`${primaryBtn} mt-6`}><Plus className="w-4 h-4" /> New plan</button>
-      </div>
-    );
-  }
-
-  const topicName = (id: string | null) => topics.find((t) => t.id === id)?.name;
-  const sampleName = (id: string | null) => samples.find((s) => s.id === id)?.name;
   const planSlots = slots
     .filter((s) => s.plan_id === plan?.id)
     .map((s) => (movedDays[s.id] !== undefined ? { ...s, day_of_week: movedDays[s.id] } : s));
@@ -157,6 +147,25 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
     toast.success(`Moved to ${WEEK_DAYS.find((w) => w.value === day)?.long ?? 'new day'}`);
     onChange();
   };
+
+  const { drag: touchDrag, bind, justDragged } = useTouchDrag(moveSlot);
+
+  if (plans.length === 0) {
+    return (
+      <div className="rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 py-16 text-center">
+        <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#0A66C2]/10 flex items-center justify-center">
+          <LayoutGrid className="w-6 h-6 text-[#0A66C2]" />
+        </div>
+        <p className="font-medium text-gray-900 dark:text-white">Create your first weekly plan</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">A plan is a reusable week: what to post each day, when, about what, and how it should be written.</p>
+        <button onClick={createPlan} className={`${primaryBtn} mt-6`}><Plus className="w-4 h-4" /> New plan</button>
+      </div>
+    );
+  }
+
+  const topicName = (id: string | null) => topics.find((t) => t.id === id)?.name;
+  const sampleName = (id: string | null) => samples.find((s) => s.id === id)?.name;
+  const touchSlot = touchDrag ? planSlots.find((s) => s.id === touchDrag.id) : undefined;
 
   return (
     <div className="space-y-6">
@@ -206,10 +215,13 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
             {WEEK_DAYS.map((d) => {
               const active = plan.active_days.includes(d.value);
               const daySlots = planSlots.filter((s) => s.day_of_week === d.value).sort((a, b) => a.post_time.localeCompare(b.post_time) || a.position - b.position);
-              const isDropTarget = dragId !== null && dropDay === d.value;
+              const isDropTarget =
+                (dragId !== null && dropDay === d.value) ||
+                (touchSlot !== undefined && touchDrag?.overDay === d.value && touchSlot.day_of_week !== d.value);
               return (
                 <div
                   key={d.value}
+                  data-drop-day={d.value}
                   onDragOver={(e) => {
                     if (!dragId) return;
                     e.preventDefault();
@@ -246,16 +258,18 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
                     {daySlots.map((s) => (
                       <div
                         key={s.id}
-                        draggable
+                        draggable={!touchMode}
+                        {...bind(s.id)}
+                        onPointerDown={(e) => setTouchMode(e.pointerType !== 'mouse')}
                         onDragStart={(e) => {
                           e.dataTransfer.setData('text/plain', s.id);
                           e.dataTransfer.effectAllowed = 'move';
                           setDragId(s.id);
                         }}
                         onDragEnd={endDrag}
-                        onClick={() => setEditor({ slot: s, day: s.day_of_week })}
-                        title="Click to edit, drag to move to another day"
-                        className={`group relative cursor-grab active:cursor-grabbing rounded-xl border-l-4 ${CATEGORY_STYLES[s.category].bar} bg-white dark:bg-gray-900 p-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all ${dragId === s.id ? 'opacity-40 scale-95' : ''}`}
+                        onClick={() => !justDragged() && setEditor({ slot: s, day: s.day_of_week })}
+                        title={touchMode ? undefined : 'Click to edit, drag to move to another day'}
+                        className={`group relative cursor-grab active:cursor-grabbing select-none [-webkit-touch-callout:none] rounded-xl border-l-4 ${CATEGORY_STYLES[s.category].bar} bg-white dark:bg-gray-900 p-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all ${dragId === s.id || touchDrag?.id === s.id ? 'opacity-40 scale-95' : ''} ${menuOpenId === s.id ? 'z-20' : ''}`}
                       >
                         <div className="flex items-center gap-1 text-xs font-semibold text-gray-900 dark:text-white">
                           <GripVertical className="w-3 h-3 -ml-1 text-gray-300 dark:text-gray-600 group-hover:text-gray-400" />
@@ -268,7 +282,15 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
                         {sampleName(s.voice_sample_id) && (
                           <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400 truncate"><Mic className="w-3 h-3" /> {sampleName(s.voice_sample_id)}</p>
                         )}
-                        <div className="absolute top-1.5 right-1.5 flex sm:hidden sm:group-hover:flex gap-0.5 bg-white dark:bg-gray-900 rounded-md">
+                        <div
+                          onTouchStart={(e) => e.stopPropagation()}
+                          className={`absolute top-1.5 right-1.5 gap-0.5 bg-white dark:bg-gray-900 rounded-md ${menuOpenId === s.id ? 'flex' : 'flex sm:hidden sm:group-hover:flex [@media(hover:none)]:flex'}`}
+                        >
+                          <MoveDayMenu
+                            currentDay={s.day_of_week}
+                            onMove={(day) => moveSlot(s.id, day)}
+                            onOpenChange={(open) => setMenuOpenId((cur) => (open ? s.id : cur === s.id ? null : cur))}
+                          />
                           <button onClick={(e) => { e.stopPropagation(); duplicateSlot(s); }} className="p-1 rounded text-gray-400 hover:text-[#0A66C2]" aria-label="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
                           <button onClick={(e) => { e.stopPropagation(); deleteSlot(s); }} className="p-1 rounded text-gray-400 hover:text-red-600" aria-label="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
@@ -288,6 +310,8 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
           </div>
         </>
       )}
+
+      {touchDrag && touchSlot && <TouchDragOverlay drag={touchDrag} slot={touchSlot} topicName={topicName(touchSlot.topic_id)} />}
 
       {editor && plan && (
         <SlotEditor
