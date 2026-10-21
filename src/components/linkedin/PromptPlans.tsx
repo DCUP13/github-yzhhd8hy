@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Copy, Trash2, Clock, FileText, Sparkles, LayoutGrid, Mic } from 'lucide-react';
+import { Plus, Copy, Trash2, Clock, FileText, Sparkles, LayoutGrid, Mic, GripVertical } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
 import { showConfirm } from '../../lib/confirm';
 import { SlotEditor } from './SlotEditor';
+import { MoveDayMenu } from './MoveDayMenu';
+import { TouchDragOverlay } from './TouchDragOverlay';
+import { useTouchDrag } from './useTouchDrag';
 import { formatTime } from './api';
 import { inputClass, primaryBtn, secondaryBtn } from './Modal';
 import { CATEGORY_STYLES, WEEK_DAYS, type PlanSlot, type PromptPlan, type Topic, type VoiceSample } from './types';
@@ -21,6 +24,15 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [editor, setEditor] = useState<{ slot: PlanSlot | null; day: number } | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropDay, setDropDay] = useState<number | null>(null);
+  const [movedDays, setMovedDays] = useState<Record<string, number>>({});
+  const [touchMode, setTouchMode] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMovedDays({});
+  }, [slots]);
 
   const plan = plans.find((p) => p.id === selectedId) || null;
 
@@ -109,6 +121,35 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
     else onChange();
   };
 
+  const planSlots = slots
+    .filter((s) => s.plan_id === plan?.id)
+    .map((s) => (movedDays[s.id] !== undefined ? { ...s, day_of_week: movedDays[s.id] } : s));
+
+  const endDrag = () => {
+    setDragId(null);
+    setDropDay(null);
+  };
+
+  const moveSlot = async (slotId: string, day: number) => {
+    endDrag();
+    const s = planSlots.find((x) => x.id === slotId);
+    if (!s || s.day_of_week === day) return;
+    setMovedDays((m) => ({ ...m, [slotId]: day }));
+    const { error } = await supabase.from('linkedin_plan_slots').update({ day_of_week: day }).eq('id', slotId);
+    if (error) {
+      setMovedDays((m) => {
+        const { [slotId]: _drop, ...rest } = m;
+        return rest;
+      });
+      toast.error('Could not move post');
+      return;
+    }
+    toast.success(`Moved to ${WEEK_DAYS.find((w) => w.value === day)?.long ?? 'new day'}`);
+    onChange();
+  };
+
+  const { drag: touchDrag, bind, justDragged } = useTouchDrag(moveSlot);
+
   if (plans.length === 0) {
     return (
       <div className="rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 py-16 text-center">
@@ -124,7 +165,7 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
 
   const topicName = (id: string | null) => topics.find((t) => t.id === id)?.name;
   const sampleName = (id: string | null) => samples.find((s) => s.id === id)?.name;
-  const planSlots = slots.filter((s) => s.plan_id === plan?.id);
+  const touchSlot = touchDrag ? planSlots.find((s) => s.id === touchDrag.id) : undefined;
 
   return (
     <div className="space-y-6">
@@ -174,8 +215,33 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
             {WEEK_DAYS.map((d) => {
               const active = plan.active_days.includes(d.value);
               const daySlots = planSlots.filter((s) => s.day_of_week === d.value).sort((a, b) => a.post_time.localeCompare(b.post_time) || a.position - b.position);
+              const isDropTarget =
+                (dragId !== null && dropDay === d.value) ||
+                (touchSlot !== undefined && touchDrag?.overDay === d.value && touchSlot.day_of_week !== d.value);
               return (
-                <div key={d.value} className={`flex flex-col rounded-2xl border transition-colors ${active ? 'border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/60' : 'border-dashed border-gray-200 dark:border-gray-700 bg-transparent'}`}>
+                <div
+                  key={d.value}
+                  data-drop-day={d.value}
+                  onDragOver={(e) => {
+                    if (!dragId) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dropDay !== d.value) setDropDay(d.value);
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropDay((cur) => (cur === d.value ? null : cur));
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const id = e.dataTransfer.getData('text/plain') || dragId;
+                    if (id) moveSlot(id, d.value);
+                  }}
+                  className={`flex flex-col rounded-2xl border transition-all duration-150 ${
+                    isDropTarget
+                      ? 'border-[#0A66C2] ring-2 ring-[#0A66C2]/30 bg-[#0A66C2]/5 dark:bg-[#0A66C2]/10'
+                      : active ? 'border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/60' : 'border-dashed border-gray-200 dark:border-gray-700 bg-transparent'
+                  }`}
+                >
                   <div className="flex items-center justify-between px-3 pt-3 pb-2">
                     <span className={`text-sm font-semibold ${active ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>{d.long}</span>
                     <button
@@ -188,14 +254,25 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
                       <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${active ? 'translate-x-4' : ''}`} />
                     </button>
                   </div>
-                  <div className={`flex-1 px-2 pb-2 space-y-2 ${active ? '' : 'opacity-40'}`}>
+                  <div className={`flex-1 px-2 pb-2 space-y-2 min-h-[64px] ${active || isDropTarget ? '' : 'opacity-40'}`}>
                     {daySlots.map((s) => (
                       <div
                         key={s.id}
-                        onClick={() => setEditor({ slot: s, day: d.value })}
-                        className={`group relative cursor-pointer rounded-xl border-l-4 ${CATEGORY_STYLES[s.category].bar} bg-white dark:bg-gray-900 p-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all`}
+                        draggable={!touchMode}
+                        {...bind(s.id)}
+                        onPointerDown={(e) => setTouchMode(e.pointerType !== 'mouse')}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', s.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          setDragId(s.id);
+                        }}
+                        onDragEnd={endDrag}
+                        onClick={() => !justDragged() && setEditor({ slot: s, day: s.day_of_week })}
+                        title={touchMode ? undefined : 'Click to edit, drag to move to another day'}
+                        className={`group relative cursor-grab active:cursor-grabbing select-none [-webkit-touch-callout:none] rounded-xl border-l-4 ${CATEGORY_STYLES[s.category].bar} bg-white dark:bg-gray-900 p-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all ${dragId === s.id || touchDrag?.id === s.id ? 'opacity-40 scale-95' : ''} ${menuOpenId === s.id ? 'z-20' : ''}`}
                       >
                         <div className="flex items-center gap-1 text-xs font-semibold text-gray-900 dark:text-white">
+                          <GripVertical className="w-3 h-3 -ml-1 text-gray-300 dark:text-gray-600 group-hover:text-gray-400" />
                           <Clock className="w-3 h-3 text-gray-400" /> {formatTime(s.post_time)}
                           {s.guide_mode === 'ai' && <Sparkles className="w-3 h-3 ml-auto text-[#0A66C2]" />}
                           {s.guide_mode === 'upload' && <FileText className="w-3 h-3 ml-auto text-[#0A66C2]" />}
@@ -205,7 +282,15 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
                         {sampleName(s.voice_sample_id) && (
                           <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400 truncate"><Mic className="w-3 h-3" /> {sampleName(s.voice_sample_id)}</p>
                         )}
-                        <div className="absolute top-1.5 right-1.5 flex sm:hidden sm:group-hover:flex gap-0.5 bg-white dark:bg-gray-900 rounded-md">
+                        <div
+                          onTouchStart={(e) => e.stopPropagation()}
+                          className={`absolute top-1.5 right-1.5 gap-0.5 bg-white dark:bg-gray-900 rounded-md ${menuOpenId === s.id ? 'flex' : 'flex sm:hidden sm:group-hover:flex [@media(hover:none)]:flex'}`}
+                        >
+                          <MoveDayMenu
+                            currentDay={s.day_of_week}
+                            onMove={(day) => moveSlot(s.id, day)}
+                            onOpenChange={(open) => setMenuOpenId((cur) => (open ? s.id : cur === s.id ? null : cur))}
+                          />
                           <button onClick={(e) => { e.stopPropagation(); duplicateSlot(s); }} className="p-1 rounded text-gray-400 hover:text-[#0A66C2]" aria-label="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
                           <button onClick={(e) => { e.stopPropagation(); deleteSlot(s); }} className="p-1 rounded text-gray-400 hover:text-red-600" aria-label="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
@@ -225,6 +310,8 @@ export function PromptPlans({ plans, slots, topics, samples, onChange }: PromptP
           </div>
         </>
       )}
+
+      {touchDrag && touchSlot && <TouchDragOverlay drag={touchDrag} slot={touchSlot} topicName={topicName(touchSlot.topic_id)} />}
 
       {editor && plan && (
         <SlotEditor
