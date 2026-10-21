@@ -57,3 +57,6 @@ verify_jwt = false
 
 [functions.linkedin-sync-analytics]
 verify_jwt = true
+
+[functions.linkedin-content-engine]
+verify_jwt = false
