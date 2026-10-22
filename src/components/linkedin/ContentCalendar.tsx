@@ -53,7 +53,6 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
     const { data, error } = await supabase
       .from('linkedin_posts')
       .select('*')
-      .or('slot_id.not.is.null,category.not.is.null')
       .gte('scheduled_for', parseISODate(range.start).toISOString())
       .lt('scheduled_for', parseISODate(range.end).toISOString())
       .order('scheduled_for', { ascending: true });
