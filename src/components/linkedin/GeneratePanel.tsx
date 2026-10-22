@@ -26,10 +26,11 @@ interface JobProgress {
 interface GeneratePanelProps {
   researchLeadDays: number;
   hasAssignments: boolean;
+  refreshKey: number;
   onGenerated: () => void;
 }
 
-export function GeneratePanel({ researchLeadDays, hasAssignments, onGenerated }: GeneratePanelProps) {
+export function GeneratePanel({ researchLeadDays, hasAssignments, refreshKey, onGenerated }: GeneratePanelProps) {
   const thisMonday = mondayOf(toISODate(new Date()));
   const [kind, setKind] = useState<RangeKind>('next');
   const [from, setFrom] = useState(thisMonday);
@@ -66,7 +67,7 @@ export function GeneratePanel({ researchLeadDays, hasAssignments, onGenerated }:
 
   const anyWorking = Object.values(progress).some((p) => p.working > 0);
 
-  useEffect(() => { loadJobs(); }, [loadJobs]);
+  useEffect(() => { loadJobs(); }, [loadJobs, refreshKey]);
 
   useEffect(() => {
     if (!anyWorking) return;

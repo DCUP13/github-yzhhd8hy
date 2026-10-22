@@ -14,6 +14,7 @@ interface TimelineProps {
   skipDates: SkipDate[];
   settings: ContentSettings;
   onChange: () => void;
+  refreshKey: number;
   onPostsChanged: () => void;
 }
 
@@ -33,7 +34,7 @@ function timezones(): string[] {
   return intl.supportedValuesOf ? intl.supportedValuesOf('timeZone') : ['UTC'];
 }
 
-export function Timeline({ plans, assignments, skipDates, settings, onChange, onPostsChanged }: TimelineProps) {
+export function Timeline({ plans, assignments, skipDates, settings, onChange, refreshKey, onPostsChanged }: TimelineProps) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [assignWeek, setAssignWeek] = useState<string | null>(null);
   const [assignPlan, setAssignPlan] = useState('');
@@ -50,7 +51,7 @@ export function Timeline({ plans, assignments, skipDates, settings, onChange, on
     setJobWeeks(data || []);
   }, []);
 
-  useEffect(() => { loadJobWeeks(); }, [loadJobWeeks]);
+  useEffect(() => { loadJobWeeks(); }, [loadJobWeeks, refreshKey]);
 
   const colorFor = (planId: string) => PLAN_COLORS[Math.max(0, plans.findIndex((p) => p.id === planId)) % PLAN_COLORS.length];
   const planName = (planId: string) => plans.find((p) => p.id === planId)?.name || 'Plan';
@@ -227,7 +228,7 @@ export function Timeline({ plans, assignments, skipDates, settings, onChange, on
       </div>
 
       <div className="space-y-6">
-        <GeneratePanel researchLeadDays={settings.research_lead_days} hasAssignments={assignments.length > 0} onGenerated={() => { loadJobWeeks(); onPostsChanged(); }} />
+        <GeneratePanel researchLeadDays={settings.research_lead_days} hasAssignments={assignments.length > 0} refreshKey={refreshKey} onGenerated={() => { loadJobWeeks(); onPostsChanged(); }} />
 
         <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2">

@@ -10,8 +10,9 @@ import { useContentData } from './useContentData';
 export type EngineTab = 'calendar' | 'plans' | 'timeline' | 'voice' | 'topics';
 
 export function ContentEngine({ tab }: { tab: EngineTab }) {
-  const { data, loading, error, reload } = useContentData();
+  const { data, loading, error, reload, postsVersion: livePostsVersion } = useContentData();
   const [postsVersion, setPostsVersion] = useState(0);
+  const postsKey = postsVersion + livePostsVersion;
 
   if (loading) {
     return <div className="py-24 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#0A66C2]" /></div>;
@@ -26,7 +27,7 @@ export function ContentEngine({ tab }: { tab: EngineTab }) {
 
   switch (tab) {
     case 'calendar':
-      return <ContentCalendar skipDates={data.skipDates} leadDays={data.settings.research_lead_days} refreshKey={postsVersion} />;
+      return <ContentCalendar skipDates={data.skipDates} leadDays={data.settings.research_lead_days} refreshKey={postsKey} />;
     case 'plans':
       return <PromptPlans plans={data.plans} slots={data.slots} topics={data.topics} samples={data.samples} onChange={reload} />;
     case 'timeline':
@@ -37,6 +38,7 @@ export function ContentEngine({ tab }: { tab: EngineTab }) {
           skipDates={data.skipDates}
           settings={data.settings}
           onChange={reload}
+          refreshKey={postsKey}
           onPostsChanged={() => setPostsVersion((v) => v + 1)}
         />
       );

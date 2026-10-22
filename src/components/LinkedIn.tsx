@@ -5,6 +5,7 @@ import type { AppView } from '../lib/router';
 import { CalendarDays, PenSquare, LayoutGrid, CalendarRange, Mic, Tags } from 'lucide-react';
 import { uploadFile } from './linkedin/api';
 import { ContentEngine, type EngineTab } from './linkedin/ContentEngine';
+import { useRealtimeRefresh } from './linkedin/useRealtimeRefresh';
 
 const TABS: { id: EngineTab | 'compose'; label: string; icon: typeof Linkedin }[] = [
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
@@ -172,6 +173,13 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
       return () => clearInterval(interval);
     }
   }, [posts, fetchPosts]);
+
+  useRealtimeRefresh('linkedin_page', ['linkedin_accounts', 'linkedin_posts'], async (table) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    if (table === 'linkedin_accounts') setAccount(await fetchAccount(user.id));
+    else setPosts(await fetchPosts(user.id));
+  });
 
   const handleConnect = async () => {
     setIsConnecting(true);

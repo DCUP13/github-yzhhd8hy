@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useRealtimeRefresh } from './useRealtimeRefresh';
 import type { ContentSettings, PlanAssignment, PlanSlot, PromptPlan, SkipDate, Topic, VoiceSample } from './types';
 
 export interface ContentData {
@@ -22,10 +23,23 @@ const EMPTY: ContentData = {
   settings: { timezone: 'UTC', research_lead_days: 3 },
 };
 
+const LIBRARY_TABLES = [
+  'linkedin_voice_samples',
+  'linkedin_topics',
+  'linkedin_prompt_plans',
+  'linkedin_plan_slots',
+  'linkedin_plan_assignments',
+  'linkedin_skip_dates',
+  'linkedin_content_settings',
+];
+const POST_TABLES = ['linkedin_posts', 'linkedin_generation_jobs'];
+const ALL_TABLES = [...LIBRARY_TABLES, ...POST_TABLES];
+
 export function useContentData() {
   const [data, setData] = useState<ContentData>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [postsVersion, setPostsVersion] = useState(0);
 
   const reload = useCallback(async () => {
     const [samples, topics, plans, slots, assignments, skips, settings] = await Promise.all([
@@ -67,5 +81,10 @@ export function useContentData() {
     })();
   }, [reload]);
 
-  return { data, loading, error, reload };
+  useRealtimeRefresh('linkedin_content', ALL_TABLES, (table) => {
+    if (POST_TABLES.includes(table)) setPostsVersion((v) => v + 1);
+    else reload();
+  });
+
+  return { data, loading, error, reload, postsVersion };
 }
