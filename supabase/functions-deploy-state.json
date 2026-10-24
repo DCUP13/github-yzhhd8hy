@@ -41,6 +41,10 @@
       "hasChanged": false,
       "hash": "ec8ffd5a2fb8bcbf4c5e6cfa6c37fd823cd1304745ce0945b7fcdd6cd8eb66de"
     },
+    "instagram-auto-refresh": {
+      "hasChanged": false,
+      "hash": "54660b00cbe32d8eac719c369f03b8cf405daa4305d87396c54a2335bcb2e1d3"
+    },
     "instagram-autoresponder": {
       "hasChanged": false,
       "hash": "234938a8a0091dfeab820c2704bb89b27cf92e330447eb1281a7726300951d28"
@@ -59,7 +63,7 @@
     },
     "instagram-sync-insights": {
       "hasChanged": false,
-      "hash": "cd12f7cdda35e059c0cd8c07eb97913b88cbaf06ddf198c342378581c792afdb"
+      "hash": "a3bdb5a724bd382c02660fcb7b1cf7ebfd6c0b0394ca8e445e83399e92570f1c"
     },
     "instagram-webhook": {
       "hasChanged": false,
@@ -144,10 +148,6 @@
     "transcribe-video": {
       "hasChanged": false,
       "hash": "a9c4d1b193f87f6708ffd3893b976777b483997305b23ae5bc4e0c6f0e9f6dae"
-    },
-    "instagram-auto-refresh": {
-      "hasChanged": false,
-      "hash": "54660b00cbe32d8eac719c369f03b8cf405daa4305d87396c54a2335bcb2e1d3"
     }
   }
 }
