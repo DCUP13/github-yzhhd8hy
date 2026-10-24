@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { File, Plus, Upload as UploadIcon, Info, Sparkles, Share2, Copy, Globe } from 'lucide-react';
+import { File, Plus, Upload as UploadIcon, Info, Sparkles, Share2, Copy, Globe, ChevronDown } from 'lucide-react';
 import { TemplateList } from './components/TemplateList';
 import { TemplateEditor } from './components/TemplateEditor';
 import type { Template } from './types';
@@ -77,6 +77,9 @@ export function TemplatesPage({ onSignOut: _onSignOut, currentView: _currentView
   const [currentTemplate, setCurrentTemplate] = useState<Template | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const templateFileRef = useRef<HTMLInputElement>(null);
+  const pageTopRef = useRef<HTMLDivElement>(null);
+  const [showPlaceholders, setShowPlaceholders] = useState(() => window.matchMedia('(min-width: 640px)').matches);
+  const [showAdvanced, setShowAdvanced] = useState(() => window.matchMedia('(min-width: 640px)').matches);
   const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
   const [sharedTemplates, setSharedTemplates] = useState<Template[]>([]);
 
@@ -326,6 +329,10 @@ export function TemplatesPage({ onSignOut: _onSignOut, currentView: _currentView
     }
   };
 
+  useEffect(() => {
+    if (currentTemplate) pageTopRef.current?.scrollIntoView({ block: 'start' });
+  }, [currentTemplate?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleEditTemplate = (template: Template) => {
     if (template.imported && template.format !== 'docx') {
       alert('Imported templates cannot be edited. You can create a copy instead.');
@@ -343,37 +350,42 @@ export function TemplatesPage({ onSignOut: _onSignOut, currentView: _currentView
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+    <div ref={pageTopRef} className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
       <div className="max-w-4xl mx-auto w-full min-w-0">
         {!currentTemplate && (
           <>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <File className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Templates</h1>
+            <div className="flex items-center justify-between gap-2 mb-4 sm:mb-6">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <File className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Templates</h1>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
                 <button
                   onClick={() => templateFileRef.current?.click()}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-gray-300 text-xs sm:text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <UploadIcon className="w-4 h-4 mr-2" />
+                  <UploadIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                   Import
                 </button>
                 <button
                   onClick={handleCreateTemplate}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Template
+                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+                  <span className="sm:hidden">New</span>
+                  <span className="hidden sm:inline">Create Template</span>
                 </button>
               </div>
             </div>
 
-            <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-start gap-3 mb-3">
+            <details
+              open={showPlaceholders}
+              onToggle={(e) => setShowPlaceholders((e.currentTarget as HTMLDetailsElement).open)}
+              className="group mb-4 sm:mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg"
+            >
+              <summary className="flex items-start gap-3 p-4 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
                 <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                <div>
+                <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-blue-900 dark:text-blue-200">
                     Available Template Placeholders
                   </h3>
@@ -381,9 +393,10 @@ export function TemplatesPage({ onSignOut: _onSignOut, currentView: _currentView
                     Use <code className="font-mono">{'{{placeholder}}'}</code> syntax in your template content or subject lines.
                   </p>
                 </div>
-              </div>
+                <ChevronDown className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5 transition-transform group-open:rotate-180" />
+              </summary>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3 px-4 pb-4">
                 {PLACEHOLDER_SECTIONS.map(section => (
                   <div key={section.title}>
                     <h4 className="text-xs font-semibold text-blue-900 dark:text-blue-200 mb-1.5 uppercase tracking-wide">
@@ -404,12 +417,16 @@ export function TemplatesPage({ onSignOut: _onSignOut, currentView: _currentView
                   </div>
                 ))}
               </div>
-            </div>
+            </details>
 
-            <div className="mb-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
-              <div className="flex items-start gap-3 mb-2">
+            <details
+              open={showAdvanced}
+              onToggle={(e) => setShowAdvanced((e.currentTarget as HTMLDetailsElement).open)}
+              className="group mb-4 sm:mb-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg"
+            >
+              <summary className="flex items-start gap-3 p-4 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
                 <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
-                <div>
+                <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-emerald-900 dark:text-emerald-200">
                     Advanced Features
                   </h3>
@@ -417,9 +434,10 @@ export function TemplatesPage({ onSignOut: _onSignOut, currentView: _currentView
                     Go beyond simple placeholders with conditionals and nested fields.
                   </p>
                 </div>
-              </div>
+                <ChevronDown className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5 transition-transform group-open:rotate-180" />
+              </summary>
 
-              <div className="text-sm text-emerald-900 dark:text-emerald-100 space-y-2 pl-8">
+              <div className="text-sm text-emerald-900 dark:text-emerald-100 space-y-2 px-4 pb-4 pl-12">
                 <p>
                   Wrap content in <code className="font-mono text-xs">{'{{#if field}}...{{/if}}'}</code> to only render it when the field has a value. Useful for optional sentences.
                 </p>
@@ -430,7 +448,7 @@ export function TemplatesPage({ onSignOut: _onSignOut, currentView: _currentView
                   Add your own custom placeholders and fallbacks in Settings &rarr; Data Quality, then reference them with <code className="font-mono text-xs">{'{{your_key}}'}</code>.
                 </p>
               </div>
-            </div>
+            </details>
           </>
         )}
 
