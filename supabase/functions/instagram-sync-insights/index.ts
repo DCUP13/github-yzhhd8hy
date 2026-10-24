@@ -52,10 +52,28 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      serviceKey,
     );
+
+    const unauthorized = () => new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+    const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (!bearer) return unauthorized();
+
+    // Background jobs call with the service key; everyone else must be the signed-in owner of the account.
+    const isInternal = serviceKey !== "" && bearer === serviceKey;
+    let callerId: string | null = null;
+    if (!isInternal) {
+      const { data: { user }, error: userError } = await supabaseClient.auth.getUser(bearer);
+      if (userError || !user) return unauthorized();
+      callerId = user.id;
+    }
 
     let accountId: string | null = null;
     let userId: string | null = null;
@@ -70,6 +88,8 @@ Deno.serve(async (req: Request) => {
       userId = url.searchParams.get("user_id");
     }
 
+    if (callerId) userId = callerId;
+
     if (!accountId) {
       return new Response(JSON.stringify({ error: "account_id is required" }), {
         status: 400,
@@ -83,7 +103,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", accountId)
       .maybeSingle();
 
-    if (acctError || !account) {
+    if (acctError || !account || (callerId && account.user_id !== callerId)) {
       return new Response(JSON.stringify({ error: "Account not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

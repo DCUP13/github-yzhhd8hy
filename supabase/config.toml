@@ -25,6 +25,9 @@ verify_jwt = false
 [functions.instagram-sync-insights]
 verify_jwt = true
 
+[functions.instagram-auto-refresh]
+verify_jwt = false
+
 [functions.instagram-deauthorize]
 verify_jwt = false
 

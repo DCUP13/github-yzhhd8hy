@@ -5,6 +5,9 @@ import { ReplyDialog } from './ReplyDialog';
 import { ComposeEmailDialog } from './ComposeEmailDialog';
 import { AttachmentViewerDialog } from './AttachmentViewerDialog';
 import { useEmails } from '../contexts/EmailContext';
+import { useRealtimeRefresh } from '../lib/useRealtimeRefresh';
+import { toast } from '../lib/toast';
+import { EmailThread, EmailBody, type ThreadMessage } from './EmailThread';
 
 interface EmailsInboxProps {
   onSignOut: () => void;
@@ -20,6 +23,7 @@ interface Email {
   attachments: any;
   created_at: string;
   reply_to_sent_id?: string | null;
+  read_at?: string | null;
 }
 
 interface OutboxEmail {
@@ -75,6 +79,19 @@ interface EmailEvent {
 
 type TabType = 'inbox' | 'outbox' | 'sent' | 'drafts';
 
+const getEventConfig = (eventType: string): { icon: any; color: string; label: string } => {
+  const t = (eventType || '').toLowerCase();
+  if (t.includes('deliver')) return { icon: CheckCircle, color: 'text-green-500', label: 'Delivered' };
+  if (t.includes('open')) return { icon: Eye, color: 'text-blue-500', label: 'Opened' };
+  if (t.includes('click')) return { icon: MousePointer, color: 'text-teal-500', label: 'Clicked' };
+  if (t.includes('bounce')) return { icon: AlertCircle, color: 'text-red-500', label: 'Bounced' };
+  if (t.includes('complain')) return { icon: AlertCircle, color: 'text-orange-500', label: 'Complaint' };
+  if (t.includes('reject') || t.includes('fail')) return { icon: AlertCircle, color: 'text-red-500', label: 'Failed' };
+  if (t.includes('reply')) return { icon: MessageSquare, color: 'text-amber-500', label: 'Reply received' };
+  if (t.includes('send') || t.includes('sent')) return { icon: Send, color: 'text-gray-400', label: 'Sent' };
+  return { icon: Mail, color: 'text-gray-400', label: eventType };
+};
+
 const formatReceiverList = (receiver: string | string[]): string => {
   if (Array.isArray(receiver)) {
     return receiver.join(', ');
@@ -87,6 +104,18 @@ const getFirstReceiver = (receiver: string | string[]): string => {
     return receiver[0] || '';
   }
   return receiver || '';
+};
+
+const toReplyableSent = (sent: SentEmail) => {
+  const [first = '', ...rest] = (sent.to_email || '').split(',').map((a) => a.trim()).filter(Boolean);
+  return {
+    id: sent.id,
+    sender: first,
+    receiver: [sent.from_email, ...rest].join(', '),
+    subject: sent.subject,
+    body: sent.body,
+    created_at: sent.sent_at || sent.created_at,
+  };
 };
 
 export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
@@ -110,7 +139,10 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [sentEvents, setSentEvents] = useState<Record<string, EmailEvent[]>>({});
   const [selectedEmailReplies, setSelectedEmailReplies] = useState<Email[]>([]);
   const [selectedEmailEvents, setSelectedEmailEvents] = useState<EmailEvent[]>([]);
+  const [timelineOpen, setTimelineOpen] = useState(true);
+  const [selectedThread, setSelectedThread] = useState<{ forId: string | null; messages: ThreadMessage[] }>({ forId: null, messages: [] });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const knownInboxIds = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     fetchAllEmails();
@@ -127,6 +159,37 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       fetchDraftEmails();
     }
   }, [activeTab]);
+
+  useRealtimeRefresh('emails_inbox_live', ['email_events', 'email_sent', 'emails', 'email_outbox'], (table) => {
+    const ignore = (err: unknown) => console.error(`Live refresh failed for ${table}:`, err);
+    if (table === 'emails') {
+      fetchInboxEmails().catch(ignore);
+    } else if (table === 'email_outbox') {
+      fetchOutboxEmails().catch(ignore);
+    } else {
+      fetchSentEmails().catch(ignore);
+    }
+
+    if (selectedEmail?.id && (activeTab === 'inbox' || activeTab === 'sent') && table !== 'email_outbox') {
+      loadThread(selectedEmail, activeTab === 'inbox' ? 'in' : 'out');
+    }
+
+    if (activeTab !== 'sent' || !selectedEmail?.id) return;
+    const sentId = selectedEmail.id as string;
+    if (table === 'emails') {
+      fetchSentEmailReplies(sentId).then(setSelectedEmailReplies);
+      return;
+    }
+    if (table === 'email_events') {
+      fetchSentEmailEvents(sentId).then(setSelectedEmailEvents);
+    }
+    if (table === 'email_events' || table === 'email_sent') {
+      supabase.from('email_sent').select('*').eq('id', sentId).maybeSingle().then(({ data, error }) => {
+        if (error) return ignore(error);
+        if (data) setSelectedEmail((current: any) => (current?.id === sentId ? data : current));
+      });
+    }
+  });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -162,7 +225,15 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    setEmails(data || []);
+    const rows: Email[] = data || [];
+    if (knownInboxIds.current) {
+      const known = knownInboxIds.current;
+      const arrivals = rows.filter((e) => !known.has(e.id) && !e.read_at);
+      if (arrivals.length === 1) toast.info(`New email from ${arrivals[0].sender}`);
+      else if (arrivals.length > 1) toast.info(`${arrivals.length} new emails`);
+    }
+    knownInboxIds.current = new Set(rows.map((e) => e.id));
+    setEmails(rows);
   };
 
   const fetchOutboxEmails = async () => {
@@ -239,8 +310,64 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     return data || [];
   };
 
+  const fetchThread = async (email: any, kind: 'in' | 'out'): Promise<ThreadMessage[]> => {
+    const selfMessage: ThreadMessage = kind === 'in'
+      ? { id: email.id, direction: 'in', from: email.sender, to: formatReceiverList(email.receiver), body: email.body, time: email.created_at }
+      : { id: email.id, direction: 'out', from: email.from_email, to: email.to_email, body: email.body, time: email.sent_at || email.created_at, openCount: email.open_count };
+    if (!email.thread_id) return [selfMessage];
+
+    const cutoff = selfMessage.time;
+    const [inbound, outbound] = await Promise.all([
+      supabase.from('emails').select('id, sender, receiver, body, created_at').eq('thread_id', email.thread_id).lte('created_at', cutoff),
+      supabase.from('email_sent').select('id, from_email, to_email, body, sent_at, created_at, open_count').eq('thread_id', email.thread_id),
+    ]);
+    if (inbound.error || outbound.error) {
+      console.error('Error fetching conversation:', inbound.error || outbound.error);
+      return [selfMessage];
+    }
+
+    const messages: ThreadMessage[] = [
+      ...(inbound.data || []).map((e: any): ThreadMessage => ({
+        id: e.id, direction: 'in', from: e.sender, to: formatReceiverList(e.receiver), body: e.body, time: e.created_at,
+      })),
+      ...(outbound.data || []).map((s: any): ThreadMessage => ({
+        id: s.id, direction: 'out', from: s.from_email, to: s.to_email, body: s.body, time: s.sent_at || s.created_at, openCount: s.open_count,
+      })),
+    ].filter((m) => m.id === selfMessage.id || new Date(m.time) <= new Date(cutoff));
+
+    if (!messages.some((m) => m.id === selfMessage.id)) messages.push(selfMessage);
+    return messages.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+  };
+
+  const loadThread = (email: any, kind: 'in' | 'out') => {
+    fetchThread(email, kind).then((messages) => {
+      setSelectedThread((current) => (current.forId === email.id ? { forId: email.id, messages } : current));
+    });
+  };
+
+  const setInboxReadAt = async (emailId: string, readAt: string | null) => {
+    const apply = (value: string | null) => {
+      setEmails((prev) => prev.map((e) => (e.id === emailId ? { ...e, read_at: value } : e)));
+      setSelectedEmail((current: any) => (current?.id === emailId ? { ...current, read_at: value } : current));
+    };
+    const previous = emails.find((e) => e.id === emailId)?.read_at ?? null;
+    apply(readAt);
+    const { error } = await supabase.from('emails').update({ read_at: readAt }).eq('id', emailId);
+    if (error) {
+      console.error('Error updating read status:', error);
+      apply(previous);
+    }
+  };
+
   const handleSelectEmail = async (email: any) => {
     setSelectedEmail(email);
+    if (activeTab === 'inbox' && !email.read_at) {
+      setInboxReadAt(email.id, new Date().toISOString());
+    }
+    setSelectedThread({ forId: email.id, messages: [] });
+    if (activeTab === 'inbox' || activeTab === 'sent') {
+      loadThread(email, activeTab === 'inbox' ? 'in' : 'out');
+    }
 
     if (activeTab === 'sent') {
       const [events, replies] = await Promise.all([
@@ -344,8 +471,13 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const handleDeleteEmail = async (emailId: string, event: React.MouseEvent) => {
     event.stopPropagation();
 
+    if (activeTab === 'inbox') setEmails(prev => prev.filter(e => e.id !== emailId));
+    else if (activeTab === 'outbox') setOutboxEmails(prev => prev.filter(e => e.id !== emailId));
+    else if (activeTab === 'sent') setSentEmails(prev => prev.filter(e => e.id !== emailId));
+    else if (activeTab === 'drafts') setDraftEmails(prev => prev.filter(e => e.id !== emailId));
+    if (selectedEmail?.id === emailId) setSelectedEmail(null);
+
     try {
-      setIsLoading(true);
       let error;
 
       if (activeTab === 'inbox') {
@@ -371,27 +503,13 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       }
 
       if (error) throw error;
-
-      if (activeTab === 'inbox') {
-        await fetchInboxEmails();
-      } else if (activeTab === 'outbox') {
-        await fetchOutboxEmails();
-      } else if (activeTab === 'sent') {
-        await fetchSentEmails();
-      } else {
-        await fetchDraftEmails();
-      }
-
-      if (selectedEmail?.id === emailId) {
-        setSelectedEmail(null);
-      }
-
-      alert('Email deleted successfully');
     } catch (error) {
       console.error('Error deleting email:', error);
-      alert('Failed to delete email. Please try again.');
-    } finally {
-      setIsLoading(false);
+      toast.error('Failed to delete email. Please try again.');
+      if (activeTab === 'inbox') await fetchInboxEmails();
+      else if (activeTab === 'outbox') await fetchOutboxEmails();
+      else if (activeTab === 'sent') await fetchSentEmails();
+      else await fetchDraftEmails();
     }
   };
 
@@ -568,6 +686,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   };
 
   const filteredEmails = getFilteredEmails();
+  const unreadCount = emails.filter((e) => !e.read_at).length;
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -740,7 +859,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     if (email.clicked_at || (email.click_count ?? 0) > 0) {
       const clickCount = email.click_count ?? 0;
       indicators.push(
-        <span key="clicked" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={`Clicked ${clickCount} time${clickCount !== 1 ? 's' : ''}`}>
+        <span key="clicked" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300" title={`Clicked ${clickCount} time${clickCount !== 1 ? 's' : ''}`}>
           <MousePointer className="w-3 h-3" />
           {clickCount > 1 && <span>{clickCount}</span>}
         </span>
@@ -772,19 +891,10 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       );
     }
 
-    const eventConfig: Record<string, { icon: any; color: string; label: string }> = {
-      delivery: { icon: CheckCircle, color: 'text-green-500', label: 'Delivered' },
-      open: { icon: Eye, color: 'text-blue-500', label: 'Opened' },
-      click: { icon: MousePointer, color: 'text-purple-500', label: 'Clicked' },
-      bounce: { icon: AlertCircle, color: 'text-red-500', label: 'Bounced' },
-      complaint: { icon: AlertCircle, color: 'text-orange-500', label: 'Complaint' },
-      reply: { icon: MessageSquare, color: 'text-amber-500', label: 'Reply received' },
-    };
-
     return (
       <div className="space-y-2">
         {selectedEmailEvents.map((event, index) => {
-          const config = eventConfig[event.event_type] || { icon: Mail, color: 'text-gray-500', label: event.event_type };
+          const config = getEventConfig(event.event_type);
           const Icon = config.icon;
           return (
             <div key={event.id} className="flex items-center gap-3">
@@ -807,6 +917,30 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     );
   };
 
+  const renderAddressEventIcons = () => {
+    if (activeTab !== 'sent' || selectedEmailEvents.length === 0) return null;
+    const byLabel = new Map<string, { config: ReturnType<typeof getEventConfig>; times: string[] }>();
+    for (const event of selectedEmailEvents) {
+      const config = getEventConfig(event.event_type);
+      const entry = byLabel.get(config.label) ?? { config, times: [] };
+      entry.times.push(new Date(event.event_time).toLocaleString());
+      byLabel.set(config.label, entry);
+    }
+    return (
+      <span className="inline-flex items-center gap-1 ml-1.5 align-middle">
+        {Array.from(byLabel.entries()).map(([label, { config, times }]) => {
+          const Icon = config.icon;
+          const title = `${label}${times.length > 1 ? ` (${times.length}x)` : ''}: ${times.join(', ')}`;
+          return (
+            <span key={label} title={title} aria-label={title} className="inline-flex cursor-help transition-transform hover:scale-125">
+              <Icon className={`w-3.5 h-3.5 ${config.color}`} />
+            </span>
+          );
+        })}
+      </span>
+    );
+  };
+
   // Render the reply thread for a selected sent email
   const renderReplyThread = () => {
     if (selectedEmailReplies.length === 0) return null;
@@ -820,20 +954,14 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
         <div className="space-y-3">
           {selectedEmailReplies.map((reply) => (
             <div key={reply.id} className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 border border-amber-100 dark:border-amber-800/30">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-2 min-w-0">
                 <User className="w-4 h-4 text-gray-400" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{reply.sender}</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white min-w-0 break-words [overflow-wrap:anywhere]">{reply.sender}</span>
                 <span className="text-xs text-gray-400">
                   {new Date(reply.created_at).toLocaleString()}
                 </span>
               </div>
-              <div className="text-sm text-gray-700 dark:text-gray-300">
-                {reply.body ? (
-                  <div dangerouslySetInnerHTML={{ __html: reply.body }} />
-                ) : (
-                  <span className="italic text-gray-400">No content</span>
-                )}
-              </div>
+              <EmailBody body={reply.body} />
             </div>
           ))}
         </div>
@@ -842,20 +970,20 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-clip">
       <div className="max-w-7xl mx-auto w-full min-w-0">
         {!selectedEmail ? (
           <>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Emails</h1>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Mail className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">Emails</h1>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 <button
                   onClick={handleGenerateDrafts}
                   disabled={isGeneratingDrafts}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
+                  className={`inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white ${
                     isGeneratingDrafts
                       ? 'bg-green-400 cursor-wait'
                       : 'bg-green-600 hover:bg-green-700'
@@ -863,36 +991,39 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 >
                   {isGeneratingDrafts ? (
                     <>
-                      <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       Generating...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Generate Drafts
+                      <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+                      <span className="sm:hidden">Drafts</span>
+                      <span className="hidden sm:inline">Generate Drafts</span>
                     </>
                   )}
                 </button>
                 <button
                   onClick={() => setShowComposeDialog(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Email
+                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+                  <span className="sm:hidden">New</span>
+                  <span className="hidden sm:inline">New Email</span>
                 </button>
                 <button
                   onClick={handleRefresh}
                   disabled={isProcessingEmails}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg shadow-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  aria-label="Refresh"
+                  className="inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-gray-300 dark:border-gray-600 text-xs sm:text-sm font-medium rounded-lg shadow-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh
+                  <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Refresh</span>
                 </button>
                 {activeTab === 'outbox' && (
                   <button
                     onClick={handleProcessOutbox}
                     disabled={isProcessingEmails}
-                    className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
+                    className={`inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white ${
                       isProcessingEmails
                         ? 'bg-blue-400 cursor-wait'
                         : 'bg-blue-600 hover:bg-blue-700'
@@ -900,13 +1031,14 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   >
                     {isProcessingEmails ? (
                       <>
-                        <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         Processing...
                       </>
                     ) : (
                       <>
-                        <Send className="w-4 h-4 mr-2" />
-                        Send Emails
+                        <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+                        <span className="sm:hidden">Send</span>
+                        <span className="hidden sm:inline">Send Emails</span>
                       </>
                     )}
                   </button>
@@ -977,6 +1109,11 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     <div className="flex items-center gap-2">
                       <Inbox className="w-4 h-4" />
                       Inbox ({emails.length})
+                      {unreadCount > 0 && (
+                        <span title={`${unreadCount} unread`} className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white">
+                          {unreadCount}
+                        </span>
+                      )}
                       {inboxReplyCount > 0 && (
                         <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                           <MessageSquare className="w-3 h-3" />
@@ -1072,18 +1209,29 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredEmails.map((email) => (
+                  {filteredEmails.map((email) => {
+                    const isUnread = activeTab === 'inbox' && !(email as Email).read_at;
+                    return (
                     <div
                       key={email.id}
                       onClick={() => handleSelectEmail(email)}
-                      className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                      className={`relative p-4 cursor-pointer transition-colors ${
+                        isUnread
+                          ? 'bg-blue-50/70 hover:bg-blue-50 dark:bg-blue-900/15 dark:hover:bg-blue-900/25'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
                     >
+                      {isUnread && <span className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-r" />}
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <div className="flex items-center gap-2 min-w-0">
-                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {isUnread ? (
+                                <span title="Unread" className="w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0 animate-pulse" />
+                              ) : (
+                                <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              )}
+                              <span className={`text-sm truncate ${isUnread ? 'font-semibold text-gray-900 dark:text-white' : 'font-medium text-gray-900 dark:text-white'}`}>
                                 {activeTab === 'inbox' ? (email as Email).sender :
                                  activeTab === 'outbox' ? (email as OutboxEmail).from_email :
                                  activeTab === 'sent' ? (email as SentEmail).from_email :
@@ -1126,11 +1274,11 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                             {activeTab === 'sent' && renderEventIndicators(email as SentEmail)}
                           </div>
                           <div className="mb-1">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            <span className={`text-sm text-gray-900 dark:text-white ${isUnread ? 'font-semibold' : 'font-medium'}`}>
                               {email.subject || '(No Subject)'}
                             </span>
                           </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                          <div className={`text-sm ${isUnread ? 'text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-400'}`}>
                             {truncateText(email.body, 100)}
                           </div>
                         </div>
@@ -1150,33 +1298,46 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm">
+            <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-4">
                 <button
                   onClick={() => setSelectedEmail(null)}
-                  className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap capitalize"
                 >
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to {activeTab}
                 </button>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                   {activeTab === 'inbox' && (
+                    <button
+                      onClick={() => {
+                        setInboxReadAt(selectedEmail.id, null);
+                        setSelectedEmail(null);
+                      }}
+                      className="inline-flex items-center px-3 py-1.5 text-sm font-medium whitespace-nowrap text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <Mail className="w-4 h-4 mr-1.5" />
+                      Mark as unread
+                    </button>
+                  )}
+                  {(activeTab === 'inbox' || activeTab === 'sent') && (
                     <>
                       <button
                         onClick={() => {
                           setIsReplyAll(false);
                           setShowReplyDialog(true);
                         }}
-                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium whitespace-nowrap text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 sm:bg-transparent dark:bg-blue-900/20 sm:dark:bg-transparent hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                       >
-                        <Reply className="w-4 h-4 mr-2" />
+                        <Reply className="w-4 h-4 mr-1.5" />
                         Reply
                       </button>
                       <button
@@ -1184,14 +1345,14 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                           setIsReplyAll(true);
                           setShowReplyDialog(true);
                         }}
-                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium whitespace-nowrap text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 sm:bg-transparent dark:bg-blue-900/20 sm:dark:bg-transparent hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                       >
-                        <Reply className="w-4 h-4 mr-2" />
+                        <Reply className="w-4 h-4 mr-1.5" />
                         Reply All
                       </button>
                     </>
                   )}
-                  <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
                     <Clock className="w-4 h-4" />
                     {new Date(
                       activeTab === 'sent' && 'sent_at' in selectedEmail 
@@ -1203,26 +1364,27 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
               </div>
               
               <div className="space-y-3">
-                <div className="flex items-center gap-4">
-                  <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
+                  <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white break-words [overflow-wrap:anywhere] min-w-0">
                     {selectedEmail.subject || '(No Subject)'}
                   </h1>
                   {activeTab === 'sent' && renderEventIndicators(selectedEmail as SentEmail)}
                 </div>
                 
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 dark:text-gray-400">From:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-1 sm:gap-x-4 sm:gap-y-1 text-sm min-w-0">
+                  <div className="flex items-baseline gap-2 min-w-0">
+                    <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">From:</span>
+                    <span className="font-medium text-gray-900 dark:text-white min-w-0 break-words [overflow-wrap:anywhere]">
                       {activeTab === 'inbox' ? (selectedEmail as Email).sender : 
                        'from_email' in selectedEmail ? (selectedEmail as any).from_email : 'Unknown'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 dark:text-gray-400">To:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
+                  <div className="flex items-baseline gap-2 min-w-0">
+                    <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">To:</span>
+                    <span className="font-medium text-gray-900 dark:text-white min-w-0 break-words [overflow-wrap:anywhere]">
                       {activeTab === 'inbox' ? formatReceiverList((selectedEmail as Email).receiver) : 
                        'to_email' in selectedEmail ? (selectedEmail as any).to_email : 'Unknown'}
+                      {renderAddressEventIcons()}
                     </span>
                   </div>
                 </div>
@@ -1254,27 +1416,18 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
               </div>
             </div>
 
-            <div className="p-6">
-              <div className="prose dark:prose-invert max-w-none">
-                {selectedEmail.body ? (
-                  <div
-                    className="text-gray-900 dark:text-white"
-                    dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
-                  />
+            <div className="p-4 sm:p-6 min-w-0">
+              {activeTab === 'inbox' || activeTab === 'sent' ? (
+                selectedThread.forId === selectedEmail.id && selectedThread.messages.length > 0 ? (
+                  <EmailThread messages={selectedThread.messages} currentId={selectedEmail.id} />
                 ) : (
-                  <div className="text-gray-900 dark:text-white">No content available</div>
-                )}
-              </div>
-
-              {/* Event timeline for sent emails */}
-              {activeTab === 'sent' && (
-                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-blue-500" />
-                    Tracking Timeline
-                  </h3>
-                  {renderEventTimeline()}
-                </div>
+                  <div className="space-y-2 animate-pulse">
+                    <div className="h-16 rounded-xl bg-gray-100 dark:bg-gray-700/50" />
+                    <div className="h-32 rounded-xl bg-gray-100 dark:bg-gray-700/50" />
+                  </div>
+                )
+              ) : (
+                <EmailBody body={selectedEmail.body} collapseQuoted={false} />
               )}
 
               {/* Reply thread for sent emails */}
@@ -1423,12 +1576,35 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 </div>
               )}
             </div>
+
+            {activeTab === 'sent' && (
+              <div className="rounded-b-xl border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setTimelineOpen((v) => !v)}
+                  className="w-full flex items-center justify-between gap-2 px-4 sm:px-6 py-3 text-left"
+                >
+                  <span className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-blue-500" />
+                    Tracking Timeline
+                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400">({selectedEmailEvents.length})</span>
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${timelineOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {timelineOpen && (
+                  <div className="px-4 sm:px-6 pb-4">
+                    {renderEventTimeline()}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {showReplyDialog && selectedEmail && (
           <ReplyDialog
-            originalEmail={selectedEmail as Email}
+            originalEmail={activeTab === 'sent' ? toReplyableSent(selectedEmail as SentEmail) : (selectedEmail as Email)}
+            replyToSentId={activeTab === 'sent' ? selectedEmail.id : undefined}
             isReplyAll={isReplyAll}
             onSend={handleSendReply}
             onClose={() => {

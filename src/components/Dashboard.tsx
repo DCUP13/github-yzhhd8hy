@@ -100,6 +100,7 @@ export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: Dashb
       bgColor: 'bg-green-100 dark:bg-green-900/20',
       details: [
         { label: 'Total sent', value: fmt(emailAnalytics.totalSent) },
+        { label: 'Sent with tracking', value: fmt(emailAnalytics.totalTracked) },
         { label: 'Delivered', value: fmt(emailAnalytics.totalDelivered) },
         { label: 'Bounced', value: fmt(emailAnalytics.totalBounced) },
         { label: 'Failed', value: fmt(emailAnalytics.failedCount) },
@@ -124,7 +125,8 @@ export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: Dashb
       color: 'text-purple-500',
       bgColor: 'bg-purple-100 dark:bg-purple-900/20',
       details: [
-        { label: 'Total clicked', value: fmt(emailAnalytics.totalClicked) },
+        { label: 'Delivered emails with links', value: fmt(emailAnalytics.totalWithLinks) },
+        { label: 'Clicked', value: fmt(emailAnalytics.totalClicked) },
         { label: 'Last click', value: emailAnalytics.lastClickTime ? new Date(emailAnalytics.lastClickTime).toLocaleString() : 'N/A' },
       ],
     },
@@ -135,7 +137,7 @@ export function Dashboard({ onSignOut, currentView, onNavigateAnalytics }: Dashb
       color: 'text-amber-500',
       bgColor: 'bg-amber-100 dark:bg-amber-900/20',
       details: [
-        { label: 'Total replies', value: fmt(emailAnalytics.totalReplies) },
+        { label: 'Emails replied to', value: fmt(emailAnalytics.totalReplies) },
         { label: 'Last reply', value: emailAnalytics.lastReplyTime ? new Date(emailAnalytics.lastReplyTime).toLocaleString() : 'N/A' },
       ],
     },

@@ -11,12 +11,12 @@ export function SettingRow({
   onChange 
 }: SettingRowProps) {
   return (
-    <div className="flex items-center justify-between py-4">
-      <div className="flex gap-4">
-        <div className="mt-1">
+    <div className="flex items-center justify-between gap-4 py-4">
+      <div className="flex flex-1 min-w-0 gap-3 sm:gap-4">
+        <div className="mt-1 flex-shrink-0">
           <Icon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
         </div>
-        <div>
+        <div className="min-w-0 break-words">
           <h3 className="text-sm font-medium text-gray-900 dark:text-white">{title}</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
         </div>

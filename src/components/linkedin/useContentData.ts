@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useRealtimeRefresh } from './useRealtimeRefresh';
+import { useRealtimeRefresh } from '../../lib/useRealtimeRefresh';
 import type { ContentSettings, PlanAssignment, PlanSlot, PromptPlan, SkipDate, Topic, VoiceSample } from './types';
 
 export interface ContentData {

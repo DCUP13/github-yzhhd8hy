@@ -1,5 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useRealtimeRefresh } from '../lib/useRealtimeRefresh';
+
+const REALTIME_TABLES = [
+  'dashboard_statistics',
+  'email_sent',
+  'email_events',
+  'emails',
+  'instagram_accounts',
+  'instagram_insights_snapshots',
+  'linkedin_accounts',
+  'linkedin_analytics_snapshots',
+];
 
 interface DashboardStats {
   totalEmailsRemaining: number;
@@ -12,6 +24,8 @@ interface DashboardStats {
 
 export interface EmailAnalytics {
   totalSent: number;
+  totalTracked: number;
+  totalWithLinks: number;
   totalDelivered: number;
   totalOpened: number;
   totalClicked: number;
@@ -78,6 +92,8 @@ export function useDashboard() {
 
 const emptyAnalytics: EmailAnalytics = {
   totalSent: 0,
+  totalTracked: 0,
+  totalWithLinks: 0,
   totalDelivered: 0,
   totalOpened: 0,
   totalClicked: 0,
@@ -163,7 +179,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: sentEmails, error } = await supabase
         .from('email_sent')
-        .select('id, delivered_at, opened_at, clicked_at, bounced_at, open_count, click_count, failed_at, complained_at');
+        .select('id, delivered_at, opened_at, clicked_at, bounced_at, open_count, click_count, failed_at, complained_at, has_links, is_tracked');
 
       if (error) throw error;
 
@@ -172,36 +188,45 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const totalSent = sentEmails.length;
-      const totalDelivered = sentEmails.filter(e => e.delivered_at || (e as any).delivery_status === 'delivered').length;
-      const totalOpened = sentEmails.filter(e => e.opened_at || (e.open_count ?? 0) > 0).length;
-      const totalClicked = sentEmails.filter(e => e.clicked_at || (e.click_count ?? 0) > 0).length;
-      const totalBounced = sentEmails.filter(e => e.bounced_at).length;
-      const failedCount = sentEmails.filter(e => (e as any).failed_at).length;
-      const complainedCount = sentEmails.filter(e => (e as any).complained_at).length;
-      const totalOpenEvents = sentEmails.reduce((sum, e) => sum + (e.open_count ?? 0), 0);
+      const failedCount = sentEmails.filter(e => e.failed_at).length;
+      const sent = sentEmails.filter(e => !e.failed_at);
+      const totalSent = sent.length;
+      // Only emails sent with a tracking id can report delivery, opens and clicks.
+      const tracked = sent.filter(e => e.is_tracked);
+      const delivered = tracked.filter(e => e.delivered_at || (e.open_count ?? 0) > 0 || e.clicked_at);
+      const isClicked = (e: typeof sent[number]) => !!e.clicked_at || (e.click_count ?? 0) > 0;
+      const withLinks = delivered.filter(e => e.has_links || isClicked(e));
 
-      // Fetch reply counts
-      const sentIds = sentEmails.map(e => e.id);
-      const { count: replyCount } = await supabase
+      const totalTracked = tracked.length;
+      const totalDelivered = delivered.length;
+      const totalWithLinks = withLinks.length;
+      const totalOpened = delivered.filter(e => e.opened_at || (e.open_count ?? 0) > 0).length;
+      const totalClicked = withLinks.filter(isClicked).length;
+      const totalBounced = tracked.filter(e => e.bounced_at).length;
+      const complainedCount = tracked.filter(e => e.complained_at).length;
+      const totalOpenEvents = sent.reduce((sum, e) => sum + (e.open_count ?? 0), 0);
+
+      const sentIds = sent.map(e => e.id);
+      const { data: replyRows, error: replyError } = await supabase
         .from('emails')
-        .select('id', { count: 'exact', head: true })
+        .select('reply_to_sent_id')
         .in('reply_to_sent_id', sentIds);
+      if (replyError) throw replyError;
 
-      const totalReplies = replyCount ?? 0;
+      const totalReplies = new Set((replyRows ?? []).map(r => r.reply_to_sent_id)).size;
 
       // Get latest event times from email_events
       const { data: recentOpens } = await supabase
         .from('email_events')
         .select('event_time')
-        .eq('event_type', 'open')
+        .ilike('event_type', '%open%')
         .order('event_time', { ascending: false })
         .limit(1);
 
       const { data: recentClicks } = await supabase
         .from('email_events')
         .select('event_time')
-        .eq('event_type', 'click')
+        .ilike('event_type', '%click%')
         .order('event_time', { ascending: false })
         .limit(1);
 
@@ -214,16 +239,18 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
       setEmailAnalytics({
         totalSent,
+        totalTracked,
+        totalWithLinks,
         totalDelivered,
         totalOpened,
         totalClicked,
         totalBounced,
         totalReplies,
-        deliveryRate: totalSent > 0 ? (totalDelivered / totalSent) * 100 : 0,
+        deliveryRate: totalTracked > 0 ? (totalDelivered / totalTracked) * 100 : 0,
         openRate: totalDelivered > 0 ? (totalOpened / totalDelivered) * 100 : 0,
-        clickRate: totalDelivered > 0 ? (totalClicked / totalDelivered) * 100 : 0,
-        replyRate: totalDelivered > 0 ? (totalReplies / totalDelivered) * 100 : 0,
-        bounceRate: totalSent > 0 ? (totalBounced / totalSent) * 100 : 0,
+        clickRate: totalWithLinks > 0 ? (totalClicked / totalWithLinks) * 100 : 0,
+        replyRate: totalSent > 0 ? (totalReplies / totalSent) * 100 : 0,
+        bounceRate: totalTracked > 0 ? (totalBounced / totalTracked) * 100 : 0,
         uniqueOpens: totalOpened,
         totalOpenEvents,
         lastOpenTime: recentOpens?.[0]?.event_time ?? null,
@@ -359,34 +386,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     fetchEmailAnalytics();
     fetchInstagramSummary();
     fetchLinkedInSummary();
-
-    const channel = supabase.channel('dashboard_stats')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'dashboard_statistics'
-        },
-        (payload) => {
-          if (payload.new) {
-            setStats({
-              totalEmailsRemaining: payload.new.total_emails_remaining,
-              totalEmailAccounts: payload.new.total_email_accounts,
-              totalEmailsSentToday: payload.new.total_emails_sent_today,
-              totalTemplates: payload.new.total_templates,
-              totalCampaigns: payload.new.total_campaigns,
-            totalDomains: payload.new.total_domains ?? 0
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
   }, []);
+
+  useRealtimeRefresh('dashboard_live', REALTIME_TABLES, (table) => {
+    if (table === 'dashboard_statistics') fetchStats();
+    else if (table.startsWith('instagram_')) fetchInstagramSummary();
+    else if (table.startsWith('linkedin_')) fetchLinkedInSummary();
+    else fetchEmailAnalytics();
+  });
 
   const value = {
     stats,

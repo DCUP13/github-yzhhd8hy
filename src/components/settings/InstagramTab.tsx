@@ -39,7 +39,6 @@ export function InstagramTab() {
     last_refresh_at: null,
     loop_prevention_enabled: true,
   });
-  const [savingSettings, setSavingSettings] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [oauthStarting, setOauthStarting] = useState(false);
   const [oauthUrl, setOauthUrl] = useState<string | null>(null);
@@ -275,27 +274,28 @@ export function InstagramTab() {
     }
   };
 
-  const handleSaveRefreshSettings = async () => {
-    setSavingSettings(true);
+  const updateRefreshSettings = async (changes: Partial<typeof refreshSettings>) => {
+    const previous = refreshSettings;
+    const next = { ...previous, ...changes };
+    setRefreshSettings(next);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) throw new Error('Not signed in');
 
-      await supabase
+      const { error } = await supabase
         .from('instagram_refresh_settings')
         .upsert({
           user_id: user.id,
-          auto_refresh_enabled: refreshSettings.auto_refresh_enabled,
-          refresh_interval_hours: refreshSettings.refresh_interval_hours,
-          loop_prevention_enabled: refreshSettings.loop_prevention_enabled,
+          auto_refresh_enabled: next.auto_refresh_enabled,
+          refresh_interval_hours: next.refresh_interval_hours,
+          loop_prevention_enabled: next.loop_prevention_enabled,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
-
-      await fetchAccounts();
+      if (error) throw error;
     } catch (error) {
       console.error('Error saving refresh settings:', error);
-    } finally {
-      setSavingSettings(false);
+      setRefreshSettings(previous);
+      toast.error('Could not save your setting. Please try again.');
     }
   };
 
@@ -578,7 +578,8 @@ export function InstagramTab() {
           <label className="flex items-center justify-between">
             <span className="text-sm text-gray-700 dark:text-gray-300">Enable auto-refresh</span>
             <button
-              onClick={() => setRefreshSettings(prev => ({ ...prev, auto_refresh_enabled: !prev.auto_refresh_enabled }))}
+              type="button"
+              onClick={() => updateRefreshSettings({ auto_refresh_enabled: !refreshSettings.auto_refresh_enabled })}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${refreshSettings.auto_refresh_enabled ? 'bg-pink-500' : 'bg-gray-300 dark:bg-gray-600'}`}
             >
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${refreshSettings.auto_refresh_enabled ? 'translate-x-5' : 'translate-x-1'}`} />
@@ -589,7 +590,7 @@ export function InstagramTab() {
               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Refresh frequency</label>
               <select
                 value={refreshSettings.refresh_interval_hours}
-                onChange={(e) => setRefreshSettings(prev => ({ ...prev, refresh_interval_hours: parseInt(e.target.value) }))}
+                onChange={(e) => updateRefreshSettings({ refresh_interval_hours: parseInt(e.target.value) })}
                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value={1}>Every 1 hour</option>
@@ -604,13 +605,6 @@ export function InstagramTab() {
               Last sync: {new Date(refreshSettings.last_refresh_at).toLocaleString()}
             </p>
           )}
-          <button
-            onClick={handleSaveRefreshSettings}
-            disabled={savingSettings}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
-          >
-            {savingSettings ? 'Saving...' : 'Save Settings'}
-          </button>
         </div>
       </div>
 
@@ -627,19 +621,13 @@ export function InstagramTab() {
               <span className="text-xs text-gray-400 mt-0.5 block">When enabled, automated messages sent by flows, auto-rules, or the autoresponder won't trigger automations on your other connected accounts. Manual messages still work normally for testing.</span>
             </div>
             <button
-              onClick={() => setRefreshSettings(prev => ({ ...prev, loop_prevention_enabled: !prev.loop_prevention_enabled }))}
+              type="button"
+              onClick={() => updateRefreshSettings({ loop_prevention_enabled: !refreshSettings.loop_prevention_enabled })}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${refreshSettings.loop_prevention_enabled ? 'bg-pink-500' : 'bg-gray-300 dark:bg-gray-600'}`}
             >
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${refreshSettings.loop_prevention_enabled ? 'translate-x-5' : 'translate-x-1'}`} />
             </button>
           </label>
-          <button
-            onClick={handleSaveRefreshSettings}
-            disabled={savingSettings}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
-          >
-            {savingSettings ? 'Saving...' : 'Save Settings'}
-          </button>
         </div>
       </div>
 

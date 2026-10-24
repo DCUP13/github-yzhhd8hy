@@ -5,7 +5,7 @@ import type { AppView } from '../lib/router';
 import { CalendarDays, PenSquare, LayoutGrid, CalendarRange, Mic, Tags, Newspaper } from 'lucide-react';
 import { uploadFile } from './linkedin/api';
 import { ContentEngine, type EngineTab } from './linkedin/ContentEngine';
-import { useRealtimeRefresh } from './linkedin/useRealtimeRefresh';
+import { useRealtimeRefresh } from '../lib/useRealtimeRefresh';
 
 type PageTab = EngineTab | 'compose' | 'posts';
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from './supabase';
 
 const DEBOUNCE_MS = 300;
 
