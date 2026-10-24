@@ -7,7 +7,7 @@ import { RichTextEditor, type RichTextEditorRef } from '../features/templates/co
 interface Email {
   id: string;
   sender: string;
-  receiver: string;
+  receiver: string | string[];
   subject: string;
   body: string;
   created_at: string;
@@ -16,6 +16,7 @@ interface Email {
 interface ReplyDialogProps {
   originalEmail: Email;
   isReplyAll: boolean;
+  replyToSentId?: string;
   onSend: (replyData: {
     to: string;
     from: string;
@@ -25,7 +26,7 @@ interface ReplyDialogProps {
   onClose: () => void;
 }
 
-export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: ReplyDialogProps) {
+export function ReplyDialog({ originalEmail, isReplyAll, replyToSentId, onSend, onClose }: ReplyDialogProps) {
   const { sesEmails, sesDomains } = useEmails();
   const editorRef = useRef<RichTextEditorRef>(null);
   
@@ -104,9 +105,10 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
     setSubject(replySubject);
 
     const originalDate = new Date(originalEmail.created_at).toLocaleString();
-    const replyBody = `<br><br><br><br><br><br>--- Original Message ---<br><br>From: ${originalEmail.sender}<br><br>Date: ${originalDate}<br><br>Subject: ${originalEmail.subject || '(No Subject)'}<br><br>${originalEmail.body || ''}`;
+    const quotedFrom = replyToSentId ? firstRecipient : originalEmail.sender;
+    const replyBody = `<br><br><br><br><br><br>--- Original Message ---<br><br>From: ${quotedFrom}<br><br>Date: ${originalDate}<br><br>Subject: ${originalEmail.subject || '(No Subject)'}<br><br>${originalEmail.body || ''}`;
     setInitialBody(replyBody);
-  }, [originalEmail, isReplyAll, allEmailOptions.length]);
+  }, [originalEmail, isReplyAll, replyToSentId, allEmailOptions.length]);
 
   // Email validation
   const validateEmail = (email: string) => {
@@ -208,7 +210,8 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
           from_email: finalFromEmail,
           subject: subject.trim(),
           body: body.trim(),
-          reply_to_id: originalEmail.id,
+          reply_to_id: replyToSentId ? null : originalEmail.id,
+          reply_to_sent_id: replyToSentId ?? null,
           status: 'pending'
         })
         .select()
@@ -300,7 +303,7 @@ export function ReplyDialog({ originalEmail, isReplyAll, onSend, onClose }: Repl
               <h3 className="text-lg font-medium text-gray-900 dark:text-white">Reply</h3>
               <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 mt-1">
                 <User className="w-4 h-4" />
-                <span>Replying to: {originalEmail.sender}</span>
+                <span>{replyToSentId ? 'Following up with' : 'Replying to'}: {originalEmail.sender}</span>
               </div>
             </div>
             <button

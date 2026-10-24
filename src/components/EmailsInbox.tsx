@@ -6,6 +6,7 @@ import { ComposeEmailDialog } from './ComposeEmailDialog';
 import { AttachmentViewerDialog } from './AttachmentViewerDialog';
 import { useEmails } from '../contexts/EmailContext';
 import { useRealtimeRefresh } from '../lib/useRealtimeRefresh';
+import { EmailThread, EmailBody, type ThreadMessage } from './EmailThread';
 
 interface EmailsInboxProps {
   onSignOut: () => void;
@@ -103,6 +104,18 @@ const getFirstReceiver = (receiver: string | string[]): string => {
   return receiver || '';
 };
 
+const toReplyableSent = (sent: SentEmail) => {
+  const [first = '', ...rest] = (sent.to_email || '').split(',').map((a) => a.trim()).filter(Boolean);
+  return {
+    id: sent.id,
+    sender: first,
+    receiver: [sent.from_email, ...rest].join(', '),
+    subject: sent.subject,
+    body: sent.body,
+    created_at: sent.sent_at || sent.created_at,
+  };
+};
+
 export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [emails, setEmails] = useState<Email[]>([]);
   const [outboxEmails, setOutboxEmails] = useState<OutboxEmail[]>([]);
@@ -124,6 +137,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [sentEvents, setSentEvents] = useState<Record<string, EmailEvent[]>>({});
   const [selectedEmailReplies, setSelectedEmailReplies] = useState<Email[]>([]);
   const [selectedEmailEvents, setSelectedEmailEvents] = useState<EmailEvent[]>([]);
+  const [selectedThread, setSelectedThread] = useState<{ forId: string | null; messages: ThreadMessage[] }>({ forId: null, messages: [] });
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -150,6 +164,10 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       fetchOutboxEmails().catch(ignore);
     } else {
       fetchSentEmails().catch(ignore);
+    }
+
+    if (selectedEmail?.id && (activeTab === 'inbox' || activeTab === 'sent') && table !== 'email_outbox') {
+      loadThread(selectedEmail, activeTab === 'inbox' ? 'in' : 'out');
     }
 
     if (activeTab !== 'sent' || !selectedEmail?.id) return;
@@ -280,8 +298,47 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     return data || [];
   };
 
+  const fetchThread = async (email: any, kind: 'in' | 'out'): Promise<ThreadMessage[]> => {
+    const selfMessage: ThreadMessage = kind === 'in'
+      ? { id: email.id, direction: 'in', from: email.sender, to: formatReceiverList(email.receiver), body: email.body, time: email.created_at }
+      : { id: email.id, direction: 'out', from: email.from_email, to: email.to_email, body: email.body, time: email.sent_at || email.created_at, openCount: email.open_count };
+    if (!email.thread_id) return [selfMessage];
+
+    const cutoff = selfMessage.time;
+    const [inbound, outbound] = await Promise.all([
+      supabase.from('emails').select('id, sender, receiver, body, created_at').eq('thread_id', email.thread_id).lte('created_at', cutoff),
+      supabase.from('email_sent').select('id, from_email, to_email, body, sent_at, created_at, open_count').eq('thread_id', email.thread_id),
+    ]);
+    if (inbound.error || outbound.error) {
+      console.error('Error fetching conversation:', inbound.error || outbound.error);
+      return [selfMessage];
+    }
+
+    const messages: ThreadMessage[] = [
+      ...(inbound.data || []).map((e: any): ThreadMessage => ({
+        id: e.id, direction: 'in', from: e.sender, to: formatReceiverList(e.receiver), body: e.body, time: e.created_at,
+      })),
+      ...(outbound.data || []).map((s: any): ThreadMessage => ({
+        id: s.id, direction: 'out', from: s.from_email, to: s.to_email, body: s.body, time: s.sent_at || s.created_at, openCount: s.open_count,
+      })),
+    ].filter((m) => m.id === selfMessage.id || new Date(m.time) <= new Date(cutoff));
+
+    if (!messages.some((m) => m.id === selfMessage.id)) messages.push(selfMessage);
+    return messages.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+  };
+
+  const loadThread = (email: any, kind: 'in' | 'out') => {
+    fetchThread(email, kind).then((messages) => {
+      setSelectedThread((current) => (current.forId === email.id ? { forId: email.id, messages } : current));
+    });
+  };
+
   const handleSelectEmail = async (email: any) => {
     setSelectedEmail(email);
+    setSelectedThread({ forId: email.id, messages: [] });
+    if (activeTab === 'inbox' || activeTab === 'sent') {
+      loadThread(email, activeTab === 'inbox' ? 'in' : 'out');
+    }
 
     if (activeTab === 'sent') {
       const [events, replies] = await Promise.all([
@@ -883,13 +940,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   {new Date(reply.created_at).toLocaleString()}
                 </span>
               </div>
-              <div className="text-sm text-gray-700 dark:text-gray-300">
-                {reply.body ? (
-                  <div className="break-words [overflow-wrap:anywhere] [&_*]:max-w-full [&_img]:h-auto [&_pre]:whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: reply.body }} />
-                ) : (
-                  <span className="italic text-gray-400">No content</span>
-                )}
-              </div>
+              <EmailBody body={reply.body} />
             </div>
           ))}
         </div>
@@ -1227,7 +1278,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   Back to {activeTab}
                 </button>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                  {activeTab === 'inbox' && (
+                  {(activeTab === 'inbox' || activeTab === 'sent') && (
                     <>
                       <button
                         onClick={() => {
@@ -1316,16 +1367,18 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
             </div>
 
             <div className="p-4 sm:p-6 min-w-0">
-              <div className="prose dark:prose-invert max-w-none min-w-0 overflow-x-auto">
-                {selectedEmail.body ? (
-                  <div
-                    className="text-gray-900 dark:text-white break-words [overflow-wrap:anywhere] [&_*]:max-w-full [&_img]:h-auto [&_table]:!w-auto [&_pre]:whitespace-pre-wrap"
-                    dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
-                  />
+              {activeTab === 'inbox' || activeTab === 'sent' ? (
+                selectedThread.forId === selectedEmail.id && selectedThread.messages.length > 0 ? (
+                  <EmailThread messages={selectedThread.messages} currentId={selectedEmail.id} />
                 ) : (
-                  <div className="text-gray-900 dark:text-white">No content available</div>
-                )}
-              </div>
+                  <div className="space-y-2 animate-pulse">
+                    <div className="h-16 rounded-xl bg-gray-100 dark:bg-gray-700/50" />
+                    <div className="h-32 rounded-xl bg-gray-100 dark:bg-gray-700/50" />
+                  </div>
+                )
+              ) : (
+                <EmailBody body={selectedEmail.body} collapseQuoted={false} />
+              )}
 
               {/* Event timeline for sent emails */}
               {activeTab === 'sent' && (
@@ -1489,7 +1542,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
 
         {showReplyDialog && selectedEmail && (
           <ReplyDialog
-            originalEmail={selectedEmail as Email}
+            originalEmail={activeTab === 'sent' ? toReplyableSent(selectedEmail as SentEmail) : (selectedEmail as Email)}
+            replyToSentId={activeTab === 'sent' ? selectedEmail.id : undefined}
             isReplyAll={isReplyAll}
             onSend={handleSendReply}
             onClose={() => {
