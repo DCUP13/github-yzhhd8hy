@@ -75,6 +75,19 @@ interface EmailEvent {
 
 type TabType = 'inbox' | 'outbox' | 'sent' | 'drafts';
 
+const getEventConfig = (eventType: string): { icon: any; color: string; label: string } => {
+  const t = (eventType || '').toLowerCase();
+  if (t.includes('deliver')) return { icon: CheckCircle, color: 'text-green-500', label: 'Delivered' };
+  if (t.includes('open')) return { icon: Eye, color: 'text-blue-500', label: 'Opened' };
+  if (t.includes('click')) return { icon: MousePointer, color: 'text-teal-500', label: 'Clicked' };
+  if (t.includes('bounce')) return { icon: AlertCircle, color: 'text-red-500', label: 'Bounced' };
+  if (t.includes('complain')) return { icon: AlertCircle, color: 'text-orange-500', label: 'Complaint' };
+  if (t.includes('reject') || t.includes('fail')) return { icon: AlertCircle, color: 'text-red-500', label: 'Failed' };
+  if (t.includes('reply')) return { icon: MessageSquare, color: 'text-amber-500', label: 'Reply received' };
+  if (t.includes('send') || t.includes('sent')) return { icon: Send, color: 'text-gray-400', label: 'Sent' };
+  return { icon: Mail, color: 'text-gray-400', label: eventType };
+};
+
 const formatReceiverList = (receiver: string | string[]): string => {
   if (Array.isArray(receiver)) {
     return receiver.join(', ');
@@ -740,7 +753,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     if (email.clicked_at || (email.click_count ?? 0) > 0) {
       const clickCount = email.click_count ?? 0;
       indicators.push(
-        <span key="clicked" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={`Clicked ${clickCount} time${clickCount !== 1 ? 's' : ''}`}>
+        <span key="clicked" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300" title={`Clicked ${clickCount} time${clickCount !== 1 ? 's' : ''}`}>
           <MousePointer className="w-3 h-3" />
           {clickCount > 1 && <span>{clickCount}</span>}
         </span>
@@ -772,19 +785,10 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       );
     }
 
-    const eventConfig: Record<string, { icon: any; color: string; label: string }> = {
-      delivery: { icon: CheckCircle, color: 'text-green-500', label: 'Delivered' },
-      open: { icon: Eye, color: 'text-blue-500', label: 'Opened' },
-      click: { icon: MousePointer, color: 'text-purple-500', label: 'Clicked' },
-      bounce: { icon: AlertCircle, color: 'text-red-500', label: 'Bounced' },
-      complaint: { icon: AlertCircle, color: 'text-orange-500', label: 'Complaint' },
-      reply: { icon: MessageSquare, color: 'text-amber-500', label: 'Reply received' },
-    };
-
     return (
       <div className="space-y-2">
         {selectedEmailEvents.map((event, index) => {
-          const config = eventConfig[event.event_type] || { icon: Mail, color: 'text-gray-500', label: event.event_type };
+          const config = getEventConfig(event.event_type);
           const Icon = config.icon;
           return (
             <div key={event.id} className="flex items-center gap-3">
@@ -804,6 +808,30 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
           );
         })}
       </div>
+    );
+  };
+
+  const renderAddressEventIcons = () => {
+    if (activeTab !== 'sent' || selectedEmailEvents.length === 0) return null;
+    const byLabel = new Map<string, { config: ReturnType<typeof getEventConfig>; times: string[] }>();
+    for (const event of selectedEmailEvents) {
+      const config = getEventConfig(event.event_type);
+      const entry = byLabel.get(config.label) ?? { config, times: [] };
+      entry.times.push(new Date(event.event_time).toLocaleString());
+      byLabel.set(config.label, entry);
+    }
+    return (
+      <span className="inline-flex items-center gap-1 ml-1.5 align-middle">
+        {Array.from(byLabel.entries()).map(([label, { config, times }]) => {
+          const Icon = config.icon;
+          const title = `${label}${times.length > 1 ? ` (${times.length}x)` : ''}: ${times.join(', ')}`;
+          return (
+            <span key={label} title={title} aria-label={title} className="inline-flex cursor-help transition-transform hover:scale-125">
+              <Icon className={`w-3.5 h-3.5 ${config.color}`} />
+            </span>
+          );
+        })}
+      </span>
     );
   };
 
@@ -1227,6 +1255,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     <span className="font-medium text-gray-900 dark:text-white min-w-0 break-words [overflow-wrap:anywhere]">
                       {activeTab === 'inbox' ? formatReceiverList((selectedEmail as Email).receiver) : 
                        'to_email' in selectedEmail ? (selectedEmail as any).to_email : 'Unknown'}
+                      {renderAddressEventIcons()}
                     </span>
                   </div>
                 </div>
