@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, RefreshCw, FileText, Ban, CalendarDays } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
@@ -53,7 +53,6 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
     const { data, error } = await supabase
       .from('linkedin_posts')
       .select('*')
-      .or('slot_id.not.is.null,category.not.is.null')
       .gte('scheduled_for', parseISODate(range.start).toISOString())
       .lt('scheduled_for', parseISODate(range.end).toISOString())
       .order('scheduled_for', { ascending: true });
@@ -63,7 +62,11 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
     setPosts((data || []) as EnginePost[]);
   }, [range]);
 
-  useEffect(() => { load(); }, [load, refreshKey]);
+  useEffect(() => { load(); }, [load]);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useEffect(() => { if (refreshKey) loadRef.current(true); }, [refreshKey]);
 
   const anyWriting = posts.some((p) => p.generation_status === 'generating' || (p.generation_status === 'pending' && displayStatus(p, leadDays).key === 'writing'));
   useEffect(() => {

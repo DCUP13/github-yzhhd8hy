@@ -2,13 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Linkedin, Image as ImageIcon, Link as LinkIcon, Sparkles, Send, Clock, Trash2, CheckCircle2, XCircle, AlertCircle, Globe, Users, Loader2, X, Video as VideoIcon, FileText, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
-import { CalendarDays, PenSquare, LayoutGrid, CalendarRange, Mic, Tags } from 'lucide-react';
+import { CalendarDays, PenSquare, LayoutGrid, CalendarRange, Mic, Tags, Newspaper } from 'lucide-react';
 import { uploadFile } from './linkedin/api';
 import { ContentEngine, type EngineTab } from './linkedin/ContentEngine';
+import { useRealtimeRefresh } from './linkedin/useRealtimeRefresh';
 
-const TABS: { id: EngineTab | 'compose'; label: string; icon: typeof Linkedin }[] = [
+type PageTab = EngineTab | 'compose' | 'posts';
+
+const POSTED_STATUSES = ['published', 'publishing', 'failed'];
+
+const TABS: { id: PageTab; label: string; icon: typeof Linkedin }[] = [
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
-  { id: 'compose', label: 'Compose & Posts', icon: PenSquare },
+  { id: 'compose', label: 'Compose', icon: PenSquare },
+  { id: 'posts', label: 'Posts', icon: Newspaper },
   { id: 'plans', label: 'Prompt Plans', icon: LayoutGrid },
   { id: 'timeline', label: 'Timeline', icon: CalendarRange },
   { id: 'voice', label: 'Voice Library', icon: Mic },
@@ -86,7 +92,7 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [isDeletingFromLinkedIn, setIsDeletingFromLinkedIn] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [tab, setTab] = useState<EngineTab | 'compose'>('calendar');
+  const [tab, setTab] = useState<PageTab>('calendar');
 
   const fetchAccount = useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -107,7 +113,8 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
       .from('linkedin_posts')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false })
+      .in('status', POSTED_STATUSES)
+      .order('updated_at', { ascending: false })
       .limit(50);
 
     if (error) {
@@ -159,9 +166,8 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
     loadData();
   }, [loadData]);
 
-  // Poll for status updates on scheduled/publishing posts
   useEffect(() => {
-    if (posts.some(p => p.status === 'publishing' || p.status === 'scheduled')) {
+    if (posts.some(p => p.status === 'publishing')) {
       const interval = setInterval(async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -172,6 +178,13 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
       return () => clearInterval(interval);
     }
   }, [posts, fetchPosts]);
+
+  useRealtimeRefresh('linkedin_page', ['linkedin_accounts', 'linkedin_posts'], async (table) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    if (table === 'linkedin_accounts') setAccount(await fetchAccount(user.id));
+    else setPosts(await fetchPosts(user.id));
+  });
 
   const handleConnect = async () => {
     setIsConnecting(true);
@@ -360,6 +373,7 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
         }
 
         resetComposer();
+        setTab('posts');
         setOauthMessage({ type: 'success', text: 'Post updated successfully!' });
       } else {
         const postData: Record<string, unknown> = {
@@ -412,8 +426,9 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
         }
 
         resetComposer();
+        setTab(schedule ? 'calendar' : 'posts');
         setOauthMessage(schedule
-          ? { type: 'success', text: 'Post scheduled successfully!' }
+          ? { type: 'success', text: 'Post scheduled and added to your calendar.' }
           : { type: 'success', text: 'Post published to LinkedIn!' });
       }
     } catch (error) {
@@ -485,6 +500,7 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
     else if (post.image_url) setPostType('image');
     else if (post.article_url) setPostType('article');
     else setPostType('text');
+    setTab('compose');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -555,7 +571,7 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
-      <div className={`${tab === 'compose' ? 'max-w-4xl' : 'max-w-7xl'} mx-auto w-full min-w-0 transition-[max-width] duration-300`}>
+      <div className={`${tab === 'compose' || tab === 'posts' ? 'max-w-4xl' : 'max-w-7xl'} mx-auto w-full min-w-0 transition-[max-width] duration-300`}>
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Linkedin className="w-6 h-6 text-[#0A66C2]" />
@@ -645,7 +661,7 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
                 ))}
               </nav>
             </div>
-            {tab !== 'compose' && <ContentEngine tab={tab} />}
+            {tab !== 'compose' && tab !== 'posts' && <ContentEngine tab={tab} />}
             {tab === 'compose' && (
             <>
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
@@ -978,13 +994,16 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
                 </div>
               </div>
             )}
+            </>
+            )}
 
-            {/* Posts list */}
+            {tab === 'posts' && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Your Posts</h2>
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Posts</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Everything that has gone out to LinkedIn, newest first. Upcoming posts live on the calendar.</p>
               {posts.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No posts yet. Create your first post above!</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Nothing has been posted yet. Posts appear here once they go live on LinkedIn.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1078,7 +1097,6 @@ export function LinkedIn({ queryParams }: LinkedInProps) {
                 </div>
               )}
             </div>
-            </>
             )}
           </>
         )}

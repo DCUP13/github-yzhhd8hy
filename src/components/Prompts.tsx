@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileText, Plus, CreditCard as Edit, Trash2, Search, Info, Repeat, Zap, Copy, Share2, Globe, Building2, Users, X, Loader2, CheckCircle2, AlertCircle, ArrowUpDown } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { ShareDialog } from './ShareDialog';
 
@@ -694,10 +695,10 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
           )}
         </div>
 
-        {showCreateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 shrink-0">
+        {showCreateModal && createPortal(
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 shrink-0">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                   {editingPrompt ? 'Edit Prompt' : 'Create Prompt'}
                 </h3>
@@ -709,7 +710,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 </button>
               </div>
 
-              <div className="p-6 space-y-4 overflow-y-auto">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto min-h-0 flex-1">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Title
@@ -955,7 +956,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 p-6 border-t border-gray-200 dark:border-gray-700 shrink-0">
+              <div className="flex justify-end gap-2 p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 shrink-0">
                 <button
                   type="button"
                   onClick={resetForm}
@@ -972,13 +973,14 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
-        {showInfoDialog && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 shrink-0">
+        {showInfoDialog && createPortal(
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 shrink-0">
                 <div className="flex items-center gap-3">
                   <Info className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white">
@@ -993,7 +995,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto space-y-5 text-sm text-gray-700 dark:text-gray-300">
+              <div className="p-4 sm:p-6 overflow-y-auto min-h-0 flex-1 space-y-5 text-sm text-gray-700 dark:text-gray-300">
                 <div>
                   <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Single Step vs Two Step</h4>
                   <p>
@@ -1060,7 +1062,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 </div>
               </div>
 
-              <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700 shrink-0">
+              <div className="flex justify-end p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowInfoDialog(false)}
@@ -1070,7 +1072,8 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {shareTarget && (

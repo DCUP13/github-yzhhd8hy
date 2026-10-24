@@ -55,6 +55,7 @@ export function useTouchDrag(onDrop: (id: string, day: number) => void) {
         pos.current = { x: t.clientX, y: t.clientY };
         clearTimer();
         timer.current = window.setTimeout(() => {
+          timer.current = null;
           if (!start.current) return;
           scroller.current = findScrollParent(start.current.el);
           navigator.vibrate?.(15);
