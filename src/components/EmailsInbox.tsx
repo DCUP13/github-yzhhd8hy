@@ -6,6 +6,7 @@ import { ComposeEmailDialog } from './ComposeEmailDialog';
 import { AttachmentViewerDialog } from './AttachmentViewerDialog';
 import { useEmails } from '../contexts/EmailContext';
 import { useRealtimeRefresh } from '../lib/useRealtimeRefresh';
+import { toast } from '../lib/toast';
 import { EmailThread, EmailBody, type ThreadMessage } from './EmailThread';
 
 interface EmailsInboxProps {
@@ -22,6 +23,7 @@ interface Email {
   attachments: any;
   created_at: string;
   reply_to_sent_id?: string | null;
+  read_at?: string | null;
 }
 
 interface OutboxEmail {
@@ -139,6 +141,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [selectedEmailEvents, setSelectedEmailEvents] = useState<EmailEvent[]>([]);
   const [selectedThread, setSelectedThread] = useState<{ forId: string | null; messages: ThreadMessage[] }>({ forId: null, messages: [] });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const knownInboxIds = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     fetchAllEmails();
@@ -221,7 +224,15 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    setEmails(data || []);
+    const rows: Email[] = data || [];
+    if (knownInboxIds.current) {
+      const known = knownInboxIds.current;
+      const arrivals = rows.filter((e) => !known.has(e.id) && !e.read_at);
+      if (arrivals.length === 1) toast.info(`New email from ${arrivals[0].sender}`);
+      else if (arrivals.length > 1) toast.info(`${arrivals.length} new emails`);
+    }
+    knownInboxIds.current = new Set(rows.map((e) => e.id));
+    setEmails(rows);
   };
 
   const fetchOutboxEmails = async () => {
@@ -333,8 +344,25 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
     });
   };
 
+  const setInboxReadAt = async (emailId: string, readAt: string | null) => {
+    const apply = (value: string | null) => {
+      setEmails((prev) => prev.map((e) => (e.id === emailId ? { ...e, read_at: value } : e)));
+      setSelectedEmail((current: any) => (current?.id === emailId ? { ...current, read_at: value } : current));
+    };
+    const previous = emails.find((e) => e.id === emailId)?.read_at ?? null;
+    apply(readAt);
+    const { error } = await supabase.from('emails').update({ read_at: readAt }).eq('id', emailId);
+    if (error) {
+      console.error('Error updating read status:', error);
+      apply(previous);
+    }
+  };
+
   const handleSelectEmail = async (email: any) => {
     setSelectedEmail(email);
+    if (activeTab === 'inbox' && !email.read_at) {
+      setInboxReadAt(email.id, new Date().toISOString());
+    }
     setSelectedThread({ forId: email.id, messages: [] });
     if (activeTab === 'inbox' || activeTab === 'sent') {
       loadThread(email, activeTab === 'inbox' ? 'in' : 'out');
@@ -666,6 +694,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   };
 
   const filteredEmails = getFilteredEmails();
+  const unreadCount = emails.filter((e) => !e.read_at).length;
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -956,7 +985,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
               <div className="flex items-center gap-2 sm:gap-3">
                 <Mail className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Emails</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">Emails</h1>
               </div>
               <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 <button
@@ -1088,6 +1117,11 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     <div className="flex items-center gap-2">
                       <Inbox className="w-4 h-4" />
                       Inbox ({emails.length})
+                      {unreadCount > 0 && (
+                        <span title={`${unreadCount} unread`} className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white">
+                          {unreadCount}
+                        </span>
+                      )}
                       {inboxReplyCount > 0 && (
                         <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                           <MessageSquare className="w-3 h-3" />
@@ -1183,18 +1217,29 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredEmails.map((email) => (
+                  {filteredEmails.map((email) => {
+                    const isUnread = activeTab === 'inbox' && !(email as Email).read_at;
+                    return (
                     <div
                       key={email.id}
                       onClick={() => handleSelectEmail(email)}
-                      className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                      className={`relative p-4 cursor-pointer transition-colors ${
+                        isUnread
+                          ? 'bg-blue-50/70 hover:bg-blue-50 dark:bg-blue-900/15 dark:hover:bg-blue-900/25'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
                     >
+                      {isUnread && <span className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-r" />}
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <div className="flex items-center gap-2 min-w-0">
-                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {isUnread ? (
+                                <span title="Unread" className="w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0 animate-pulse" />
+                              ) : (
+                                <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              )}
+                              <span className={`text-sm truncate ${isUnread ? 'font-semibold text-gray-900 dark:text-white' : 'font-medium text-gray-900 dark:text-white'}`}>
                                 {activeTab === 'inbox' ? (email as Email).sender :
                                  activeTab === 'outbox' ? (email as OutboxEmail).from_email :
                                  activeTab === 'sent' ? (email as SentEmail).from_email :
@@ -1237,11 +1282,11 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                             {activeTab === 'sent' && renderEventIndicators(email as SentEmail)}
                           </div>
                           <div className="mb-1">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            <span className={`text-sm text-gray-900 dark:text-white ${isUnread ? 'font-semibold' : 'font-medium'}`}>
                               {email.subject || '(No Subject)'}
                             </span>
                           </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                          <div className={`text-sm ${isUnread ? 'text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-400'}`}>
                             {truncateText(email.body, 100)}
                           </div>
                         </div>
@@ -1261,7 +1306,8 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1278,6 +1324,18 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   Back to {activeTab}
                 </button>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                  {activeTab === 'inbox' && (
+                    <button
+                      onClick={() => {
+                        setInboxReadAt(selectedEmail.id, null);
+                        setSelectedEmail(null);
+                      }}
+                      className="inline-flex items-center px-3 py-1.5 text-sm font-medium whitespace-nowrap text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <Mail className="w-4 h-4 mr-1.5" />
+                      Mark as unread
+                    </button>
+                  )}
                   {(activeTab === 'inbox' || activeTab === 'sent') && (
                     <>
                       <button
