@@ -139,6 +139,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const [sentEvents, setSentEvents] = useState<Record<string, EmailEvent[]>>({});
   const [selectedEmailReplies, setSelectedEmailReplies] = useState<Email[]>([]);
   const [selectedEmailEvents, setSelectedEmailEvents] = useState<EmailEvent[]>([]);
+  const [timelineOpen, setTimelineOpen] = useState(true);
   const [selectedThread, setSelectedThread] = useState<{ forId: string | null; messages: ThreadMessage[] }>({ forId: null, messages: [] });
   const dropdownRef = useRef<HTMLDivElement>(null);
   const knownInboxIds = useRef<Set<string> | null>(null);
@@ -978,7 +979,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden">
+    <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen overflow-x-clip">
       <div className="max-w-7xl mx-auto w-full min-w-0">
         {!selectedEmail ? (
           <>
@@ -1313,7 +1314,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
             </div>
           </>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm">
             <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-4">
                 <button
@@ -1436,17 +1437,6 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 )
               ) : (
                 <EmailBody body={selectedEmail.body} collapseQuoted={false} />
-              )}
-
-              {/* Event timeline for sent emails */}
-              {activeTab === 'sent' && (
-                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-blue-500" />
-                    Tracking Timeline
-                  </h3>
-                  {renderEventTimeline()}
-                </div>
               )}
 
               {/* Reply thread for sent emails */}
@@ -1595,6 +1585,28 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 </div>
               )}
             </div>
+
+            {activeTab === 'sent' && (
+              <div className="sticky bottom-0 z-10 rounded-b-xl border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.12)]">
+                <button
+                  type="button"
+                  onClick={() => setTimelineOpen((v) => !v)}
+                  className="w-full flex items-center justify-between gap-2 px-4 sm:px-6 py-3 text-left"
+                >
+                  <span className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-blue-500" />
+                    Tracking Timeline
+                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400">({selectedEmailEvents.length})</span>
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${timelineOpen ? '' : 'rotate-180'}`} />
+                </button>
+                {timelineOpen && (
+                  <div className="px-4 sm:px-6 pb-4 max-h-[30vh] overflow-y-auto">
+                    {renderEventTimeline()}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

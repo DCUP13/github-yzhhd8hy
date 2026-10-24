@@ -346,7 +346,7 @@ export default function App() {
                   <h2 className="text-base font-bold">Dashboard</h2>
                 </div>
 
-                <div className="flex-1 lg:ml-64 pt-12 lg:pt-0 min-w-0 overflow-x-hidden">
+                <div className="flex-1 lg:ml-64 pt-12 lg:pt-0 min-w-0 overflow-x-clip">
                   {appView === 'dashboard' && (
                     <Dashboard onSignOut={handleSignOut} currentView={appView} onNavigateAnalytics={() => navigateToApp('analytics')} />
                   )}

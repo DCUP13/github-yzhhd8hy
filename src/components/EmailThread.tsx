@@ -91,9 +91,65 @@ function HtmlFrame({ html }: { html: string }) {
   );
 }
 
+const SIMPLE_TAGS = new Set([
+  'p', 'br', 'div', 'span', 'b', 'strong', 'i', 'em', 'u', 's', 'strike', 'a', 'ul', 'ol', 'li',
+  'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'code', 'hr', 'font', 'sub', 'sup', 'small',
+]);
+const SAFE_HREF = /^(https?:|mailto:|tel:)/i;
+
+function isSimpleHtml(html: string): boolean {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  if (doc.head.querySelector('style, link')) return false;
+  return Array.from(doc.body.querySelectorAll('*')).every((el) => {
+    if (!SIMPLE_TAGS.has(el.tagName.toLowerCase())) return false;
+    if (el.hasAttribute('bgcolor') || el.hasAttribute('background')) return false;
+    return !/background/i.test(el.getAttribute('style') || '');
+  });
+}
+
+function sanitizeSimpleHtml(html: string): string {
+  const source = new DOMParser().parseFromString(html, 'text/html').body;
+  const out = document.createElement('div');
+  const copy = (from: Node, to: Node) => {
+    from.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        to.appendChild(document.createTextNode(child.textContent || ''));
+        return;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = (child as Element).tagName.toLowerCase();
+      if (!SIMPLE_TAGS.has(tag)) {
+        copy(child, to);
+        return;
+      }
+      const el = document.createElement(tag === 'font' ? 'span' : tag);
+      if (tag === 'a') {
+        const href = (child as Element).getAttribute('href') || '';
+        if (SAFE_HREF.test(href.trim())) {
+          el.setAttribute('href', href.trim());
+          el.setAttribute('target', '_blank');
+          el.setAttribute('rel', 'noopener noreferrer');
+        }
+      }
+      copy(child, el);
+      to.appendChild(el);
+    });
+  };
+  copy(source, out);
+  return out.innerHTML;
+}
+
 function BodyContent({ content }: { content: string }) {
   if (!content.trim()) return null;
-  if (HTML_PATTERN.test(content)) return <HtmlFrame html={content} />;
+  if (HTML_PATTERN.test(content)) {
+    if (!isSimpleHtml(content)) return <HtmlFrame html={content} />;
+    return (
+      <div
+        className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 break-words [overflow-wrap:anywhere] [&_p]:my-2 [&_p:first-child]:mt-0 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 dark:[&_blockquote]:border-gray-600 [&_blockquote]:pl-3 [&_blockquote]:text-gray-600 dark:[&_blockquote]:text-gray-400 [&_pre]:whitespace-pre-wrap [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold"
+        dangerouslySetInnerHTML={{ __html: sanitizeSimpleHtml(content) }}
+      />
+    );
+  }
   return (
     <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-gray-800 dark:text-gray-200">
       {content}
