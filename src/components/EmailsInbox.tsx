@@ -471,8 +471,13 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
   const handleDeleteEmail = async (emailId: string, event: React.MouseEvent) => {
     event.stopPropagation();
 
+    if (activeTab === 'inbox') setEmails(prev => prev.filter(e => e.id !== emailId));
+    else if (activeTab === 'outbox') setOutboxEmails(prev => prev.filter(e => e.id !== emailId));
+    else if (activeTab === 'sent') setSentEmails(prev => prev.filter(e => e.id !== emailId));
+    else if (activeTab === 'drafts') setDraftEmails(prev => prev.filter(e => e.id !== emailId));
+    if (selectedEmail?.id === emailId) setSelectedEmail(null);
+
     try {
-      setIsLoading(true);
       let error;
 
       if (activeTab === 'inbox') {
@@ -498,27 +503,13 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       }
 
       if (error) throw error;
-
-      if (activeTab === 'inbox') {
-        await fetchInboxEmails();
-      } else if (activeTab === 'outbox') {
-        await fetchOutboxEmails();
-      } else if (activeTab === 'sent') {
-        await fetchSentEmails();
-      } else {
-        await fetchDraftEmails();
-      }
-
-      if (selectedEmail?.id === emailId) {
-        setSelectedEmail(null);
-      }
-
-      alert('Email deleted successfully');
     } catch (error) {
       console.error('Error deleting email:', error);
-      alert('Failed to delete email. Please try again.');
-    } finally {
-      setIsLoading(false);
+      toast.error('Failed to delete email. Please try again.');
+      if (activeTab === 'inbox') await fetchInboxEmails();
+      else if (activeTab === 'outbox') await fetchOutboxEmails();
+      else if (activeTab === 'sent') await fetchSentEmails();
+      else await fetchDraftEmails();
     }
   };
 
