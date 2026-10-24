@@ -133,7 +133,7 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
       <button
         key={p.id}
         onClick={(e) => { e.stopPropagation(); setEditing(p); }}
-        className={`w-full text-left rounded-md border-l-[3px] ${cat ? cat.bar : 'border-gray-300'} bg-white dark:bg-gray-800 shadow-sm hover:shadow-md hover:-translate-y-px transition-all ${compact ? 'px-1.5 py-1' : narrow ? 'px-2 py-2' : 'px-3 py-2.5'}`}
+        className={`block w-full text-left rounded-md border-l-[3px] ${cat ? cat.bar : 'border-gray-300'} bg-white dark:bg-gray-800 shadow-sm hover:shadow-md hover:-translate-y-px transition-all ${compact ? 'px-1.5 py-1' : narrow ? 'px-2 py-2' : 'px-3 py-2.5'}`}
       >
         <div className={narrow ? 'flex flex-col items-start gap-1' : 'flex items-center gap-1.5'}>
           <span className="text-[11px] font-semibold tabular-nums text-gray-500 dark:text-gray-400">{timeLabel(p)}</span>
@@ -146,7 +146,7 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
         <p className={`text-gray-800 dark:text-gray-100 ${compact ? 'text-xs truncate' : narrow ? 'text-[13px] font-medium leading-snug mt-1.5 break-words' : 'text-sm font-medium mt-1'}`}>{p.topic_name || 'Untitled'}</p>
         {!compact && (
           <>
-            <p className={`mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400 break-words ${narrow ? 'line-clamp-4' : 'line-clamp-3'}`}>{p.content_text || (p.generation_status === 'failed' ? 'Writing failed. Open to retry.' : 'Not written yet.')}</p>
+            <p className={`mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400 break-words overflow-hidden ${narrow ? 'line-clamp-4 max-h-[6.5em]' : 'line-clamp-3 max-h-[4.875em]'}`}>{p.content_text || (p.generation_status === 'failed' ? 'Writing failed. Open to retry.' : 'Not written yet.')}</p>
             {p.document_url && <p className="mt-1.5 flex items-center gap-1 text-xs text-[#0A66C2] min-w-0"><FileText className="w-3 h-3 flex-shrink-0" /><span className="truncate">{p.document_name || 'Document'}</span></p>}
           </>
         )}
@@ -179,7 +179,7 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
                   </span>
                   {skipped && <Ban className="w-3.5 h-3.5 text-gray-400" aria-label="Skipped" />}
                 </div>
-                <div className="hidden sm:block space-y-1">
+                <div className="hidden sm:flex flex-col gap-1">
                   {list.slice(0, 3).map((p) => chip(p, true))}
                   {list.length > 3 && <p className="text-[11px] font-medium text-gray-500 px-1">+{list.length - 3} more</p>}
                 </div>
@@ -212,7 +212,7 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
               <span className={`text-lg font-semibold group-hover:text-[#0A66C2] ${d === today ? 'text-[#0A66C2]' : 'text-gray-800 dark:text-gray-100'}`}>{parseISODate(d).getDate()}</span>
             </button>
             {skipped && <p className="flex items-center gap-1 text-xs text-gray-400 px-1 mb-2"><Ban className="w-3 h-3" /> Skipped</p>}
-            <div className="space-y-2">{list.map((p) => chip(p, false, true))}</div>
+            <div className="flex flex-col gap-2">{list.map((p) => chip(p, false, true))}</div>
           </div>
         );
       })}
@@ -222,7 +222,7 @@ export function ContentCalendar({ skipDates, leadDays, refreshKey }: ContentCale
   const renderDay = () => {
     const list = byDay.get(cursor) || [];
     return (
-      <div className="max-w-2xl mx-auto space-y-3">
+      <div className="max-w-2xl mx-auto flex flex-col gap-3">
         {skipSet.has(cursor) && <p className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-900/40 text-sm text-gray-500"><Ban className="w-4 h-4" /> This day is skipped. Nothing will be generated for it.</p>}
         {list.length === 0 && !skipSet.has(cursor) && (
           <div className="py-16 text-center">
