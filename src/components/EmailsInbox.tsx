@@ -1587,7 +1587,7 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
             </div>
 
             {activeTab === 'sent' && (
-              <div className="sticky bottom-0 z-10 rounded-b-xl border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.12)]">
+              <div className="rounded-b-xl border-t border-gray-200 dark:border-gray-700">
                 <button
                   type="button"
                   onClick={() => setTimelineOpen((v) => !v)}
@@ -1598,10 +1598,10 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                     Tracking Timeline
                     <span className="text-xs font-normal text-gray-500 dark:text-gray-400">({selectedEmailEvents.length})</span>
                   </span>
-                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${timelineOpen ? '' : 'rotate-180'}`} />
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${timelineOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {timelineOpen && (
-                  <div className="px-4 sm:px-6 pb-4 max-h-[30vh] overflow-y-auto">
+                  <div className="px-4 sm:px-6 pb-4">
                     {renderEventTimeline()}
                   </div>
                 )}

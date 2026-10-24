@@ -11,7 +11,7 @@ export interface ThreadMessage {
   openCount?: number;
 }
 
-const HTML_PATTERN = /<\/?[a-z][\s\S]*?>/i;
+const HTML_PATTERN = /<\/?(html|head|body|p|br|div|span|b|strong|i|em|u|a|ul|ol|li|blockquote|h[1-6]|pre|code|hr|font|img|table|tbody|thead|tr|td|th|center|style|meta)(\s[^>]*)?\/?>/i;
 const HTML_QUOTE_MARKERS = [/---\s*Original Message\s*---/i, /<blockquote/i, /<div[^>]+class="[^"]*gmail_quote/i, /<div[^>]+id="divRplyFwdMsg"/i];
 const TEXT_QUOTE_START = /^(On .+wrote:|-+\s*Original Message\s*-+|>)/i;
 
@@ -94,17 +94,14 @@ function HtmlFrame({ html }: { html: string }) {
 const SIMPLE_TAGS = new Set([
   'p', 'br', 'div', 'span', 'b', 'strong', 'i', 'em', 'u', 's', 'strike', 'a', 'ul', 'ol', 'li',
   'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'code', 'hr', 'font', 'sub', 'sup', 'small',
+  'img', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'center',
 ]);
+const DROPPED_TAGS = new Set(['script', 'style', 'link', 'meta', 'title', 'head', 'iframe', 'object', 'embed', 'form', 'svg']);
 const SAFE_HREF = /^(https?:|mailto:|tel:)/i;
+const SAFE_SRC = /^https:/i;
 
-function isSimpleHtml(html: string): boolean {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  if (doc.head.querySelector('style, link')) return false;
-  return Array.from(doc.body.querySelectorAll('*')).every((el) => {
-    if (!SIMPLE_TAGS.has(el.tagName.toLowerCase())) return false;
-    if (el.hasAttribute('bgcolor') || el.hasAttribute('background')) return false;
-    return !/background/i.test(el.getAttribute('style') || '');
-  });
+function isDesignedHtml(html: string): boolean {
+  return /<style[\s>]|<link\s[^>]*stylesheet/i.test(html);
 }
 
 function sanitizeSimpleHtml(html: string): string {
@@ -118,11 +115,22 @@ function sanitizeSimpleHtml(html: string): string {
       }
       if (child.nodeType !== Node.ELEMENT_NODE) return;
       const tag = (child as Element).tagName.toLowerCase();
+      if (DROPPED_TAGS.has(tag)) return;
+      if (tag === 'img') {
+        const src = ((child as Element).getAttribute('src') || '').trim();
+        if (!SAFE_SRC.test(src)) return;
+        const img = document.createElement('img');
+        img.setAttribute('src', src);
+        img.setAttribute('alt', (child as Element).getAttribute('alt') || '');
+        img.setAttribute('loading', 'lazy');
+        to.appendChild(img);
+        return;
+      }
       if (!SIMPLE_TAGS.has(tag)) {
         copy(child, to);
         return;
       }
-      const el = document.createElement(tag === 'font' ? 'span' : tag);
+      const el = document.createElement(tag === 'font' ? 'span' : tag === 'center' ? 'div' : tag);
       if (tag === 'a') {
         const href = (child as Element).getAttribute('href') || '';
         if (SAFE_HREF.test(href.trim())) {
@@ -142,10 +150,10 @@ function sanitizeSimpleHtml(html: string): string {
 function BodyContent({ content }: { content: string }) {
   if (!content.trim()) return null;
   if (HTML_PATTERN.test(content)) {
-    if (!isSimpleHtml(content)) return <HtmlFrame html={content} />;
+    if (isDesignedHtml(content)) return <HtmlFrame html={content} />;
     return (
       <div
-        className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 break-words [overflow-wrap:anywhere] [&_p]:my-2 [&_p:first-child]:mt-0 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 dark:[&_blockquote]:border-gray-600 [&_blockquote]:pl-3 [&_blockquote]:text-gray-600 dark:[&_blockquote]:text-gray-400 [&_pre]:whitespace-pre-wrap [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold"
+        className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 break-words [overflow-wrap:anywhere] [&_p]:my-2 [&_p:first-child]:mt-0 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 dark:[&_blockquote]:border-gray-600 [&_blockquote]:pl-3 [&_blockquote]:text-gray-600 dark:[&_blockquote]:text-gray-400 [&_pre]:whitespace-pre-wrap [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold [&_img]:max-w-full [&_img]:h-auto [&_img]:inline-block [&_img]:rounded [&_table]:max-w-full [&_td]:align-top [&_td]:pr-2"
         dangerouslySetInnerHTML={{ __html: sanitizeSimpleHtml(content) }}
       />
     );
