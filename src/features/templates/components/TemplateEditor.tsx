@@ -49,9 +49,20 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
     <div className="h-full flex flex-col bg-white dark:bg-gray-800">
       <div className="border-b border-gray-200 dark:border-gray-700 p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 sm:mb-4">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white min-w-0 truncate">
-            {pendingTitle || 'Untitled Template'}
-          </h2>
+          {isEditableImport ? (
+            <input
+              type="text"
+              value={pendingTitle}
+              onChange={(e) => setPendingTitle(e.target.value)}
+              placeholder="Untitled Template"
+              aria-label="Template name"
+              className="flex-1 min-w-0 basis-48 text-lg sm:text-xl font-semibold text-gray-900 dark:text-white bg-transparent border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none rounded-lg px-2 py-1 -ml-2 transition-colors"
+            />
+          ) : (
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white min-w-0 truncate">
+              {pendingTitle || 'Untitled Template'}
+            </h2>
+          )}
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={onCancel}
