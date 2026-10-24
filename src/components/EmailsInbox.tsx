@@ -820,16 +820,16 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
         <div className="space-y-3">
           {selectedEmailReplies.map((reply) => (
             <div key={reply.id} className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 border border-amber-100 dark:border-amber-800/30">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-2 min-w-0">
                 <User className="w-4 h-4 text-gray-400" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{reply.sender}</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white min-w-0 break-words [overflow-wrap:anywhere]">{reply.sender}</span>
                 <span className="text-xs text-gray-400">
                   {new Date(reply.created_at).toLocaleString()}
                 </span>
               </div>
               <div className="text-sm text-gray-700 dark:text-gray-300">
                 {reply.body ? (
-                  <div dangerouslySetInnerHTML={{ __html: reply.body }} />
+                  <div className="break-words [overflow-wrap:anywhere] [&_*]:max-w-full [&_img]:h-auto [&_pre]:whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: reply.body }} />
                 ) : (
                   <span className="italic text-gray-400">No content</span>
                 )}
@@ -846,16 +846,16 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       <div className="max-w-7xl mx-auto w-full min-w-0">
         {!selectedEmail ? (
           <>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Emails</h1>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Mail className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Emails</h1>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 <button
                   onClick={handleGenerateDrafts}
                   disabled={isGeneratingDrafts}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
+                  className={`inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white ${
                     isGeneratingDrafts
                       ? 'bg-green-400 cursor-wait'
                       : 'bg-green-600 hover:bg-green-700'
@@ -863,36 +863,39 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                 >
                   {isGeneratingDrafts ? (
                     <>
-                      <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       Generating...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Generate Drafts
+                      <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+                      <span className="sm:hidden">Drafts</span>
+                      <span className="hidden sm:inline">Generate Drafts</span>
                     </>
                   )}
                 </button>
                 <button
                   onClick={() => setShowComposeDialog(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Email
+                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+                  <span className="sm:hidden">New</span>
+                  <span className="hidden sm:inline">New Email</span>
                 </button>
                 <button
                   onClick={handleRefresh}
                   disabled={isProcessingEmails}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg shadow-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  aria-label="Refresh"
+                  className="inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-gray-300 dark:border-gray-600 text-xs sm:text-sm font-medium rounded-lg shadow-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh
+                  <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Refresh</span>
                 </button>
                 {activeTab === 'outbox' && (
                   <button
                     onClick={handleProcessOutbox}
                     disabled={isProcessingEmails}
-                    className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${
+                    className={`inline-flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white ${
                       isProcessingEmails
                         ? 'bg-blue-400 cursor-wait'
                         : 'bg-blue-600 hover:bg-blue-700'
@@ -900,13 +903,14 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                   >
                     {isProcessingEmails ? (
                       <>
-                        <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         Processing...
                       </>
                     ) : (
                       <>
-                        <Send className="w-4 h-4 mr-2" />
-                        Send Emails
+                        <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+                        <span className="sm:hidden">Send</span>
+                        <span className="hidden sm:inline">Send Emails</span>
                       </>
                     )}
                   </button>
@@ -1157,16 +1161,16 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
           </>
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between mb-4">
+            <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-4">
                 <button
                   onClick={() => setSelectedEmail(null)}
-                  className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap capitalize"
                 >
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to {activeTab}
                 </button>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                   {activeTab === 'inbox' && (
                     <>
                       <button
@@ -1174,9 +1178,9 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                           setIsReplyAll(false);
                           setShowReplyDialog(true);
                         }}
-                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium whitespace-nowrap text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 sm:bg-transparent dark:bg-blue-900/20 sm:dark:bg-transparent hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                       >
-                        <Reply className="w-4 h-4 mr-2" />
+                        <Reply className="w-4 h-4 mr-1.5" />
                         Reply
                       </button>
                       <button
@@ -1184,14 +1188,14 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
                           setIsReplyAll(true);
                           setShowReplyDialog(true);
                         }}
-                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium whitespace-nowrap text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 sm:bg-transparent dark:bg-blue-900/20 sm:dark:bg-transparent hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                       >
-                        <Reply className="w-4 h-4 mr-2" />
+                        <Reply className="w-4 h-4 mr-1.5" />
                         Reply All
                       </button>
                     </>
                   )}
-                  <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
                     <Clock className="w-4 h-4" />
                     {new Date(
                       activeTab === 'sent' && 'sent_at' in selectedEmail 
@@ -1203,24 +1207,24 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
               </div>
               
               <div className="space-y-3">
-                <div className="flex items-center gap-4">
-                  <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
+                  <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white break-words [overflow-wrap:anywhere] min-w-0">
                     {selectedEmail.subject || '(No Subject)'}
                   </h1>
                   {activeTab === 'sent' && renderEventIndicators(selectedEmail as SentEmail)}
                 </div>
                 
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 dark:text-gray-400">From:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-1 sm:gap-x-4 sm:gap-y-1 text-sm min-w-0">
+                  <div className="flex items-baseline gap-2 min-w-0">
+                    <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">From:</span>
+                    <span className="font-medium text-gray-900 dark:text-white min-w-0 break-words [overflow-wrap:anywhere]">
                       {activeTab === 'inbox' ? (selectedEmail as Email).sender : 
                        'from_email' in selectedEmail ? (selectedEmail as any).from_email : 'Unknown'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 dark:text-gray-400">To:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
+                  <div className="flex items-baseline gap-2 min-w-0">
+                    <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">To:</span>
+                    <span className="font-medium text-gray-900 dark:text-white min-w-0 break-words [overflow-wrap:anywhere]">
                       {activeTab === 'inbox' ? formatReceiverList((selectedEmail as Email).receiver) : 
                        'to_email' in selectedEmail ? (selectedEmail as any).to_email : 'Unknown'}
                     </span>
@@ -1254,11 +1258,11 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
               </div>
             </div>
 
-            <div className="p-6">
-              <div className="prose dark:prose-invert max-w-none">
+            <div className="p-4 sm:p-6 min-w-0">
+              <div className="prose dark:prose-invert max-w-none min-w-0 overflow-x-auto">
                 {selectedEmail.body ? (
                   <div
-                    className="text-gray-900 dark:text-white"
+                    className="text-gray-900 dark:text-white break-words [overflow-wrap:anywhere] [&_*]:max-w-full [&_img]:h-auto [&_table]:!w-auto [&_pre]:whitespace-pre-wrap"
                     dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
                   />
                 ) : (
