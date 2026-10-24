@@ -579,14 +579,14 @@ export function AmazonTab({ userId }: AmazonTabProps) {
             domains.map((domain) => (
               <div
                 key={domain}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
               >
-                <div className="flex items-center gap-3 flex-1">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
                   <Globe className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                  <span className="text-gray-900 dark:text-white flex-1">{domain}</span>
+                  <span className="text-gray-900 dark:text-white flex-1 min-w-0 break-all">{domain}</span>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-end gap-4 sm:gap-5 flex-shrink-0">
+                  <div className="flex items-center gap-3">
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       Autoresponder
                     </span>
@@ -597,7 +597,8 @@ export function AmazonTab({ userId }: AmazonTabProps) {
                   </div>
                   <button
                     onClick={() => handleRemoveDomain(domain)}
-                    className="p-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Remove domain"
+                    className="p-2 -mr-2 sm:mr-0 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -676,12 +677,12 @@ export function AmazonTab({ userId }: AmazonTabProps) {
             sesEmails.map((email) => (
               <div
                 key={email.address}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
               >
-                <div className="flex items-center gap-3">
-                  <Mail className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <span className="text-gray-900 dark:text-white">{email.address}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Mail className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-gray-900 dark:text-white break-all">{email.address}</span>
                     <div className="flex items-center gap-2 mt-1">
                       <input
                         type="number"
@@ -697,11 +698,11 @@ export function AmazonTab({ userId }: AmazonTabProps) {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-end gap-2 flex-shrink-0">
                   <button
                     onClick={() => handleTestEmail(email)}
                     disabled={email.testing}
-                    className={`inline-flex items-center px-3 py-1 text-sm font-medium rounded-lg ${
+                    className={`inline-flex items-center px-3 py-1 text-sm font-medium whitespace-nowrap rounded-lg ${
                       email.testing
                         ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-wait'
                         : 'text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20'
@@ -721,7 +722,8 @@ export function AmazonTab({ userId }: AmazonTabProps) {
                   </button>
                   <button
                     onClick={() => handleRemoveSESEmail(email.address)}
-                    className="p-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Remove email"
+                    className="p-2 -mr-2 sm:mr-0 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                   >
                     <X className="w-5 h-5" />
                   </button>
