@@ -1,5 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useRealtimeRefresh } from '../lib/useRealtimeRefresh';
+
+const REALTIME_TABLES = [
+  'dashboard_statistics',
+  'email_sent',
+  'email_events',
+  'emails',
+  'instagram_accounts',
+  'instagram_insights_snapshots',
+  'linkedin_accounts',
+  'linkedin_analytics_snapshots',
+];
 
 interface DashboardStats {
   totalEmailsRemaining: number;
@@ -194,14 +206,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       const { data: recentOpens } = await supabase
         .from('email_events')
         .select('event_time')
-        .eq('event_type', 'open')
+        .ilike('event_type', '%open%')
         .order('event_time', { ascending: false })
         .limit(1);
 
       const { data: recentClicks } = await supabase
         .from('email_events')
         .select('event_time')
-        .eq('event_type', 'click')
+        .ilike('event_type', '%click%')
         .order('event_time', { ascending: false })
         .limit(1);
 
@@ -359,34 +371,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     fetchEmailAnalytics();
     fetchInstagramSummary();
     fetchLinkedInSummary();
-
-    const channel = supabase.channel('dashboard_stats')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'dashboard_statistics'
-        },
-        (payload) => {
-          if (payload.new) {
-            setStats({
-              totalEmailsRemaining: payload.new.total_emails_remaining,
-              totalEmailAccounts: payload.new.total_email_accounts,
-              totalEmailsSentToday: payload.new.total_emails_sent_today,
-              totalTemplates: payload.new.total_templates,
-              totalCampaigns: payload.new.total_campaigns,
-            totalDomains: payload.new.total_domains ?? 0
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
   }, []);
+
+  useRealtimeRefresh('dashboard_live', REALTIME_TABLES, (table) => {
+    if (table === 'dashboard_statistics') fetchStats();
+    else if (table.startsWith('instagram_')) fetchInstagramSummary();
+    else if (table.startsWith('linkedin_')) fetchLinkedInSummary();
+    else fetchEmailAnalytics();
+  });
 
   const value = {
     stats,
