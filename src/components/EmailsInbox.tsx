@@ -5,6 +5,7 @@ import { ReplyDialog } from './ReplyDialog';
 import { ComposeEmailDialog } from './ComposeEmailDialog';
 import { AttachmentViewerDialog } from './AttachmentViewerDialog';
 import { useEmails } from '../contexts/EmailContext';
+import { useRealtimeRefresh } from '../lib/useRealtimeRefresh';
 
 interface EmailsInboxProps {
   onSignOut: () => void;
@@ -140,6 +141,33 @@ export function EmailsInbox({ onSignOut, currentView }: EmailsInboxProps) {
       fetchDraftEmails();
     }
   }, [activeTab]);
+
+  useRealtimeRefresh('emails_inbox_live', ['email_events', 'email_sent', 'emails', 'email_outbox'], (table) => {
+    const ignore = (err: unknown) => console.error(`Live refresh failed for ${table}:`, err);
+    if (table === 'emails') {
+      fetchInboxEmails().catch(ignore);
+    } else if (table === 'email_outbox') {
+      fetchOutboxEmails().catch(ignore);
+    } else {
+      fetchSentEmails().catch(ignore);
+    }
+
+    if (activeTab !== 'sent' || !selectedEmail?.id) return;
+    const sentId = selectedEmail.id as string;
+    if (table === 'emails') {
+      fetchSentEmailReplies(sentId).then(setSelectedEmailReplies);
+      return;
+    }
+    if (table === 'email_events') {
+      fetchSentEmailEvents(sentId).then(setSelectedEmailEvents);
+    }
+    if (table === 'email_events' || table === 'email_sent') {
+      supabase.from('email_sent').select('*').eq('id', sentId).maybeSingle().then(({ data, error }) => {
+        if (error) return ignore(error);
+        if (data) setSelectedEmail((current: any) => (current?.id === sentId ? data : current));
+      });
+    }
+  });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
