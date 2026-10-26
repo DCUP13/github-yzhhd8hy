@@ -7,13 +7,20 @@ const corsHeaders = {
 };
 
 const LINKEDIN_API_BASE = "https://api.linkedin.com";
-const LINKEDIN_VERSION = "202401";
+
+// LinkedIn retires API versions after about a year; use a recent, already-released month.
+function linkedInVersion(): string {
+  const d = new Date();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - 2);
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 function authHeaders(accessToken: string): Record<string, string> {
   return {
     "Authorization": `Bearer ${accessToken}`,
     "X-Restli-Protocol-Version": "2.0.0",
-    "Linkedin-Version": LINKEDIN_VERSION,
+    "Linkedin-Version": linkedInVersion(),
     "Content-Type": "application/json",
   };
 }

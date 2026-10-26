@@ -6,6 +6,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// LinkedIn retires API versions after about a year; use a recent, already-released month.
+function linkedInVersion(): string {
+  const d = new Date();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - 2);
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -52,7 +60,7 @@ Deno.serve(async (req: Request) => {
       const headers = {
         "Authorization": `Bearer ${accessToken}`,
         "X-Restli-Protocol-Version": "2.0.0",
-        "Linkedin-Version": "202401",
+        "Linkedin-Version": linkedInVersion(),
       };
 
       // 1. Fetch the user's UGC posts
@@ -60,10 +68,7 @@ Deno.serve(async (req: Request) => {
       try {
         const postsUrl = `https://api.linkedin.com/rest/posts?author=${encodeURIComponent(personUrn)}&isDistributed=false&count=50&sortBy=LAST_MODIFIED`;
         const postsRes = await fetch(postsUrl, {
-          headers: {
-            ...headers,
-            "Linkedin-Version": "202401",
-          },
+          headers,
         });
 
         if (postsRes.ok) {
@@ -112,10 +117,7 @@ Deno.serve(async (req: Request) => {
           // Try the new posts API for statistics
           const statsUrl = `https://api.linkedin.com/rest/posts/${encodeURIComponent(postUrn)}`;
           const statsRes = await fetch(statsUrl, {
-            headers: {
-              ...headers,
-              "Linkedin-Version": "202401",
-            },
+            headers,
           });
 
           if (statsRes.ok) {
