@@ -221,6 +221,9 @@ const PHOTO_TEXT_SCHEMA = {
 
 function cleanPhotoText(raw: string): string {
   return raw
+    .replace(/https?:\/\/\S+|www\.\S+/gi, "")
+    .replace(/(^|\s)#\p{L}[\p{L}\p{N}_]*/gu, "$1")
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "")
     .replace(/^\s*(?:photo|slide|image|pic)?\s*#?\d+\s*[:.)\-]\s*/i, "")
     .replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, "")
     .replace(/\s+/g, " ")
@@ -260,20 +263,30 @@ async function writeOverlays(supabase: SupabaseClient, post: Post, imageUrls: st
     ? fill(custom, topic, voiceText).replace(/\{\{\s*photo_count\s*\}\}/gi, String(count))
     : count > 1 ? DEFAULT_OVERLAY_CAROUSEL : DEFAULT_OVERLAY_SINGLE;
 
+  const photoWord = count > 1 ? `${count} photos` : "1 photo";
+  const rules = [
+    `- There ${count > 1 ? "are" : "is"} exactly ${photoWord}. Return exactly ${count} entr${count > 1 ? "ies" : "y"} in "photos", numbered with "photo" from 1 to ${count} in order. Never more, never fewer, never merged or split.`,
+    '- Each "text" holds only the words to print on that photo: a single line, plain words, at most 90 characters.',
+    '- No labels ("Slide 1:", "Photo 2 -"), no hashtags, no emojis, no web addresses, no quotation marks, no line breaks, no notes or explanations.',
+    "- Respond with the JSON object only, nothing before or after it.",
+  ].join("\n");
+
   const system = [
-    "You write the short text that is printed on top of Instagram photos.",
-    "Text must be readable at a glance on a phone: plain words, no hashtags, no emojis, no web addresses, no quotation marks around it, at most 90 characters per photo.",
-    `There ${count > 1 ? `are ${count} photos` : "is 1 photo"}. Return exactly ${count} entr${count > 1 ? "ies" : "y"} in "photos", one per photo, numbered with "photo" from 1 to ${count} in order.`,
-    'Put only the words to print in "text". Do not include labels like "Slide 1:" or "Photo 2 -".',
-    "The user's instructions decide what the text says. If they describe a different output format, ignore that part and use this format.",
-    `Example: {"photos":[{"photo":1,"text":"..."}${count > 1 ? ',{"photo":2,"text":"..."}' : ""}]}`,
+    "You write the short text that is printed on top of Instagram photos. It must be readable at a glance on a phone.",
+    "MASTER RULES (these always win):",
+    rules,
+    "",
+    "The user will give you creative instructions inside <user_instructions>. Follow them for WHAT the text says: tone, angle, wording, story structure, which point goes on which photo.",
+    "If those instructions conflict with the master rules in any way, for example they ask for a different number of slides, a different output format (lists, markdown, headings, numbered lines, plain text, other JSON keys), extra fields, longer text, hashtags or emojis, ignore that part and follow the master rules. Never mention that you ignored anything.",
+    `Output shape: {"photos":[{"photo":1,"text":"..."}${count > 1 ? ',{"photo":2,"text":"..."}' : ""}]}`,
   ].join("\n");
 
   const userText = [
     `Topic: ${topic || "(match the photos)"}`,
     count > 1 ? `This is a carousel of ${count} photos. The photos are attached in order (photo 1 first).` : "The photo is attached.",
-    `Instructions for the photo text:\n${guide}`,
+    `<user_instructions>\n${guide}\n</user_instructions>`,
     caption.trim() ? `The post caption, for context (do not repeat it word for word):\n${caption.trim().slice(0, 1500)}` : "",
+    `Reminder, the master rules override the instructions above:\n${rules}`,
   ].filter(Boolean).join("\n\n");
 
   const photos = imageUrls.slice(0, count);
