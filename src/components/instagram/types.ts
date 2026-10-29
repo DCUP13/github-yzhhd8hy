@@ -43,6 +43,7 @@ export interface PlanSlot {
   overlay_text: string;
   overlay_prompt_id: string | null;
   overlay_scope: OverlayScope;
+  overlay_font_size: number;
   caption_prompt: string;
   overlay_prompt: string;
   link_id: string | null;
@@ -100,6 +101,7 @@ export interface ScheduledPost {
   overlay_texts: string[];
   overlay_prompt_id: string | null;
   overlay_scope: OverlayScope;
+  overlay_font_size: number;
   account_ids: string[];
   link_id: string | null;
   status: PostStatus;

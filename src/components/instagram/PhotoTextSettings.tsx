@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
 import { labelClass } from '../linkedin/Modal';
 import { PromptTextBox } from './PromptTextBox';
+import { TextSizeSlider } from './TextSizeSlider';
 import { IMAGE_TEXT_CATEGORY, PINK, STARTER_IMAGE_TEXT_PROMPT, type InstagramPrompt, type OverlayMode, type OverlayScope } from './types';
 
 interface PhotoTextSettingsProps {
@@ -11,11 +12,13 @@ interface PhotoTextSettingsProps {
   mode: OverlayMode;
   scope: OverlayScope;
   text: string;
+  fontSize: number;
   promptText: string;
   prompts: InstagramPrompt[];
   onModeChange: (mode: OverlayMode) => void;
   onScopeChange: (scope: OverlayScope) => void;
   onTextChange: (text: string) => void;
+  onFontSizeChange: (size: number) => void;
   onPromptTextChange: (text: string) => void;
   onPromptImported: (id: string) => void;
   onPromptCreated: () => void;
@@ -30,8 +33,8 @@ export function choiceClass(active: boolean) {
 }
 
 export function PhotoTextSettings({
-  isCarousel, mode, scope, text, promptText, prompts,
-  onModeChange, onScopeChange, onTextChange, onPromptTextChange, onPromptImported, onPromptCreated,
+  isCarousel, mode, scope, text, fontSize, promptText, prompts,
+  onModeChange, onScopeChange, onTextChange, onFontSizeChange, onPromptTextChange, onPromptImported, onPromptCreated,
 }: PhotoTextSettingsProps) {
   const [creating, setCreating] = useState(false);
   const everyPhoto = isCarousel && scope === 'all';
@@ -116,6 +119,12 @@ export function PhotoTextSettings({
               Add a starter carousel prompt
             </button>
           )}
+        </div>
+      )}
+
+      {mode !== 'none' && (
+        <div className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+          <TextSizeSlider value={fontSize} sample={mode === 'fixed' ? text : 'A short line for the photo'} onChange={onFontSizeChange} />
         </div>
       )}
     </div>

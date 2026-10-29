@@ -3,12 +3,12 @@ import { ChevronLeft, ChevronRight, ImageOff, Loader2 } from 'lucide-react';
 
 const MAX_DIM = 1080;
 const REF_WIDTH = 640;
-const FONT_SIZE = 64;
 const PADDING = 40;
 
 interface PhotoPreviewProps {
   photos: { url: string; text: string }[];
   index: number;
+  fontSize: number;
   textOff: boolean;
   onIndexChange: (index: number) => void;
 }
@@ -28,7 +28,7 @@ function wrapText(text: string, maxChars: number): string[] {
 }
 
 // Mirrors the overlay-text-on-image edge function so the preview matches the posted photo.
-function draw(canvas: HTMLCanvasElement, img: HTMLImageElement, text: string): Measure | null {
+function draw(canvas: HTMLCanvasElement, img: HTMLImageElement, text: string, baseSize: number): Measure | null {
   let w = img.naturalWidth;
   let h = img.naturalHeight;
   if (w > MAX_DIM || h > MAX_DIM) {
@@ -44,7 +44,7 @@ function draw(canvas: HTMLCanvasElement, img: HTMLImageElement, text: string): M
   if (!text.trim()) return null;
 
   const scale = w / REF_WIDTH;
-  const fontSize = Math.round(FONT_SIZE * scale);
+  const fontSize = Math.round(baseSize * scale);
   ctx.font = `700 ${fontSize}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -61,7 +61,7 @@ function draw(canvas: HTMLCanvasElement, img: HTMLImageElement, text: string): M
   return { lines: lines.length, coverage: Math.round((bannerH / h) * 100) };
 }
 
-export function PhotoPreview({ photos, index, textOff, onIndexChange }: PhotoPreviewProps) {
+export function PhotoPreview({ photos, index, fontSize, textOff, onIndexChange }: PhotoPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [measure, setMeasure] = useState<Measure | null>(null);
@@ -76,13 +76,13 @@ export function PhotoPreview({ photos, index, textOff, onIndexChange }: PhotoPre
     const img = new Image();
     img.onload = () => {
       if (cancelled || !canvasRef.current) return;
-      setMeasure(draw(canvasRef.current, img, text));
+      setMeasure(draw(canvasRef.current, img, text, fontSize));
       setStatus('ready');
     };
     img.onerror = () => { if (!cancelled) setStatus('error'); };
     img.src = url;
     return () => { cancelled = true; };
-  }, [url, text]);
+  }, [url, text, fontSize]);
 
   if (!photo) return null;
   const many = photos.length > 1;

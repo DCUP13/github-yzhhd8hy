@@ -19,6 +19,7 @@ interface EnginePost {
   overlay_text: string;
   overlay_texts: string[];
   overlay_scope: string;
+  overlay_font_size: number | null;
   account_ids: string[];
   carousel_size: number;
 }
@@ -58,7 +59,10 @@ async function overlayImage(post: EnginePost, sourceUrl: string, text: string): 
       Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
       apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
     },
-    body: JSON.stringify({ user_id: post.user_id, source_url: sourceUrl, text, target_folder: "scheduled-overlay" }),
+    body: JSON.stringify({
+      user_id: post.user_id, source_url: sourceUrl, text, target_folder: "scheduled-overlay",
+      overlay_settings: { fontSize: post.overlay_font_size || 64 },
+    }),
   });
   const out = await res.json().catch(() => ({}));
   if (!res.ok || typeof out.cloudfront_url !== "string") throw new Error(`Could not add the text overlay: ${out.error || res.status}`);

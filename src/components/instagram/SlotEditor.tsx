@@ -8,6 +8,7 @@ import { WEEK_DAYS } from '../linkedin/types';
 import { PINK, type InstagramPrompt, type MediaType, type OverlayMode, type OverlayScope, type PlanSlot, type SavedLink, type Topic, type VoiceSample } from './types';
 import { LinkPicker } from './LinkPicker';
 import { PhotoTextSettings, choiceClass } from './PhotoTextSettings';
+import { DEFAULT_TEXT_SIZE } from './TextSizeSlider';
 
 interface SlotEditorProps {
   planId: string;
@@ -38,6 +39,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
   const [overlayMode, setOverlayMode] = useState<OverlayMode>(slot?.overlay_mode || 'none');
   const [overlayText, setOverlayText] = useState(slot?.overlay_text || '');
   const [overlayScope, setOverlayScope] = useState<OverlayScope>(slot?.overlay_scope || 'first');
+  const [fontSize, setFontSize] = useState(slot?.overlay_font_size || DEFAULT_TEXT_SIZE);
   const [overlayPromptId, setOverlayPromptId] = useState(slot?.overlay_prompt_id || '');
   const [overlayPrompt, setOverlayPrompt] = useState(slot?.overlay_prompt || '');
   const [linkId, setLinkId] = useState(slot?.link_id || '');
@@ -98,6 +100,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       overlay_mode: overlayMode,
       overlay_text: overlayMode === 'fixed' ? overlayText.trim() : '',
       overlay_scope: mediaType === 'carousel' && overlayMode !== 'none' ? overlayScope : 'first',
+      overlay_font_size: fontSize,
       overlay_prompt_id: overlayMode === 'ai' && overlayPromptId ? overlayPromptId : null,
       overlay_prompt: overlayMode === 'ai' ? overlayPrompt.trim() : '',
       link_id: linkId || null,
@@ -234,6 +237,8 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
             mode={overlayMode}
             scope={overlayScope}
             text={overlayText}
+            fontSize={fontSize}
+            onFontSizeChange={setFontSize}
             promptText={overlayPrompt}
             prompts={imageTextPrompts}
             onModeChange={setOverlayMode}

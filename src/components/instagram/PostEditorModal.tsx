@@ -9,6 +9,7 @@ import { StatusBadge, displayStatus, isLocked } from './postStatus';
 import { LinkPicker } from './LinkPicker';
 import { PhotoTextEditor } from './PhotoTextEditor';
 import { PhotoPreview } from './PhotoPreview';
+import { TextSizeSlider, DEFAULT_TEXT_SIZE } from './TextSizeSlider';
 import { PINK, fullCaption, type IgAccountLite, type LibraryAsset, type OverlayScope, type SavedLink, type ScheduledPost } from './types';
 
 interface PostEditorModalProps {
@@ -54,6 +55,7 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
   const [photos, setPhotos] = useState<Photo[]>(() => photosOf(post));
   const [overlay, setOverlay] = useState(post.overlay_text || '');
   const [scope, setScope] = useState<OverlayScope>(post.overlay_scope || 'first');
+  const [fontSize, setFontSize] = useState(post.overlay_font_size || DEFAULT_TEXT_SIZE);
   const [when, setWhen] = useState(toLocalInput(post.scheduled_for));
   const [accountIds, setAccountIds] = useState<string[]>(post.account_ids || []);
   const [linkId, setLinkId] = useState(post.link_id || '');
@@ -110,6 +112,7 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
       overlay_text: everyPhoto ? photos[0].text : coverText,
       overlay_texts: everyPhoto ? photos.map((p) => p.text) : [],
       overlay_scope: everyPhoto ? 'all' : 'first',
+      overlay_font_size: fontSize,
       scheduled_for: scheduled,
       account_ids: accountIds,
       link_id: linkId || null,
@@ -355,7 +358,10 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
 
         <div className="lg:col-span-2 space-y-5">
           {photos.length > 0 && (
-            <PhotoPreview photos={previewPhotos} index={previewIndex} textOff={post.overlay_mode === 'none'} onIndexChange={setPreviewIndex} />
+            <PhotoPreview photos={previewPhotos} index={previewIndex} fontSize={fontSize} textOff={post.overlay_mode === 'none'} onIndexChange={setPreviewIndex} />
+          )}
+          {photos.length > 0 && post.overlay_mode !== 'none' && (
+            <TextSizeSlider value={fontSize} disabled={locked} onChange={setFontSize} />
           )}
           <div>
             <label className={labelClass}>Publish at</label>
