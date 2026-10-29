@@ -63,3 +63,9 @@ verify_jwt = true
 
 [functions.linkedin-content-engine]
 verify_jwt = false
+
+[functions.instagram-content-engine]
+verify_jwt = false
+
+[functions.process-instagram-engine-queue]
+verify_jwt = false
