@@ -13,7 +13,6 @@ interface PhotoTextSettingsProps {
   text: string;
   promptText: string;
   prompts: InstagramPrompt[];
-  captionPrompts: InstagramPrompt[];
   onModeChange: (mode: OverlayMode) => void;
   onScopeChange: (scope: OverlayScope) => void;
   onTextChange: (text: string) => void;
@@ -31,7 +30,7 @@ export function choiceClass(active: boolean) {
 }
 
 export function PhotoTextSettings({
-  isCarousel, mode, scope, text, promptText, prompts, captionPrompts,
+  isCarousel, mode, scope, text, promptText, prompts,
   onModeChange, onScopeChange, onTextChange, onPromptTextChange, onPromptImported, onPromptCreated,
 }: PhotoTextSettingsProps) {
   const [creating, setCreating] = useState(false);
@@ -96,10 +95,7 @@ export function PhotoTextSettings({
           <PromptTextBox
             label="Image text prompt"
             value={promptText}
-            groups={[
-              { label: 'Image text prompts', prompts },
-              { label: 'Other Instagram prompts', prompts: captionPrompts },
-            ]}
+            groups={[{ label: 'Image text prompts', prompts }]}
             placeholder={everyPhoto
               ? 'Leave empty to use the built-in style: a hook on the first photo, one point per photo, a call to action on the last.'
               : 'Leave empty to use the built-in style: a short headline for the cover photo.'}
