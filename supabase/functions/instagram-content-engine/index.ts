@@ -123,23 +123,33 @@ async function loadVoice(supabase: SupabaseClient, post: Post): Promise<string> 
   return ((data as { content: string } | null)?.content || "").trim();
 }
 
+type SlotPrompts = { extra_instructions: string; caption_prompt: string; overlay_prompt: string };
+
+async function loadSlot(supabase: SupabaseClient, post: Post): Promise<SlotPrompts | null> {
+  if (!post.slot_id) return null;
+  const { data } = await supabase
+    .from("instagram_plan_slots")
+    .select("extra_instructions, caption_prompt, overlay_prompt")
+    .eq("id", post.slot_id)
+    .eq("user_id", post.user_id)
+    .maybeSingle();
+  return (data as SlotPrompts | null) ?? null;
+}
+
+async function loadPromptText(supabase: SupabaseClient, post: Post, id: string | null | undefined): Promise<string> {
+  if (!id) return "";
+  const { data } = await supabase.from("prompts").select("content").eq("id", id).eq("user_id", post.user_id).maybeSingle();
+  return ((data as { content: string } | null)?.content || "").trim();
+}
+
 async function writeCaption(
   supabase: SupabaseClient,
   post: Post,
   imageUrls: string[],
   instructions: string,
 ): Promise<{ caption: string; hashtags: string[] }> {
-  const [slotRes, promptRes, voiceText] = await Promise.all([
-    post.slot_id
-      ? supabase.from("instagram_plan_slots").select("extra_instructions").eq("id", post.slot_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    post.prompt_id
-      ? supabase.from("prompts").select("content").eq("id", post.prompt_id).eq("user_id", post.user_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    loadVoice(supabase, post),
-  ]);
-  const slot = slotRes.data as { extra_instructions: string } | null;
-  const promptText = ((promptRes.data as { content: string } | null)?.content || "").trim();
+  const [slot, voiceText] = await Promise.all([loadSlot(supabase, post), loadVoice(supabase, post)]);
+  const promptText = slot?.caption_prompt?.trim() || (await loadPromptText(supabase, post, post.prompt_id));
   const topic = post.topic_name || "";
 
   const system = [
@@ -243,13 +253,8 @@ function parsePhotoTexts(result: unknown, count: number): string[] {
 
 async function writeOverlays(supabase: SupabaseClient, post: Post, imageUrls: string[], caption: string): Promise<string[]> {
   const count = post.overlay_scope === "all" && imageUrls.length > 1 ? Math.min(imageUrls.length, 10) : 1;
-  const [promptRes, voiceText] = await Promise.all([
-    post.overlay_prompt_id
-      ? supabase.from("prompts").select("content").eq("id", post.overlay_prompt_id).eq("user_id", post.user_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    loadVoice(supabase, post),
-  ]);
-  const custom = ((promptRes.data as { content: string } | null)?.content || "").trim();
+  const [slot, voiceText] = await Promise.all([loadSlot(supabase, post), loadVoice(supabase, post)]);
+  const custom = slot ? slot.overlay_prompt.trim() : await loadPromptText(supabase, post, post.overlay_prompt_id);
   const topic = post.topic_name || "";
   const guide = custom
     ? fill(custom, topic, voiceText).replace(/\{\{\s*photo_count\s*\}\}/gi, String(count))

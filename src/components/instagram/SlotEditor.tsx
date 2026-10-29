@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Loader2, Plus, Mic, Image as ImageIcon, Images } from 'lucide-react';
+import { PromptTextBox } from './PromptTextBox';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
 import { Modal, labelClass, secondaryBtn } from '../linkedin/Modal';
@@ -26,6 +27,9 @@ const ADD_NEW = '__add_new__';
 export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, imageTextPrompts, links, onClose, onSaved }: SlotEditorProps) {
   const [postTime, setPostTime] = useState((slot?.post_time || '09:00').slice(0, 5));
   const [promptId, setPromptId] = useState(slot?.prompt_id || '');
+  const [captionPrompt, setCaptionPrompt] = useState(
+    slot?.caption_prompt || prompts.find((p) => p.id === slot?.prompt_id)?.content || '',
+  );
   const [extra, setExtra] = useState(slot?.extra_instructions || '');
   const [topicId, setTopicId] = useState(slot?.topic_id || '');
   const [sampleId, setSampleId] = useState(slot?.voice_sample_id || '');
@@ -35,6 +39,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
   const [overlayText, setOverlayText] = useState(slot?.overlay_text || '');
   const [overlayScope, setOverlayScope] = useState<OverlayScope>(slot?.overlay_scope || 'first');
   const [overlayPromptId, setOverlayPromptId] = useState(slot?.overlay_prompt_id || '');
+  const [overlayPrompt, setOverlayPrompt] = useState(slot?.overlay_prompt || '');
   const [linkId, setLinkId] = useState(slot?.link_id || '');
   const [addingTopic, setAddingTopic] = useState(false);
   const [newTopic, setNewTopic] = useState('');
@@ -42,7 +47,6 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
   const extraRef = useRef<HTMLTextAreaElement>(null);
 
   const topicOptions = topics.filter((t) => !t.is_hidden || t.id === topicId);
-  const selectedPrompt = prompts.find((p) => p.id === promptId);
   const dayLabel = WEEK_DAYS.find((d) => d.value === dayOfWeek)?.long;
 
   const insertToken = (token: string) => {
@@ -71,8 +75,8 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
   };
 
   const save = async () => {
-    if (!promptId) {
-      toast.error('Choose a caption prompt');
+    if (!captionPrompt.trim()) {
+      toast.error('Write or import a caption prompt');
       return;
     }
     if (overlayMode === 'fixed' && !overlayText.trim()) {
@@ -84,7 +88,8 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       plan_id: planId,
       day_of_week: dayOfWeek,
       post_time: postTime,
-      prompt_id: promptId,
+      prompt_id: promptId || null,
+      caption_prompt: captionPrompt.trim(),
       extra_instructions: extra,
       topic_id: topicId || null,
       voice_sample_id: sampleId || null,
@@ -94,6 +99,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       overlay_text: overlayMode === 'fixed' ? overlayText.trim() : '',
       overlay_scope: mediaType === 'carousel' && overlayMode !== 'none' ? overlayScope : 'first',
       overlay_prompt_id: overlayMode === 'ai' && overlayPromptId ? overlayPromptId : null,
+      overlay_prompt: overlayMode === 'ai' ? overlayPrompt.trim() : '',
       link_id: linkId || null,
       updated_at: new Date().toISOString(),
     };
@@ -190,21 +196,19 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
 
         <div className="lg:col-span-3 space-y-5">
           <div>
-            <label className={labelClass}>Caption prompt</label>
-            {prompts.length === 0 ? (
-              <p className="rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-200">
-                You have no Instagram prompts yet. Create one on the Prompts page and set its category to Instagram, then come back here.
+            <PromptTextBox
+              label="Caption prompt"
+              value={captionPrompt}
+              groups={[{ label: 'Instagram prompts', prompts }]}
+              placeholder="Import a prompt from your Prompts page, or write how the AI should write this caption..."
+              rows={6}
+              onChange={setCaptionPrompt}
+              onImport={setPromptId}
+            />
+            {prompts.length === 0 && (
+              <p className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                Tip: to import a saved prompt, create one on the Prompts page and set its category to Instagram.
               </p>
-            ) : (
-              <>
-                <select value={promptId} onChange={(e) => setPromptId(e.target.value)} className={PINK.input}>
-                  <option value="">Choose a prompt...</option>
-                  {prompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-                </select>
-                {selectedPrompt && (
-                  <p className="mt-2 max-h-28 overflow-y-auto rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300 whitespace-pre-line">{selectedPrompt.content}</p>
-                )}
-              </>
             )}
           </div>
 
@@ -230,13 +234,14 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
             mode={overlayMode}
             scope={overlayScope}
             text={overlayText}
-            promptId={overlayPromptId}
+            promptText={overlayPrompt}
             prompts={imageTextPrompts}
             captionPrompts={prompts}
             onModeChange={setOverlayMode}
             onScopeChange={setOverlayScope}
             onTextChange={setOverlayText}
-            onPromptChange={setOverlayPromptId}
+            onPromptTextChange={setOverlayPrompt}
+            onPromptImported={setOverlayPromptId}
             onPromptCreated={onSaved}
           />
 

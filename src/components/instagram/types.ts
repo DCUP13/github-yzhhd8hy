@@ -43,6 +43,8 @@ export interface PlanSlot {
   overlay_text: string;
   overlay_prompt_id: string | null;
   overlay_scope: OverlayScope;
+  caption_prompt: string;
+  overlay_prompt: string;
   link_id: string | null;
 }
 

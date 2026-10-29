@@ -3,6 +3,7 @@ import { Ban, Sparkles, Type, Loader2, Wand2, Image as ImageIcon, Images } from 
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
 import { labelClass } from '../linkedin/Modal';
+import { PromptTextBox } from './PromptTextBox';
 import { IMAGE_TEXT_CATEGORY, PINK, STARTER_IMAGE_TEXT_PROMPT, type InstagramPrompt, type OverlayMode, type OverlayScope } from './types';
 
 interface PhotoTextSettingsProps {
@@ -10,13 +11,14 @@ interface PhotoTextSettingsProps {
   mode: OverlayMode;
   scope: OverlayScope;
   text: string;
-  promptId: string;
+  promptText: string;
   prompts: InstagramPrompt[];
   captionPrompts: InstagramPrompt[];
   onModeChange: (mode: OverlayMode) => void;
   onScopeChange: (scope: OverlayScope) => void;
   onTextChange: (text: string) => void;
-  onPromptChange: (id: string) => void;
+  onPromptTextChange: (text: string) => void;
+  onPromptImported: (id: string) => void;
   onPromptCreated: () => void;
 }
 
@@ -29,12 +31,11 @@ export function choiceClass(active: boolean) {
 }
 
 export function PhotoTextSettings({
-  isCarousel, mode, scope, text, promptId, prompts, captionPrompts,
-  onModeChange, onScopeChange, onTextChange, onPromptChange, onPromptCreated,
+  isCarousel, mode, scope, text, promptText, prompts, captionPrompts,
+  onModeChange, onScopeChange, onTextChange, onPromptTextChange, onPromptImported, onPromptCreated,
 }: PhotoTextSettingsProps) {
   const [creating, setCreating] = useState(false);
   const everyPhoto = isCarousel && scope === 'all';
-  const selected = [...prompts, ...captionPrompts].find((p) => p.id === promptId);
 
   const createStarter = async () => {
     setCreating(true);
@@ -61,8 +62,9 @@ export function PhotoTextSettings({
       toast.error('Could not create the starter prompt');
       return;
     }
-    toast.success('Starter prompt added. You can edit it on the Prompts page.');
-    onPromptChange(data.id);
+    toast.success('Starter prompt added and copied here. Edit it below for this plan.');
+    onPromptTextChange(STARTER_IMAGE_TEXT_PROMPT.content);
+    onPromptImported(data.id);
     onPromptCreated();
   };
 
@@ -91,28 +93,26 @@ export function PhotoTextSettings({
 
       {mode === 'ai' && (
         <div className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Image text prompt</label>
-          <select value={promptId} onChange={(e) => onPromptChange(e.target.value)} className={PINK.input}>
-            <option value="">{everyPhoto ? 'Built-in: hook, one point per photo, call to action' : 'Built-in: short headline'}</option>
-            {prompts.length > 0 && (
-              <optgroup label="Image text prompts">
-                {prompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-              </optgroup>
-            )}
-            {captionPrompts.length > 0 && (
-              <optgroup label="Other Instagram prompts">
-                {captionPrompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-              </optgroup>
-            )}
-          </select>
-          {selected && (
-            <p className="max-h-28 overflow-y-auto rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300 whitespace-pre-line">{selected.content}</p>
-          )}
+          <PromptTextBox
+            label="Image text prompt"
+            value={promptText}
+            groups={[
+              { label: 'Image text prompts', prompts },
+              { label: 'Other Instagram prompts', prompts: captionPrompts },
+            ]}
+            placeholder={everyPhoto
+              ? 'Leave empty to use the built-in style: a hook on the first photo, one point per photo, a call to action on the last.'
+              : 'Leave empty to use the built-in style: a short headline for the cover photo.'}
+            rows={4}
+            tokens={['{{topic}}', '{{voice}}', '{{photo_count}}']}
+            onChange={onPromptTextChange}
+            onImport={onPromptImported}
+          />
           <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
             {everyPhoto
               ? 'The AI looks at every photo in order and writes one short line for each, following this prompt. Just describe what each photo should say; the app makes sure the answer comes back as one line per photo.'
               : 'The AI writes a short headline for the cover photo, following this prompt.'}
-            {' '}Create your own on the Prompts page with the category "{IMAGE_TEXT_CATEGORY}". You can use {'{{topic}}'}, {'{{voice}}'} and {'{{photo_count}}'} in it.
+            {' '}Save reusable ones on the Prompts page with the category "{IMAGE_TEXT_CATEGORY}".
           </p>
           {prompts.length === 0 && (
             <button type="button" onClick={createStarter} disabled={creating} className="inline-flex items-center gap-1.5 text-xs font-medium text-pink-700 dark:text-pink-300 hover:underline disabled:opacity-60">

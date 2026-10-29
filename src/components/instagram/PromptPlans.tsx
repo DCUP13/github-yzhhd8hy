@@ -219,7 +219,13 @@ export function PromptPlans({ plans, slots, topics, samples, prompts, imageTextP
 
   const topicName = (id: string | null) => topics.find((t) => t.id === id)?.name;
   const sampleName = (id: string | null) => samples.find((s) => s.id === id)?.name;
-  const promptTitle = (id: string | null) => prompts.find((p) => p.id === id)?.title;
+  const promptTitle = (s: PlanSlot) => {
+    const text = s.caption_prompt?.trim();
+    if (!text) return prompts.find((p) => p.id === s.prompt_id)?.title;
+    const source = prompts.find((p) => p.id === s.prompt_id);
+    if (source && source.content.trim() === text) return source.title;
+    return source ? `${source.title} (edited)` : text.slice(0, 80);
+  };
   const touchSlot = touchDrag ? planSlots.find((s) => s.id === touchDrag.id) : undefined;
 
   return (
@@ -337,7 +343,7 @@ export function PromptPlans({ plans, slots, topics, samples, prompts, imageTextP
                           {s.link_id && <Link2 className="w-3 h-3 ml-auto text-gray-400" aria-label="Has link" />}
                           {s.overlay_mode !== 'none' && <Type className={`w-3 h-3 text-gray-400 ${s.link_id ? '' : 'ml-auto'}`} aria-label={s.overlay_scope === 'all' ? 'Text on every photo' : 'Text on cover photo'} />}
                         </p>
-                        <p className="mt-0.5 text-xs text-gray-700 dark:text-gray-200 line-clamp-2">{promptTitle(s.prompt_id) || <span className="text-amber-600">No prompt chosen</span>}</p>
+                        <p className="mt-0.5 text-xs text-gray-700 dark:text-gray-200 line-clamp-2">{promptTitle(s) || <span className="text-amber-600">No prompt chosen</span>}</p>
                         {topicName(s.topic_id) && <p className="mt-0.5 text-[11px] text-gray-500 truncate">{topicName(s.topic_id)}</p>}
                         {sampleName(s.voice_sample_id) && (
                           <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400 truncate"><Mic className="w-3 h-3" /> {sampleName(s.voice_sample_id)}</p>
@@ -372,7 +378,7 @@ export function PromptPlans({ plans, slots, topics, samples, prompts, imageTextP
       )}
 
       {touchDrag && touchSlot && (
-        <TouchDragOverlay drag={touchDrag} currentDay={touchSlot.day_of_week} time={formatTime(touchSlot.post_time)} label={promptTitle(touchSlot.prompt_id) || 'Post slot'} />
+        <TouchDragOverlay drag={touchDrag} currentDay={touchSlot.day_of_week} time={formatTime(touchSlot.post_time)} label={promptTitle(touchSlot) || 'Post slot'} />
       )}
 
       {editor && plan && (
