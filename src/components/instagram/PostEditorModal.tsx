@@ -8,6 +8,7 @@ import { generateWithEngine } from './api';
 import { StatusBadge, displayStatus, isLocked } from './postStatus';
 import { LinkPicker } from './LinkPicker';
 import { PhotoTextEditor } from './PhotoTextEditor';
+import { PhotoPreview } from './PhotoPreview';
 import { PINK, fullCaption, type IgAccountLite, type LibraryAsset, type OverlayScope, type SavedLink, type ScheduledPost } from './types';
 
 interface PostEditorModalProps {
@@ -61,6 +62,7 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
   const [picker, setPicker] = useState(false);
   const [library, setLibrary] = useState<LibraryAsset[] | null>(null);
   const [libraryError, setLibraryError] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   const status = displayStatus(post);
   const locked = isLocked(post);
@@ -69,6 +71,7 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
   const preview = fullCaption(caption, hashtags, link);
   const everyPhoto = photos.length > 1 && scope === 'all';
   const coverText = scope === 'all' ? photos[0]?.text || '' : overlay;
+  const previewPhotos = photos.map((p, i) => ({ url: p.url, text: everyPhoto ? p.text : i === 0 ? coverText : '' }));
 
   useEffect(() => {
     if (!picker || library) return;
@@ -264,7 +267,9 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {photos.map((p, i) => (
                   <div key={`${p.url}-${i}`} className="group relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
-                    <img src={p.url} alt="" className="w-full h-full object-cover" />
+                    <button onClick={() => setPreviewIndex(i)} className={`block w-full h-full ring-2 ring-inset rounded-lg ${previewIndex === i ? 'ring-pink-500' : 'ring-transparent'}`} aria-label={`Preview photo ${i + 1}`}>
+                      <img src={p.url} alt="" className="w-full h-full object-cover" />
+                    </button>
                     <span className="absolute top-1 left-1 px-1.5 rounded bg-black/60 text-[10px] font-semibold text-white">{i + 1}</span>
                     {!locked && (
                       <div className="absolute inset-x-0 bottom-0 flex items-center justify-between p-1 bg-gradient-to-t from-black/70 to-transparent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
@@ -349,6 +354,9 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
         </div>
 
         <div className="lg:col-span-2 space-y-5">
+          {photos.length > 0 && (
+            <PhotoPreview photos={previewPhotos} index={previewIndex} textOff={post.overlay_mode === 'none'} onIndexChange={setPreviewIndex} />
+          )}
           <div>
             <label className={labelClass}>Publish at</label>
             <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} disabled={locked} className={PINK.input} />
