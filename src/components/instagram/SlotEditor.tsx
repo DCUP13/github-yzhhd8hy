@@ -232,6 +232,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
             text={overlayText}
             promptId={overlayPromptId}
             prompts={imageTextPrompts}
+            captionPrompts={prompts}
             onModeChange={setOverlayMode}
             onScopeChange={setOverlayScope}
             onTextChange={setOverlayText}

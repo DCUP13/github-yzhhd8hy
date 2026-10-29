@@ -12,6 +12,7 @@ interface PhotoTextSettingsProps {
   text: string;
   promptId: string;
   prompts: InstagramPrompt[];
+  captionPrompts: InstagramPrompt[];
   onModeChange: (mode: OverlayMode) => void;
   onScopeChange: (scope: OverlayScope) => void;
   onTextChange: (text: string) => void;
@@ -28,12 +29,12 @@ export function choiceClass(active: boolean) {
 }
 
 export function PhotoTextSettings({
-  isCarousel, mode, scope, text, promptId, prompts,
+  isCarousel, mode, scope, text, promptId, prompts, captionPrompts,
   onModeChange, onScopeChange, onTextChange, onPromptChange, onPromptCreated,
 }: PhotoTextSettingsProps) {
   const [creating, setCreating] = useState(false);
   const everyPhoto = isCarousel && scope === 'all';
-  const selected = prompts.find((p) => p.id === promptId);
+  const selected = [...prompts, ...captionPrompts].find((p) => p.id === promptId);
 
   const createStarter = async () => {
     setCreating(true);
@@ -93,16 +94,25 @@ export function PhotoTextSettings({
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Image text prompt</label>
           <select value={promptId} onChange={(e) => onPromptChange(e.target.value)} className={PINK.input}>
             <option value="">{everyPhoto ? 'Built-in: hook, one point per photo, call to action' : 'Built-in: short headline'}</option>
-            {prompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+            {prompts.length > 0 && (
+              <optgroup label="Image text prompts">
+                {prompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </optgroup>
+            )}
+            {captionPrompts.length > 0 && (
+              <optgroup label="Other Instagram prompts">
+                {captionPrompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </optgroup>
+            )}
           </select>
           {selected && (
             <p className="max-h-28 overflow-y-auto rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300 whitespace-pre-line">{selected.content}</p>
           )}
           <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
             {everyPhoto
-              ? 'The AI looks at every photo in order and writes one short line for each, following this prompt.'
+              ? 'The AI looks at every photo in order and writes one short line for each, following this prompt. Just describe what each photo should say; the app makes sure the answer comes back as one line per photo.'
               : 'The AI writes a short headline for the cover photo, following this prompt.'}
-            {' '}Create your own on the Prompts page with the category "{IMAGE_TEXT_CATEGORY}". You can edit the text on any post.
+            {' '}Create your own on the Prompts page with the category "{IMAGE_TEXT_CATEGORY}". You can use {'{{topic}}'}, {'{{voice}}'} and {'{{photo_count}}'} in it.
           </p>
           {prompts.length === 0 && (
             <button type="button" onClick={createStarter} disabled={creating} className="inline-flex items-center gap-1.5 text-xs font-medium text-pink-700 dark:text-pink-300 hover:underline disabled:opacity-60">

@@ -48,7 +48,7 @@ function json(body: unknown, status = 200) {
 
 type Content = string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "low" } }>;
 
-async function chatJson<T>(system: string, user: Content): Promise<T> {
+async function chatJson<T>(system: string, user: Content, schema?: { name: string; schema: Record<string, unknown> }): Promise<T> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("AI writing is not configured");
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -56,7 +56,9 @@ async function chatJson<T>(system: string, user: Content): Promise<T> {
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gpt-4o",
-      response_format: { type: "json_object" },
+      response_format: schema
+        ? { type: "json_schema", json_schema: { name: schema.name, strict: true, schema: schema.schema } }
+        : { type: "json_object" },
       temperature: 0.85,
       max_tokens: 1500,
       messages: [
@@ -187,8 +189,60 @@ const DEFAULT_OVERLAY_CAROUSEL = [
   "Last photo: a short call to action, e.g. save this, share it, or read the caption.",
 ].join("\n");
 
+const PHOTO_TEXT_SCHEMA = {
+  name: "photo_texts",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["photos"],
+    properties: {
+      photos: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["photo", "text"],
+          properties: { photo: { type: "integer" }, text: { type: "string" } },
+        },
+      },
+    },
+  },
+};
+
+function cleanPhotoText(raw: string): string {
+  return raw
+    .replace(/^\s*(?:photo|slide|image|pic)?\s*#?\d+\s*[:.)\-]\s*/i, "")
+    .replace(/^["'\u201c\u2018]+|["'\u201d\u2019]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+}
+
+function parsePhotoTexts(result: unknown, count: number): string[] {
+  const out: string[] = Array(count).fill("");
+  const r = (result && typeof result === "object" ? result : {}) as Record<string, unknown>;
+  const list = [r.photos, r.texts, r.slides].find(Array.isArray) as unknown[] | undefined;
+  if (!list) return out;
+  const unnumbered: string[] = [];
+  for (const item of list) {
+    if (typeof item === "string") { unnumbered.push(cleanPhotoText(item)); continue; }
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const text = typeof o.text === "string" ? cleanPhotoText(o.text) : "";
+    const n = Number(o.photo ?? o.slide ?? o.index);
+    if (Number.isInteger(n) && n >= 1 && n <= count && !out[n - 1]) out[n - 1] = text;
+    else unnumbered.push(text);
+  }
+  for (const t of unnumbered) {
+    const gap = out.findIndex((v) => !v);
+    if (gap < 0) break;
+    out[gap] = t;
+  }
+  return out;
+}
+
 async function writeOverlays(supabase: SupabaseClient, post: Post, imageUrls: string[], caption: string): Promise<string[]> {
-  const count = post.overlay_scope === "all" && imageUrls.length > 1 ? imageUrls.length : 1;
+  const count = post.overlay_scope === "all" && imageUrls.length > 1 ? Math.min(imageUrls.length, 10) : 1;
   const [promptRes, voiceText] = await Promise.all([
     post.overlay_prompt_id
       ? supabase.from("prompts").select("content").eq("id", post.overlay_prompt_id).eq("user_id", post.user_id).maybeSingle()
@@ -197,13 +251,17 @@ async function writeOverlays(supabase: SupabaseClient, post: Post, imageUrls: st
   ]);
   const custom = ((promptRes.data as { content: string } | null)?.content || "").trim();
   const topic = post.topic_name || "";
-  const guide = custom ? fill(custom, topic, voiceText) : count > 1 ? DEFAULT_OVERLAY_CAROUSEL : DEFAULT_OVERLAY_SINGLE;
+  const guide = custom
+    ? fill(custom, topic, voiceText).replace(/\{\{\s*photo_count\s*\}\}/gi, String(count))
+    : count > 1 ? DEFAULT_OVERLAY_CAROUSEL : DEFAULT_OVERLAY_SINGLE;
 
   const system = [
     "You write the short text that is printed on top of Instagram photos.",
     "Text must be readable at a glance on a phone: plain words, no hashtags, no emojis, no web addresses, no quotation marks around it, at most 90 characters per photo.",
-    `Return exactly ${count} text${count > 1 ? "s" : ""}, one per photo, in the same order as the photos.`,
-    'Return JSON: {"texts": string[]}',
+    `There ${count > 1 ? `are ${count} photos` : "is 1 photo"}. Return exactly ${count} entr${count > 1 ? "ies" : "y"} in "photos", one per photo, numbered with "photo" from 1 to ${count} in order.`,
+    'Put only the words to print in "text". Do not include labels like "Slide 1:" or "Photo 2 -".',
+    "The user's instructions decide what the text says. If they describe a different output format, ignore that part and use this format.",
+    `Example: {"photos":[{"photo":1,"text":"..."}${count > 1 ? ',{"photo":2,"text":"..."}' : ""}]}`,
   ].join("\n");
 
   const userText = [
@@ -214,19 +272,30 @@ async function writeOverlays(supabase: SupabaseClient, post: Post, imageUrls: st
   ].filter(Boolean).join("\n\n");
 
   const photos = imageUrls.slice(0, count);
-  let result: { texts?: unknown };
-  try {
-    result = await chatJson(system, [
-      { type: "text", text: userText },
-      ...photos.map((url) => ({ type: "image_url" as const, image_url: { url, detail: "low" as const } })),
-    ]);
-  } catch (e) {
-    if (!photos.length) throw e;
-    result = await chatJson(system, userText);
+  const withPhotos = (text: string): Content => [
+    { type: "text", text },
+    ...photos.map((url) => ({ type: "image_url" as const, image_url: { url, detail: "low" as const } })),
+  ];
+  const ask = async (text: string) => {
+    try {
+      return await chatJson<unknown>(system, withPhotos(text), PHOTO_TEXT_SCHEMA);
+    } catch (e) {
+      if (!photos.length) throw e;
+      return await chatJson<unknown>(system, text, PHOTO_TEXT_SCHEMA);
+    }
+  };
+
+  let texts = parsePhotoTexts(await ask(userText), count);
+  const missing = texts.map((t, i) => (t ? 0 : i + 1)).filter(Boolean);
+  if (missing.length) {
+    const retry = parsePhotoTexts(
+      await ask(`${userText}\n\nYour previous answer was missing text for photo ${missing.join(", ")}. Return all ${count} entries again.`),
+      count,
+    );
+    texts = texts.map((t, i) => t || retry[i]);
   }
-  const texts = Array.isArray(result.texts) ? result.texts.map((t) => (typeof t === "string" ? t.trim().slice(0, 120) : "")) : [];
   if (!texts.some(Boolean)) throw new Error("AI returned no photo text");
-  return Array.from({ length: count }, (_, i) => texts[i] || "");
+  return texts;
 }
 
 async function generatePost(supabase: SupabaseClient, postId: string, parts: Parts, instructions = ""): Promise<Row> {

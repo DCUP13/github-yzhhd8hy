@@ -933,7 +933,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     </p>
                   ) : formData.category === 'Instagram Image Text' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      <strong>Image text placeholders:</strong> {`{{topic}}`} (the post's topic), {`{{voice}}`} (the post's voice sample). The AI sees every photo in order and writes one short line per photo. Pick this prompt in Instagram &gt; Posts &gt; Plans when a slot puts text on every photo.
+                      <strong>Image text placeholders:</strong> {`{{topic}}`} (the post's topic), {`{{voice}}`} (the post's voice sample), {`{{photo_count}}`} (how many photos the post has). The AI sees every photo in order and writes one short line per photo. Just describe what each photo should say (e.g. photo 1 a hook, the last photo a call to action); the app handles the answer format. Pick this prompt in Instagram &gt; Posts &gt; Plans.
                     </p>
                   ) : formData.category === 'Instagram' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
