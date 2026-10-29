@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { Loader2, Plus, Mic, Image as ImageIcon, Images, Ban, Sparkles, Type } from 'lucide-react';
+import { Loader2, Plus, Mic, Image as ImageIcon, Images } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
 import { Modal, labelClass, secondaryBtn } from '../linkedin/Modal';
 import { WEEK_DAYS } from '../linkedin/types';
-import { PINK, type InstagramPrompt, type MediaType, type OverlayMode, type PlanSlot, type SavedLink, type Topic, type VoiceSample } from './types';
+import { PINK, type InstagramPrompt, type MediaType, type OverlayMode, type OverlayScope, type PlanSlot, type SavedLink, type Topic, type VoiceSample } from './types';
 import { LinkPicker } from './LinkPicker';
+import { PhotoTextSettings, choiceClass } from './PhotoTextSettings';
 
 interface SlotEditorProps {
   planId: string;
@@ -14,6 +15,7 @@ interface SlotEditorProps {
   topics: Topic[];
   samples: VoiceSample[];
   prompts: InstagramPrompt[];
+  imageTextPrompts: InstagramPrompt[];
   links: SavedLink[];
   onClose: () => void;
   onSaved: () => void;
@@ -21,15 +23,7 @@ interface SlotEditorProps {
 
 const ADD_NEW = '__add_new__';
 
-function choiceClass(active: boolean) {
-  return `flex items-center justify-center gap-1.5 px-2 py-2 text-sm font-medium rounded-lg border transition-all ${
-    active
-      ? 'border-pink-500 bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-300'
-      : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-  }`;
-}
-
-export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, links, onClose, onSaved }: SlotEditorProps) {
+export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, imageTextPrompts, links, onClose, onSaved }: SlotEditorProps) {
   const [postTime, setPostTime] = useState((slot?.post_time || '09:00').slice(0, 5));
   const [promptId, setPromptId] = useState(slot?.prompt_id || '');
   const [extra, setExtra] = useState(slot?.extra_instructions || '');
@@ -39,6 +33,8 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
   const [carouselSize, setCarouselSize] = useState(slot?.carousel_size || 3);
   const [overlayMode, setOverlayMode] = useState<OverlayMode>(slot?.overlay_mode || 'none');
   const [overlayText, setOverlayText] = useState(slot?.overlay_text || '');
+  const [overlayScope, setOverlayScope] = useState<OverlayScope>(slot?.overlay_scope || 'first');
+  const [overlayPromptId, setOverlayPromptId] = useState(slot?.overlay_prompt_id || '');
   const [linkId, setLinkId] = useState(slot?.link_id || '');
   const [addingTopic, setAddingTopic] = useState(false);
   const [newTopic, setNewTopic] = useState('');
@@ -96,6 +92,8 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       carousel_size: mediaType === 'carousel' ? carouselSize : 3,
       overlay_mode: overlayMode,
       overlay_text: overlayMode === 'fixed' ? overlayText.trim() : '',
+      overlay_scope: mediaType === 'carousel' && overlayMode !== 'none' ? overlayScope : 'first',
+      overlay_prompt_id: overlayMode === 'ai' && overlayPromptId ? overlayPromptId : null,
       link_id: linkId || null,
       updated_at: new Date().toISOString(),
     };
@@ -227,18 +225,19 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
             </div>
           </div>
 
-          <div>
-            <label className={labelClass}>Text on the first photo</label>
-            <div className="grid grid-cols-3 gap-2">
-              <button type="button" onClick={() => setOverlayMode('none')} className={choiceClass(overlayMode === 'none')}><Ban className="w-4 h-4" /> None</button>
-              <button type="button" onClick={() => setOverlayMode('ai')} className={choiceClass(overlayMode === 'ai')}><Sparkles className="w-4 h-4" /> AI writes it</button>
-              <button type="button" onClick={() => setOverlayMode('fixed')} className={choiceClass(overlayMode === 'fixed')}><Type className="w-4 h-4" /> Fixed text</button>
-            </div>
-            {overlayMode === 'fixed' && (
-              <input value={overlayText} onChange={(e) => setOverlayText(e.target.value)} maxLength={120} placeholder="e.g. New this week" className={`${PINK.input} mt-2`} />
-            )}
-            {overlayMode === 'ai' && <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">A short headline is written with each caption. You can edit it on any post.</p>}
-          </div>
+          <PhotoTextSettings
+            isCarousel={mediaType === 'carousel'}
+            mode={overlayMode}
+            scope={overlayScope}
+            text={overlayText}
+            promptId={overlayPromptId}
+            prompts={imageTextPrompts}
+            onModeChange={setOverlayMode}
+            onScopeChange={setOverlayScope}
+            onTextChange={setOverlayText}
+            onPromptChange={setOverlayPromptId}
+            onPromptCreated={onSaved}
+          />
 
           <div>
             <label className={labelClass}>Default link (optional)</label>

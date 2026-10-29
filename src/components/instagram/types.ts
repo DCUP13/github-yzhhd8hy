@@ -1,5 +1,6 @@
 export type MediaType = 'single' | 'carousel';
 export type OverlayMode = 'none' | 'ai' | 'fixed';
+export type OverlayScope = 'first' | 'all';
 export type GenerationStatus = 'none' | 'pending' | 'generating' | 'done' | 'failed';
 export type PostStatus = 'draft' | 'scheduled' | 'publishing' | 'published' | 'partial' | 'failed';
 
@@ -40,6 +41,8 @@ export interface PlanSlot {
   carousel_size: number;
   overlay_mode: OverlayMode;
   overlay_text: string;
+  overlay_prompt_id: string | null;
+  overlay_scope: OverlayScope;
   link_id: string | null;
 }
 
@@ -92,6 +95,9 @@ export interface ScheduledPost {
   media_urls: string[];
   overlay_mode: OverlayMode;
   overlay_text: string;
+  overlay_texts: string[];
+  overlay_prompt_id: string | null;
+  overlay_scope: OverlayScope;
   account_ids: string[];
   link_id: string | null;
   status: PostStatus;
@@ -120,6 +126,19 @@ export interface InstagramPrompt {
   title: string;
   content: string;
 }
+
+export const IMAGE_TEXT_CATEGORY = 'Instagram Image Text';
+
+export const STARTER_IMAGE_TEXT_PROMPT = {
+  title: 'Carousel slide text (starter)',
+  content: [
+    'Write the text printed on each photo so the carousel reads like a mini story about {{topic}}.',
+    'Photo 1: a bold hook of 3-8 words that makes people swipe.',
+    'Each middle photo: one useful tip or point, 12 words or fewer, matching what the photo shows.',
+    'Last photo: a short call to action such as "Save this for later" or "Read the caption".',
+    'Keep the wording simple, confident and in this voice: {{voice}}',
+  ].join('\n'),
+};
 
 export const PINK = {
   input:

@@ -17,6 +17,8 @@ interface EnginePost {
   media_urls: string[];
   overlay_mode: string;
   overlay_text: string;
+  overlay_texts: string[];
+  overlay_scope: string;
   account_ids: string[];
   carousel_size: number;
 }
@@ -48,6 +50,29 @@ async function fail(supabase: SupabaseClient, postId: string, message: string) {
     .eq("id", postId);
 }
 
+async function overlayImage(post: EnginePost, sourceUrl: string, text: string): Promise<{ url: string; key: string }> {
+  const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/overlay-text-on-image`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
+    },
+    body: JSON.stringify({ user_id: post.user_id, source_url: sourceUrl, text, target_folder: "scheduled-overlay" }),
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok || typeof out.cloudfront_url !== "string") throw new Error(`Could not add the text overlay: ${out.error || res.status}`);
+  return { url: out.cloudfront_url, key: out.s3_key || keyFromUrl(out.cloudfront_url) };
+}
+
+function photoTexts(post: EnginePost, count: number): string[] {
+  if (post.overlay_mode === "none") return Array(count).fill("");
+  if (post.overlay_scope !== "all" || count < 2) return [post.overlay_text.trim(), ...Array(count - 1).fill("")];
+  const saved = post.overlay_texts || [];
+  const fallback = post.overlay_mode === "fixed" && !saved.length ? post.overlay_text.trim() : "";
+  return Array.from({ length: count }, (_, i) => (saved[i] ?? fallback).trim());
+}
+
 async function fanOut(supabase: SupabaseClient, postId: string) {
   const { data, error } = await supabase.from("instagram_scheduled_posts").select("*").eq("id", postId).maybeSingle();
   if (error || !data) return;
@@ -76,22 +101,15 @@ async function fanOut(supabase: SupabaseClient, postId: string) {
   const urls = [...post.media_urls];
   let firstKey = keyByUrl.get(urls[0]) || keyFromUrl(urls[0]);
 
-  if (post.overlay_mode !== "none" && post.overlay_text.trim()) {
-    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/overlay-text-on-image`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
-      },
-      body: JSON.stringify({ user_id: post.user_id, source_url: urls[0], text: post.overlay_text.trim(), target_folder: "scheduled-overlay" }),
-    });
-    const out = await res.json().catch(() => ({}));
-    if (!res.ok || typeof out.cloudfront_url !== "string") {
-      return fail(supabase, post.id, `Could not add the text overlay: ${out.error || res.status}`);
+  const texts = photoTexts(post, urls.length);
+  if (texts.some(Boolean)) {
+    try {
+      const rendered = await Promise.all(urls.map((u, i) => (texts[i] ? overlayImage(post, u, texts[i]) : Promise.resolve(null))));
+      rendered.forEach((r, i) => { if (r) urls[i] = r.url; });
+      if (rendered[0]) firstKey = rendered[0].key;
+    } catch (e) {
+      return fail(supabase, post.id, e instanceof Error ? e.message : "Could not add the text overlay");
     }
-    urls[0] = out.cloudfront_url;
-    firstKey = out.s3_key || keyFromUrl(out.cloudfront_url);
   }
 
   const { data: existingRows } = await supabase

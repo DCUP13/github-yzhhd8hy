@@ -3,7 +3,7 @@ import type { ScheduledPost } from './types';
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
-export async function generateWithEngine(postId: string, parts: 'all' | 'caption' | 'media', instructions = ''): Promise<ScheduledPost> {
+export async function generateWithEngine(postId: string, parts: 'all' | 'caption' | 'media' | 'overlay', instructions = ''): Promise<ScheduledPost> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Please sign in again');
   const res = await fetch(`${FUNCTIONS_URL}/instagram-content-engine`, {

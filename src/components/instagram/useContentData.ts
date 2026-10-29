@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRealtimeRefresh } from '../../lib/useRealtimeRefresh';
+import { IMAGE_TEXT_CATEGORY } from './types';
 import type { ContentSettings, InstagramPrompt, PlanAssignment, PlanSlot, PromptPlan, SavedLink, SkipDate, Topic, VoiceSample } from './types';
 
 export interface ContentData {
@@ -12,6 +13,7 @@ export interface ContentData {
   skipDates: SkipDate[];
   settings: ContentSettings;
   prompts: InstagramPrompt[];
+  imageTextPrompts: InstagramPrompt[];
   links: SavedLink[];
 }
 
@@ -24,6 +26,7 @@ const EMPTY: ContentData = {
   skipDates: [],
   settings: { timezone: 'UTC' },
   prompts: [],
+  imageTextPrompts: [],
   links: [],
 };
 
@@ -40,6 +43,12 @@ const LIBRARY_TABLES = [
 const POST_TABLES = ['instagram_scheduled_posts', 'instagram_generation_jobs'];
 const ALL_TABLES = [...LIBRARY_TABLES, ...POST_TABLES];
 
+function pickPrompts(rows: (InstagramPrompt & { category: string })[] | null, category: string): InstagramPrompt[] {
+  return (rows || [])
+    .filter((p) => p.category === category && p.content?.trim())
+    .map(({ id, title, content }) => ({ id, title, content }));
+}
+
 export function useContentData() {
   const [data, setData] = useState<ContentData>(EMPTY);
   const [loading, setLoading] = useState(true);
@@ -55,7 +64,7 @@ export function useContentData() {
       supabase.from('instagram_plan_assignments').select('id, plan_id, start_week').order('start_week'),
       supabase.from('instagram_skip_dates').select('id, skip_date, note').order('skip_date'),
       supabase.from('instagram_content_settings').select('timezone').maybeSingle(),
-      supabase.from('prompts').select('id, title, content').eq('category', 'Instagram').order('title'),
+      supabase.from('prompts').select('id, title, content, category').in('category', ['Instagram', IMAGE_TEXT_CATEGORY]).order('title'),
       supabase.from('instagram_links').select('id, name, url, created_at').order('name'),
     ]);
     const failed = [samples, topics, plans, slots, assignments, skips, settings, prompts, links].find((r) => r.error);
@@ -72,7 +81,8 @@ export function useContentData() {
       assignments: (assignments.data || []) as PlanAssignment[],
       skipDates: (skips.data || []) as SkipDate[],
       settings: (settings.data as ContentSettings | null) || EMPTY.settings,
-      prompts: ((prompts.data || []) as InstagramPrompt[]).filter((p) => p.content?.trim()),
+      prompts: pickPrompts(prompts.data, 'Instagram'),
+      imageTextPrompts: pickPrompts(prompts.data, IMAGE_TEXT_CATEGORY),
       links: (links.data || []) as SavedLink[],
     });
   }, []);

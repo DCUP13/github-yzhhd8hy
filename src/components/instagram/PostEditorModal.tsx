@@ -7,7 +7,8 @@ import { Modal, labelClass, secondaryBtn } from '../linkedin/Modal';
 import { generateWithEngine } from './api';
 import { StatusBadge, displayStatus, isLocked } from './postStatus';
 import { LinkPicker } from './LinkPicker';
-import { PINK, fullCaption, type IgAccountLite, type LibraryAsset, type SavedLink, type ScheduledPost } from './types';
+import { PhotoTextEditor } from './PhotoTextEditor';
+import { PINK, fullCaption, type IgAccountLite, type LibraryAsset, type OverlayScope, type SavedLink, type ScheduledPost } from './types';
 
 interface PostEditorModalProps {
   post: ScheduledPost;
@@ -35,18 +36,28 @@ function parseTags(raw: string): string[] {
     .map((t) => `#${t}`);
 }
 
-interface Photo { id: string | null; url: string }
+interface Photo { id: string | null; url: string; text: string }
+
+function photosOf(post: ScheduledPost): Photo[] {
+  const texts = post.overlay_texts || [];
+  return (post.media_urls || []).map((url, i) => ({
+    id: post.media_asset_ids?.[i] ?? null,
+    url,
+    text: texts[i] ?? (i === 0 || (post.overlay_mode === 'fixed' && texts.length === 0) ? post.overlay_text || '' : ''),
+  }));
+}
 
 export function PostEditorModal({ post, accounts, links, onClose, onChanged }: PostEditorModalProps) {
   const [caption, setCaption] = useState(post.caption || '');
   const [tags, setTags] = useState((post.hashtags || []).join(' '));
-  const [photos, setPhotos] = useState<Photo[]>(() => (post.media_urls || []).map((url, i) => ({ id: post.media_asset_ids?.[i] ?? null, url })));
+  const [photos, setPhotos] = useState<Photo[]>(() => photosOf(post));
   const [overlay, setOverlay] = useState(post.overlay_text || '');
+  const [scope, setScope] = useState<OverlayScope>(post.overlay_scope || 'first');
   const [when, setWhen] = useState(toLocalInput(post.scheduled_for));
   const [accountIds, setAccountIds] = useState<string[]>(post.account_ids || []);
   const [linkId, setLinkId] = useState(post.link_id || '');
   const [instructions, setInstructions] = useState('');
-  const [busy, setBusy] = useState<null | 'save' | 'caption' | 'media' | 'delete'>(null);
+  const [busy, setBusy] = useState<null | 'save' | 'caption' | 'media' | 'overlay' | 'delete'>(null);
   const [picker, setPicker] = useState(false);
   const [library, setLibrary] = useState<LibraryAsset[] | null>(null);
   const [libraryError, setLibraryError] = useState(false);
@@ -56,6 +67,8 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
   const link = links.find((l) => l.id === linkId)?.url || '';
   const hashtags = parseTags(tags);
   const preview = fullCaption(caption, hashtags, link);
+  const everyPhoto = photos.length > 1 && scope === 'all';
+  const coverText = scope === 'all' ? photos[0]?.text || '' : overlay;
 
   useEffect(() => {
     if (!picker || library) return;
@@ -73,8 +86,9 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
   const applyFresh = (fresh: ScheduledPost) => {
     setCaption(fresh.caption || '');
     setTags((fresh.hashtags || []).join(' '));
-    setPhotos((fresh.media_urls || []).map((url, i) => ({ id: fresh.media_asset_ids?.[i] ?? null, url })));
+    setPhotos(photosOf(fresh));
     setOverlay(fresh.overlay_text || '');
+    setScope(fresh.overlay_scope || 'first');
     onChanged(fresh);
   };
 
@@ -90,7 +104,9 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
       media_asset_ids: photos.map((p) => p.id).filter((id): id is string => !!id),
       media_type: photos.length > 1 ? 'carousel' : 'single',
       carousel_size: Math.max(photos.length, 1),
-      overlay_text: overlay,
+      overlay_text: everyPhoto ? photos[0].text : coverText,
+      overlay_texts: everyPhoto ? photos.map((p) => p.text) : [],
+      overlay_scope: everyPhoto ? 'all' : 'first',
       scheduled_for: scheduled,
       account_ids: accountIds,
       link_id: linkId || null,
@@ -115,16 +131,19 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
     if (saved) { toast.success('Post saved'); onChanged(saved); onClose(); }
   };
 
-  const regenerate = async (parts: 'caption' | 'media') => {
-    const msg = parts === 'caption' ? 'Rewrite the caption? Your current caption and hashtags will be replaced.' : 'Pick new photos? The current photos will be replaced.';
-    const ok = await showConfirm({ message: msg, confirmText: parts === 'caption' ? 'Rewrite' : 'Pick new' });
+  const regenerate = async (parts: 'caption' | 'media' | 'overlay') => {
+    const msg = parts === 'caption'
+      ? 'Rewrite the caption? Your current caption and hashtags will be replaced.'
+      : parts === 'media' ? 'Pick new photos? The current photos will be replaced.'
+      : 'Rewrite the text on the photos? The current photo text will be replaced.';
+    const ok = await showConfirm({ message: msg, confirmText: parts === 'media' ? 'Pick new' : 'Rewrite' });
     if (!ok) return;
     setBusy(parts);
     const saved = await persist();
     if (!saved) { setBusy(null); return; }
     try {
       applyFresh(await generateWithEngine(post.id, parts, parts === 'caption' ? instructions : ''));
-      toast.success(parts === 'caption' ? 'Caption rewritten' : 'New photos picked');
+      toast.success(parts === 'caption' ? 'Caption rewritten' : parts === 'media' ? 'New photos picked' : 'Photo text rewritten');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Generation failed');
     } finally {
@@ -155,10 +174,19 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
     const idx = photos.findIndex((p) => p.id === a.id);
     if (idx >= 0) { setPhotos(photos.filter((_, i) => i !== idx)); return; }
     if (photos.length >= MAX_PHOTOS) { toast.info(`A carousel can hold up to ${MAX_PHOTOS} photos`); return; }
-    setPhotos([...photos, { id: a.id, url: a.cloudfront_url }]);
+    setPhotos([...photos, { id: a.id, url: a.cloudfront_url, text: '' }]);
   };
 
   const toggleAccount = (id: string) => setAccountIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const changeScope = (next: OverlayScope) => {
+    if (next === scope) return;
+    if (next === 'all') setPhotos(photos.map((p, i) => (i === 0 ? { ...p, text: overlay } : p)));
+    else setOverlay(photos[0]?.text || '');
+    setScope(next);
+  };
+
+  const setPhotoText = (index: number, text: string) => setPhotos(photos.map((p, i) => (i === index ? { ...p, text } : p)));
 
   const headerDate = new Date(post.scheduled_for).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const results = Array.isArray(post.publish_results) ? post.publish_results : [];
@@ -303,11 +331,20 @@ export function PostEditorModal({ post, accounts, links, onClose, onChanged }: P
             <p className="mt-1 text-xs text-gray-400">{hashtags.length} / 30</p>
           </div>
 
-          {(post.overlay_mode !== 'none' || overlay) && (
-            <div>
-              <label className={labelClass}>Text on the photo</label>
-              <input value={overlay} onChange={(e) => setOverlay(e.target.value.slice(0, 120))} readOnly={locked} placeholder="Leave empty for no text" className={PINK.input} />
-            </div>
+          {(post.overlay_mode !== 'none' || coverText || photos.some((p) => p.text)) && (
+            <PhotoTextEditor
+              photos={photos}
+              scope={scope}
+              coverText={coverText}
+              locked={locked}
+              canRewrite={post.overlay_mode === 'ai' && photos.length > 0}
+              rewriting={busy === 'overlay'}
+              disabled={!!busy}
+              onScopeChange={changeScope}
+              onCoverTextChange={(text) => (scope === 'all' ? setPhotoText(0, text) : setOverlay(text))}
+              onPhotoTextChange={setPhotoText}
+              onRewrite={() => regenerate('overlay')}
+            />
           )}
         </div>
 

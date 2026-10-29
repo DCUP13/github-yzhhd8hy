@@ -18,6 +18,7 @@ interface PromptPlansProps {
   topics: Topic[];
   samples: VoiceSample[];
   prompts: InstagramPrompt[];
+  imageTextPrompts: InstagramPrompt[];
   links: SavedLink[];
   accounts: IgAccountLite[];
   onChange: () => void;
@@ -68,7 +69,7 @@ function AccountsPicker({ plan, accounts, onSave }: { plan: PromptPlan; accounts
   );
 }
 
-export function PromptPlans({ plans, slots, topics, samples, prompts, links, accounts, onChange }: PromptPlansProps) {
+export function PromptPlans({ plans, slots, topics, samples, prompts, imageTextPrompts, links, accounts, onChange }: PromptPlansProps) {
   const [selectedId, setSelectedId] = useState<string | null>(plans[0]?.id || null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -334,7 +335,7 @@ export function PromptPlans({ plans, slots, topics, samples, prompts, links, acc
                         <p className="mt-1 flex items-center gap-1 text-[11px] uppercase tracking-wide font-semibold text-pink-600 dark:text-pink-400">
                           {s.media_type === 'carousel' ? <><Images className="w-3 h-3" /> Carousel x{s.carousel_size}</> : <><ImageIcon className="w-3 h-3" /> Single</>}
                           {s.link_id && <Link2 className="w-3 h-3 ml-auto text-gray-400" aria-label="Has link" />}
-                          {s.overlay_mode !== 'none' && <Type className={`w-3 h-3 text-gray-400 ${s.link_id ? '' : 'ml-auto'}`} aria-label="Has text overlay" />}
+                          {s.overlay_mode !== 'none' && <Type className={`w-3 h-3 text-gray-400 ${s.link_id ? '' : 'ml-auto'}`} aria-label={s.overlay_scope === 'all' ? 'Text on every photo' : 'Text on cover photo'} />}
                         </p>
                         <p className="mt-0.5 text-xs text-gray-700 dark:text-gray-200 line-clamp-2">{promptTitle(s.prompt_id) || <span className="text-amber-600">No prompt chosen</span>}</p>
                         {topicName(s.topic_id) && <p className="mt-0.5 text-[11px] text-gray-500 truncate">{topicName(s.topic_id)}</p>}
@@ -382,6 +383,7 @@ export function PromptPlans({ plans, slots, topics, samples, prompts, links, acc
           topics={topics}
           samples={samples}
           prompts={prompts}
+          imageTextPrompts={imageTextPrompts}
           links={links}
           onClose={() => setEditor(null)}
           onSaved={onChange}

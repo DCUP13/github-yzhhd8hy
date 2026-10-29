@@ -28,7 +28,7 @@ export function ContentEngine({ tab, accounts }: { tab: EngineTab; accounts: IgA
     case 'calendar':
       return <ContentCalendar skipDates={data.skipDates} links={data.links} accounts={accounts} refreshKey={postsVersion} />;
     case 'plans':
-      return <PromptPlans plans={data.plans} slots={data.slots} topics={data.topics} samples={data.samples} prompts={data.prompts} links={data.links} accounts={accounts} onChange={reload} />;
+      return <PromptPlans plans={data.plans} slots={data.slots} topics={data.topics} samples={data.samples} prompts={data.prompts} imageTextPrompts={data.imageTextPrompts} links={data.links} accounts={accounts} onChange={reload} />;
     case 'timeline':
       return <Timeline plans={data.plans} assignments={data.assignments} skipDates={data.skipDates} settings={data.settings} onChange={reload} refreshKey={postsVersion} />;
     case 'voice':

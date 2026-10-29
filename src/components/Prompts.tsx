@@ -34,6 +34,7 @@ const categories = [
   'General',
   'Email Marketing',
   'Instagram',
+  'Instagram Image Text',
   'LinkedIn',
   'Real Estate',
   'Customer Service',
@@ -41,6 +42,8 @@ const categories = [
   'Follow-up',
   'Other'
 ];
+
+const isPostWriter = (category: string) => category === 'LinkedIn' || category === 'Instagram Image Text';
 
 type SortKey = 'newest' | 'oldest' | 'updated' | 'az' | 'za';
 
@@ -348,7 +351,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
         .map(v => v.trim().toLowerCase())
         .filter(v => v.length > 0);
 
-      const isLinkedIn = formData.category === 'LinkedIn';
+      const isLinkedIn = isPostWriter(formData.category);
       const replyMode = isLinkedIn ? 'single' : formData.replyMode;
 
       const promptData: Record<string, any> = {
@@ -733,7 +736,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     value={formData.category}
                     onChange={(e) => {
                       const category = e.target.value;
-                      setFormData(prev => ({ ...prev, category, replyMode: category === 'LinkedIn' ? 'single' : prev.replyMode }));
+                      setFormData(prev => ({ ...prev, category, replyMode: isPostWriter(category) ? 'single' : prev.replyMode }));
                     }}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
@@ -743,7 +746,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   </select>
                 </div>
 
-                {formData.category !== 'LinkedIn' && (
+                {!isPostWriter(formData.category) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Reply Mode
@@ -787,6 +790,8 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
                       placeholder={formData.category === 'LinkedIn'
                         ? 'How should the post be written? e.g. Open with a contrarian hook about {{topic}}, share one personal story, end with a question.'
+                        : formData.category === 'Instagram Image Text'
+                        ? 'How should the text on each photo read? e.g. Photo 1: a bold hook about {{topic}}. Middle photos: one tip each. Last photo: a call to action.'
                         : 'Write your autoresponder prompt here. Use {{variable_name}} for dynamic content.'}
                       required
                     />
@@ -826,7 +831,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   </>
                 )}
 
-                {formData.category !== 'LinkedIn' && (
+                {!isPostWriter(formData.category) && (
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900/50">
                   <div className="flex items-center justify-between mb-3">
                     <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -862,7 +867,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 </div>
                 )}
 
-                {formData.category !== 'Instagram' && formData.category !== 'LinkedIn' && (
+                {formData.category !== 'Instagram' && !isPostWriter(formData.category) && (
                 <div className="border border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50 dark:bg-green-900/20">
                   <label className="block text-sm font-medium text-green-800 dark:text-green-300 mb-2">
                     Email Routing (optional)
@@ -926,6 +931,10 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     <p className="text-xs text-blue-700 dark:text-blue-300">
                       <strong>LinkedIn placeholders:</strong> {`{{topic}}`} (the slot's topic), {`{{voice}}`} (the slot's voice sample), {`{{sample:Sample name}}`} (any voice sample by name). Import this prompt into a post slot from LinkedIn &gt; Prompt Plans.
                     </p>
+                  ) : formData.category === 'Instagram Image Text' ? (
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      <strong>Image text placeholders:</strong> {`{{topic}}`} (the post's topic), {`{{voice}}`} (the post's voice sample). The AI sees every photo in order and writes one short line per photo. Pick this prompt in Instagram &gt; Posts &gt; Plans when a slot puts text on every photo.
+                    </p>
                   ) : formData.category === 'Instagram' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
                       <strong>Instagram placeholders:</strong> {`{{message}}`} (incoming DM text), {`{{conversation}}`} (full DM history), {`{{sender_username}}`} (sender's IG username), {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, plus your custom variables.
@@ -937,7 +946,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   )}
                 </div>
 
-                {formData.category !== 'LinkedIn' && (
+                {!isPostWriter(formData.category) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Custom Variables (comma-separated)
