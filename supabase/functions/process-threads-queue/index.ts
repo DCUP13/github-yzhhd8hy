@@ -65,10 +65,22 @@ async function waitReady(containerId: string, token: string) {
   for (let i = 0; i < 12; i++) {
     const s = await graph(containerId, token, { fields: "status,error_message" }, "GET");
     if (s.status === "FINISHED" || s.status === "PUBLISHED") return;
-    if (s.status === "ERROR" || s.status === "EXPIRED") throw new Error(s.error_message || "Threads could not process the photos");
-    await sleep(2500);
+    if (s.status === "ERROR" || s.status === "EXPIRED") throw new Error(s.error_message || "Threads could not process this post");
+    await sleep(i === 0 ? 1500 : 2500);
   }
-  throw new Error("Threads took too long to process the photos");
+  throw new Error("Threads took too long to prepare this post. Please try again.");
+}
+
+async function publishWhenReady(uid: string, creationId: string, token: string) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await graph(`${uid}/threads_publish`, token, { creation_id: creationId });
+    } catch (e) {
+      const notFound = (e as Error & { code?: number }).code === 24 || /cannot be found|does not exist/i.test((e as Error).message);
+      if (!notFound || attempt >= 4) throw e;
+      await sleep(3000 * (attempt + 1));
+    }
+  }
 }
 
 async function publishTo(account: Account, text: string, urls: string[]): Promise<Result> {
@@ -79,6 +91,7 @@ async function publishTo(account: Account, text: string, urls: string[]): Promis
     let creationId: string;
     if (urls.length === 0) {
       creationId = (await graph(`${uid}/threads`, token, { media_type: "TEXT", text })).id;
+      await waitReady(creationId, token);
     } else if (urls.length === 1) {
       creationId = (await graph(`${uid}/threads`, token, { media_type: "IMAGE", image_url: urls[0], text })).id;
       await waitReady(creationId, token);
@@ -91,7 +104,7 @@ async function publishTo(account: Account, text: string, urls: string[]): Promis
       creationId = (await graph(`${uid}/threads`, token, { media_type: "CAROUSEL", children: children.join(","), text })).id;
       await waitReady(creationId, token);
     }
-    const published = await graph(`${uid}/threads_publish`, token, { creation_id: creationId });
+    const published = await publishWhenReady(uid, creationId, token);
     let permalink: string | undefined;
     try {
       permalink = (await graph(published.id, token, { fields: "permalink" }, "GET")).permalink;
