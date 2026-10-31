@@ -36,6 +36,7 @@ const categories = [
   'Instagram',
   'Instagram Image Text',
   'LinkedIn',
+  'Threads',
   'Real Estate',
   'Customer Service',
   'Sales',
@@ -43,7 +44,7 @@ const categories = [
   'Other'
 ];
 
-const isPostWriter = (category: string) => category === 'LinkedIn' || category === 'Instagram Image Text';
+const isPostWriter = (category: string) => category === 'LinkedIn' || category === 'Threads' || category === 'Instagram Image Text';
 
 type SortKey = 'newest' | 'oldest' | 'updated' | 'az' | 'za';
 
