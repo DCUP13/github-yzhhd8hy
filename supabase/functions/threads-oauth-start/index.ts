@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
     const state = `${payload}.${await sign(payload, appSecret)}`;
 
     const redirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/threads-oauth-callback`;
-    const authUrl = `https://threads.net/oauth/authorize?client_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(SCOPE)}&response_type=code&state=${encodeURIComponent(state)}`;
+    const authUrl = `https://threads.com/oauth/authorize?client_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(SCOPE)}&response_type=code&state=${encodeURIComponent(state)}`;
 
     return json({ auth_url: authUrl });
   } catch (error) {

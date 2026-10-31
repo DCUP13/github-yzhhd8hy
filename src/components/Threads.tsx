@@ -65,10 +65,12 @@ export function Threads({ queryParams, navigateToApp }: ThreadsProps) {
   const connect = async () => {
     setConnecting(true);
     try {
-      window.location.href = await startThreadsConnect();
+      // Threads blocks being shown inside an embedded frame, so sign-in opens in a new tab.
+      window.open(await startThreadsConnect(), '_blank', 'noopener,noreferrer');
     } catch (e) {
-      setConnecting(false);
       toast.error(e instanceof Error ? e.message : 'Could not start the Threads connection');
+    } finally {
+      setConnecting(false);
     }
   };
 
