@@ -134,7 +134,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
           value={replyCount}
           onChange={setReplyCount}
           label="Thread follow-ups"
-          hint="The main post goes out first, then each follow-up is posted as a reply to keep people reading."
+          hint="The main post goes out first, then each follow-up is posted as a reply. Auto lets the AI use as many replies as the content needs (up to 10)."
         />
 
         <div>

@@ -80,6 +80,25 @@ function clip(text: string, max: number): string {
   return text.length > max ? text.slice(0, max - 1).replace(/\s+\S*$/, "") + "…" : text;
 }
 
+// Breaks at the most natural boundary available so bullets and sentences stay intact.
+function splitChunks(text: string, max: number): string[] {
+  const out: string[] = [];
+  let rest = text.trim();
+  while (rest.length > max) {
+    const win = rest.slice(0, max + 1);
+    let cut = -1;
+    for (const [sep, keep] of [["\n\n", 0], ["\n", 0], [". ", 1], ["! ", 1], ["? ", 1], [" ", 0]] as const) {
+      const i = win.lastIndexOf(sep);
+      if (i > max * 0.4) { cut = i + keep; break; }
+    }
+    if (cut <= 0) cut = win.lastIndexOf(" ") > 0 ? win.lastIndexOf(" ") : max;
+    out.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
 function fill(template: string, topic: string, voice: string): string {
   return template.replaceAll("{{topic}}", topic || "a topic of your choice").replaceAll("{{voice}}", voice || "friendly and natural");
 }
@@ -143,15 +162,30 @@ async function generatePost(supabase: SupabaseClient, id: string, parts: Parts, 
         || (prompt.data as { content?: string } | null)?.content?.trim()
         || "Write an engaging Threads post about {{topic}}.";
       const extra = (slot.data as { extra_instructions?: string } | null)?.extra_instructions?.trim() || "";
-      const replyCount = Math.max(0, Math.min(10, post.reply_count || 0));
+      const auto = post.reply_count === -1;
+      const replyCount = auto ? 10 : Math.max(0, Math.min(10, post.reply_count || 0));
       const replyBudget = MAX_CHARS - 10;
+      const flow = [
+        "Thread flow rules:",
+        "- The main post is the hook: a bold opening line plus a promise of what the thread delivers. End it with a short cue that pulls people into the replies (for example \"Here's how:\" or \"Let me break it down ↓\").",
+        "- Each reply picks up exactly where the previous part stopped, so the whole thread reads as one continuous piece.",
+        "- Every part except the last ends with a bridge or open loop that makes the reader want the next reply.",
+        "- Never split a sentence, bullet point or numbered step across two parts. If a list does not fit in one part, break between items and continue the list in the next reply.",
+        "- Put each bullet on its own line starting with \"•\" (or \"1.\", \"2.\" when order matters), with a blank line before the list.",
+        "- Aim for roughly 250 to 450 characters per part. Use more replies rather than cramming.",
+        "- The last reply wraps up with a clear takeaway or a question that invites comments.",
+        "- Do not label the parts (no \"1/5\" or \"Part 2\") unless the prompt asks for it.",
+      ].join("\n");
+      const threadRule = auto
+        ? `This is a multi-part thread. Decide how many follow-up replies the content needs, between 1 and 10, so nothing is cut short or squeezed. Each reply must be at most ${replyBudget} characters.\n${flow}`
+        : replyCount
+          ? `This is a multi-part thread. Write the main post plus exactly ${replyCount} follow-up replies, each at most ${replyBudget} characters. Size the content so it fits comfortably in that many parts.\n${flow}`
+          : "Write a single post. Return an empty replies array.";
 
       const system = [
         "You write posts for Threads (Meta's text-first social app).",
         `Hard limit: the main post must be at most ${budget} characters including spaces and line breaks.`,
-        replyCount
-          ? `This is a multi-part thread. Write the main post plus exactly ${replyCount} follow-up replies that continue it, each at most ${replyBudget} characters. The main post must hook the reader and make them want to open the thread (a teaser or promise of what follows works well). Each follow-up adds new value, flows from the previous one, and the last one wraps up (a takeaway or a question). Do not number the parts unless the prompt asks for it.`
-          : "Write a single post. Return an empty replies array.",
+        threadRule,
         "Write in a conversational, human tone. Short paragraphs. No hashtags unless asked (at most one if used). No markdown, no quotation marks around the post.",
         linkUrl ? "A link will be added automatically at the end of the main post, so do not include any URL." : "Do not include URLs.",
         post.photo_mode !== "none" ? "The main post will include photos, so the text can reference them naturally." : "",
@@ -168,11 +202,19 @@ async function generatePost(supabase: SupabaseClient, id: string, parts: Parts, 
 
       const written = await writeText(system, user);
       let text = written.text;
-      if (text.length > budget) {
+      if (!replyCount && text.length > budget) {
         text = (await writeText("Shorten the given text. Return JSON with the shortened text and an empty replies array.", `Shorten this to at most ${budget} characters while keeping the meaning:\n\n${text}`)).text;
       }
-      patch.content_text = clip(text, budget);
-      patch.reply_texts = written.replies.slice(0, replyCount).map((r) => clip(r, replyBudget));
+      if (!replyCount) {
+        patch.content_text = clip(text, budget);
+        patch.reply_texts = [];
+      } else {
+        // Anything over the limit spills into extra replies instead of being cut off.
+        const [main, ...overflow] = splitChunks(text, budget);
+        const replies = [...overflow, ...written.replies.slice(0, replyCount).flatMap((r) => splitChunks(r, replyBudget))];
+        patch.content_text = main;
+        patch.reply_texts = replies.slice(0, 10).map((r) => clip(r, replyBudget));
+      }
     }
 
     const { data: saved, error } = await supabase

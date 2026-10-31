@@ -11,7 +11,7 @@ import { PhotoPicker, type PhotoValue } from './PhotoPicker';
 import { PostInsights } from './PostInsights';
 import { PromptTextBox } from './PromptTextBox';
 import { StatusBadge, displayStatus, isLocked } from './postStatus';
-import { ReplyCountSelect, ThreadRepliesEditor } from './ThreadReplies';
+import { AUTO_REPLIES, MAX_REPLIES, ReplyCountSelect, SplitButton, ThreadRepliesEditor, splitForThread } from './ThreadReplies';
 import type { ContentData } from './useContentData';
 import { MAX_CHARS, THEME, fullText, type IgAccountLite, type ScheduledPost, type ThreadsAccount } from './types';
 
@@ -45,7 +45,9 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
   const [postId, setPostId] = useState<string | null>(post?.id ?? null);
   const [text, setText] = useState(post?.content_text ?? '');
   const [replies, setReplies] = useState<string[]>(post?.reply_texts ?? []);
-  const [replyCount, setReplyCount] = useState(Math.max(post?.reply_count ?? 0, post?.reply_texts?.length ?? 0));
+  const [replyCount, setReplyCount] = useState(
+    post?.reply_count === AUTO_REPLIES ? AUTO_REPLIES : Math.max(post?.reply_count ?? 0, post?.reply_texts?.length ?? 0),
+  );
   const [linkId, setLinkId] = useState(post?.link_id ?? '');
   const [photo, setPhoto] = useState<PhotoValue>({
     mode: post?.photo_mode ?? 'none',
@@ -74,7 +76,14 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
 
   const changeReplies = (next: string[]) => {
     setReplies(next);
-    setReplyCount(next.length);
+    if (replyCount !== AUTO_REPLIES) setReplyCount(next.length);
+  };
+
+  const splitMain = () => {
+    const linkUrl = link?.url.trim() ?? '';
+    const [main, ...rest] = splitForThread(text, MAX_CHARS - (linkUrl ? linkUrl.length + 2 : 0));
+    setText(main);
+    changeReplies([...rest, ...replies].slice(0, MAX_REPLIES));
   };
 
   if (post && isLocked(post)) {
@@ -241,6 +250,7 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
             </span>
           </div>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder="What do you want to say?" className={`${THEME.input} resize-y leading-relaxed`} />
+          {over && replies.length < MAX_REPLIES && <SplitButton onClick={splitMain} />}
           {link && <p className="mt-1 text-xs text-gray-500">The link is added at the end and counts toward the limit.</p>}
         </div>
 
@@ -275,7 +285,7 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
               </select>
             </div>
             <input value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Extra instructions (optional)" className={THEME.input} />
-            <ReplyCountSelect value={replyCount} onChange={setReplyCount} label="Follow-up replies to write" hint="AI writes the main post plus this many replies that continue the thread." />
+            <ReplyCountSelect value={replyCount} onChange={setReplyCount} label="Follow-up replies to write" hint="Auto lets the AI use as many replies as it needs (up to 10). Each reply carries on from the one before it." />
             <button type="button" onClick={() => runEngine('text')} disabled={!!busy} className={secondaryBtn}>
               {busy === 'write' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {text.trim() ? 'Rewrite' : 'Write it'}
             </button>
