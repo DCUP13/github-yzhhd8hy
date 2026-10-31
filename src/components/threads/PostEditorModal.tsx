@@ -9,6 +9,7 @@ import { InstagramCrossPost, ThreadsAccountsPicker } from './AudiencePicker';
 import { LinkPicker } from './LinkPicker';
 import { PhotoPicker, type PhotoValue } from './PhotoPicker';
 import { PostInsights } from './PostInsights';
+import { PromptTextBox } from './PromptTextBox';
 import { StatusBadge, displayStatus, isLocked } from './postStatus';
 import type { ContentData } from './useContentData';
 import { MAX_CHARS, THEME, fullText, type IgAccountLite, type ScheduledPost, type ThreadsAccount } from './types';
@@ -54,6 +55,9 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
   const [igIds, setIgIds] = useState<string[]>(post?.instagram_account_ids ?? []);
   const [when, setWhen] = useState(toLocalInput(post?.scheduled_for ?? null, defaultDate));
   const [promptId, setPromptId] = useState(post?.prompt_id ?? '');
+  const [promptText, setPromptText] = useState(
+    post?.thread_prompt ?? data.prompts.find((p) => p.id === post?.prompt_id)?.content ?? '',
+  );
   const [topicId, setTopicId] = useState(post?.topic_id ?? '');
   const [voiceId, setVoiceId] = useState(post?.voice_sample_id ?? '');
   const [instructions, setInstructions] = useState('');
@@ -98,6 +102,7 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
       also_instagram: alsoIg,
       instagram_account_ids: alsoIg ? igIds : [],
       prompt_id: promptId || null,
+      thread_prompt: promptText.trim() || null,
       topic_id: topicId || null,
       topic_name: data.topics.find((t) => t.id === topicId)?.name ?? null,
       voice_sample_id: voiceId || null,
@@ -219,11 +224,16 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
             <Sparkles className="w-4 h-4 text-sky-500" /> Write with AI
           </summary>
           <div className="px-3 pb-3 space-y-3">
-            <div className="grid sm:grid-cols-3 gap-2">
-              <select value={promptId} onChange={(e) => setPromptId(e.target.value)} className={THEME.input}>
-                <option value="">Default prompt</option>
-                {data.prompts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-              </select>
+            <PromptTextBox
+              label="Writing prompt"
+              value={promptText}
+              groups={[{ label: 'Threads prompts', prompts: data.prompts }]}
+              placeholder={post?.slot_id ? 'Leave empty to use the prompt from this post\'s plan slot.' : 'Leave empty to use the default prompt, or import one of your Threads prompts.'}
+              note="Edits here are saved to this post only. Your saved prompt on the Prompts page is not changed."
+              onChange={setPromptText}
+              onImport={setPromptId}
+            />
+            <div className="grid sm:grid-cols-2 gap-2">
               <select value={topicId} onChange={(e) => setTopicId(e.target.value)} className={THEME.input}>
                 <option value="">Any topic</option>
                 {visibleTopics.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}

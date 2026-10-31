@@ -85,6 +85,7 @@ export interface ScheduledPost {
   plan_id: string | null;
   slot_id: string | null;
   prompt_id: string | null;
+  thread_prompt: string | null;
   topic_id: string | null;
   topic_name: string | null;
   voice_sample_id: string | null;

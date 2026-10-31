@@ -17,6 +17,7 @@ interface Post {
   slot_id: string | null;
   link_id: string | null;
   prompt_id: string | null;
+  thread_prompt: string | null;
   topic_id: string | null;
   topic_name: string | null;
   voice_sample_id: string | null;
@@ -120,7 +121,8 @@ async function generatePost(supabase: SupabaseClient, id: string, parts: Parts, 
       const voiceText = (voice.data as { content?: string } | null)?.content?.trim() || "";
       const linkUrl = (link.data as { url?: string } | null)?.url || "";
       const budget = MAX_CHARS - (linkUrl ? linkUrl.length + 2 : 0) - 10;
-      const base = (slot.data as { thread_prompt?: string } | null)?.thread_prompt?.trim()
+      const base = post.thread_prompt?.trim()
+        || (slot.data as { thread_prompt?: string } | null)?.thread_prompt?.trim()
         || (prompt.data as { content?: string } | null)?.content?.trim()
         || "Write an engaging Threads post about {{topic}}.";
       const extra = (slot.data as { extra_instructions?: string } | null)?.extra_instructions?.trim() || "";
