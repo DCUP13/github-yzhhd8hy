@@ -11,6 +11,7 @@ import { PhotoPicker, type PhotoValue } from './PhotoPicker';
 import { PostInsights } from './PostInsights';
 import { PromptTextBox } from './PromptTextBox';
 import { StatusBadge, displayStatus, isLocked } from './postStatus';
+import { ReplyCountSelect, ThreadRepliesEditor } from './ThreadReplies';
 import type { ContentData } from './useContentData';
 import { MAX_CHARS, THEME, fullText, type IgAccountLite, type ScheduledPost, type ThreadsAccount } from './types';
 
@@ -43,6 +44,8 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
   const connected = accounts.filter((a) => a.connected);
   const [postId, setPostId] = useState<string | null>(post?.id ?? null);
   const [text, setText] = useState(post?.content_text ?? '');
+  const [replies, setReplies] = useState<string[]>(post?.reply_texts ?? []);
+  const [replyCount, setReplyCount] = useState(Math.max(post?.reply_count ?? 0, post?.reply_texts?.length ?? 0));
   const [linkId, setLinkId] = useState(post?.link_id ?? '');
   const [photo, setPhoto] = useState<PhotoValue>({
     mode: post?.photo_mode ?? 'none',
@@ -69,6 +72,11 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
   const hasPhotos = photo.mode !== 'none' && photo.urls.length > 0;
   const visibleTopics = useMemo(() => data.topics.filter((t) => !t.is_hidden), [data.topics]);
 
+  const changeReplies = (next: string[]) => {
+    setReplies(next);
+    setReplyCount(next.length);
+  };
+
   if (post && isLocked(post)) {
     return (
       <Modal title="Threads post" onClose={onClose} size="lg">
@@ -78,6 +86,16 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
             {post.published_at && <span className="text-xs text-gray-500">{new Date(post.published_at).toLocaleString()}</span>}
           </div>
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800 dark:text-gray-200">{fullText(post.content_text, link?.url ?? '')}</p>
+          {post.reply_texts?.length > 0 && (
+            <div className="space-y-3 border-l-2 border-sky-200 dark:border-sky-800 pl-3 ml-1">
+              {post.reply_texts.map((r, i) => (
+                <div key={i}>
+                  <p className="text-xs font-medium text-gray-500 mb-0.5">Follow-up {i + 1}</p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800 dark:text-gray-200">{r}</p>
+                </div>
+              ))}
+            </div>
+          )}
           {post.media_urls.length > 0 && (
             <div className="flex gap-2 overflow-x-auto">
               {post.media_urls.map((u) => <img key={u} src={u} alt="" className="h-28 w-28 rounded-lg object-cover flex-shrink-0" />)}
@@ -93,6 +111,8 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
     const d = new Date(when);
     return {
       content_text: text.trim(),
+      reply_texts: replies.map((r) => r.trim()).filter(Boolean),
+      reply_count: replyCount,
       link_id: linkId || null,
       photo_mode: photo.mode,
       photo_count: photo.mode === 'none' ? 1 : Math.max(1, photo.urls.length || photo.count),
@@ -130,7 +150,10 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
       const id = await persist(postId ? {} : { status: 'draft' });
       if (!id) return;
       const updated = await generateWithEngine(id, parts, instructions);
-      if (parts === 'text') setText(updated.content_text);
+      if (parts === 'text') {
+        setText(updated.content_text);
+        setReplies(updated.reply_texts ?? []);
+      }
       else setPhoto((p) => ({ ...p, urls: updated.media_urls, assetIds: updated.media_asset_ids }));
       onSaved();
     } catch (e) {
@@ -143,6 +166,8 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
   const validate = (): boolean => {
     if (!text.trim()) { toast.error('Write something first'); return false; }
     if (over) { toast.error(`Threads posts can be up to ${MAX_CHARS} characters`); return false; }
+    const longReply = replies.findIndex((r) => r.trim().length > MAX_CHARS);
+    if (longReply >= 0) { toast.error(`Follow-up ${longReply + 1} is over ${MAX_CHARS} characters`); return false; }
     if (!accountIds.length) { toast.error('Choose at least one Threads profile'); return false; }
     if (photo.mode !== 'none' && !photo.urls.length) { toast.error('Add photos or switch to "No photos"'); return false; }
     return true;
@@ -219,6 +244,12 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
           {link && <p className="mt-1 text-xs text-gray-500">The link is added at the end and counts toward the limit.</p>}
         </div>
 
+        <div>
+          <label className={labelClass}>Thread follow-ups (optional)</label>
+          <p className="-mt-1 mb-2 text-xs text-gray-500">Each one is posted as a reply to the one before it, so readers can keep going.</p>
+          <ThreadRepliesEditor replies={replies} onChange={changeReplies} />
+        </div>
+
         <details className="group rounded-xl border border-gray-200 dark:border-gray-700">
           <summary className="flex items-center gap-2 px-3 py-2.5 cursor-pointer text-sm font-medium text-gray-800 dark:text-gray-200 select-none">
             <Sparkles className="w-4 h-4 text-sky-500" /> Write with AI
@@ -244,6 +275,7 @@ export function PostEditorModal({ post, defaultDate, data, accounts, igAccounts,
               </select>
             </div>
             <input value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Extra instructions (optional)" className={THEME.input} />
+            <ReplyCountSelect value={replyCount} onChange={setReplyCount} label="Follow-up replies to write" hint="AI writes the main post plus this many replies that continue the thread." />
             <button type="button" onClick={() => runEngine('text')} disabled={!!busy} className={secondaryBtn}>
               {busy === 'write' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {text.trim() ? 'Rewrite' : 'Write it'}
             </button>

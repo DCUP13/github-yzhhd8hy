@@ -26,6 +26,8 @@ interface Post {
   photo_count: number;
   media_urls: string[];
   media_asset_ids: string[];
+  reply_count: number;
+  reply_texts: string[];
   status: string;
 }
 
@@ -33,7 +35,12 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
-async function writeText(system: string, user: string): Promise<string> {
+interface Written {
+  text: string;
+  replies: string[];
+}
+
+async function writeText(system: string, user: string): Promise<Written> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("AI writing is not configured");
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -42,13 +49,18 @@ async function writeText(system: string, user: string): Promise<string> {
     body: JSON.stringify({
       model: "gpt-4o",
       temperature: 0.85,
-      max_tokens: 600,
+      max_tokens: 3000,
       response_format: {
         type: "json_schema",
         json_schema: {
           name: "thread_post",
           strict: true,
-          schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false },
+          schema: {
+            type: "object",
+            properties: { text: { type: "string" }, replies: { type: "array", items: { type: "string" } } },
+            required: ["text", "replies"],
+            additionalProperties: false,
+          },
         },
       },
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
@@ -58,9 +70,14 @@ async function writeText(system: string, user: string): Promise<string> {
   const data = await res.json();
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== "string") throw new Error("AI returned an empty response");
-  const parsed = JSON.parse(content) as { text?: string };
+  const parsed = JSON.parse(content) as { text?: string; replies?: unknown };
   if (typeof parsed.text !== "string" || !parsed.text.trim()) throw new Error("AI returned an empty post");
-  return parsed.text.trim();
+  const replies = Array.isArray(parsed.replies) ? parsed.replies.filter((r): r is string => typeof r === "string" && !!r.trim()).map((r) => r.trim()) : [];
+  return { text: parsed.text.trim(), replies };
+}
+
+function clip(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max - 1).replace(/\s+\S*$/, "") + "…" : text;
 }
 
 function fill(template: string, topic: string, voice: string): string {
@@ -126,14 +143,19 @@ async function generatePost(supabase: SupabaseClient, id: string, parts: Parts, 
         || (prompt.data as { content?: string } | null)?.content?.trim()
         || "Write an engaging Threads post about {{topic}}.";
       const extra = (slot.data as { extra_instructions?: string } | null)?.extra_instructions?.trim() || "";
+      const replyCount = Math.max(0, Math.min(10, post.reply_count || 0));
+      const replyBudget = MAX_CHARS - 10;
 
       const system = [
         "You write posts for Threads (Meta's text-first social app).",
-        `Hard limit: the post must be at most ${budget} characters including spaces and line breaks.`,
+        `Hard limit: the main post must be at most ${budget} characters including spaces and line breaks.`,
+        replyCount
+          ? `This is a multi-part thread. Write the main post plus exactly ${replyCount} follow-up replies that continue it, each at most ${replyBudget} characters. The main post must hook the reader and make them want to open the thread (a teaser or promise of what follows works well). Each follow-up adds new value, flows from the previous one, and the last one wraps up (a takeaway or a question). Do not number the parts unless the prompt asks for it.`
+          : "Write a single post. Return an empty replies array.",
         "Write in a conversational, human tone. Short paragraphs. No hashtags unless asked (at most one if used). No markdown, no quotation marks around the post.",
-        linkUrl ? "A link will be added automatically at the end, so do not include any URL." : "Do not include URLs.",
-        post.photo_mode !== "none" ? "The post will include photos, so the text can reference them naturally." : "",
-        'Return JSON: {"text": "..."}',
+        linkUrl ? "A link will be added automatically at the end of the main post, so do not include any URL." : "Do not include URLs.",
+        post.photo_mode !== "none" ? "The main post will include photos, so the text can reference them naturally." : "",
+        'Return JSON: {"text": "main post", "replies": ["follow-up 1", ...]}',
       ].filter(Boolean).join("\n");
       const user = [
         fill(base, topic, voiceText),
@@ -141,15 +163,16 @@ async function generatePost(supabase: SupabaseClient, id: string, parts: Parts, 
         voiceText ? `Match the style of this writing sample:\n${voiceText.slice(0, 3000)}` : "",
         extra ? `Extra instructions: ${extra}` : "",
         instructions ? `Additional instructions for this version: ${instructions}` : "",
-        parts === "all" && post.content_text.trim() ? `Previous draft (write a fresh version):\n${post.content_text}` : "",
+        parts === "all" && post.content_text.trim() ? `Previous draft (write a fresh version):\n${[post.content_text, ...(post.reply_texts || [])].join("\n---\n")}` : "",
       ].filter(Boolean).join("\n\n");
 
-      let text = await writeText(system, user);
+      const written = await writeText(system, user);
+      let text = written.text;
       if (text.length > budget) {
-        text = await writeText(system, `Shorten this to at most ${budget} characters while keeping the meaning:\n\n${text}`);
+        text = (await writeText("Shorten the given text. Return JSON with the shortened text and an empty replies array.", `Shorten this to at most ${budget} characters while keeping the meaning:\n\n${text}`)).text;
       }
-      if (text.length > budget) text = text.slice(0, budget - 1).replace(/\s+\S*$/, "") + "…";
-      patch.content_text = text;
+      patch.content_text = clip(text, budget);
+      patch.reply_texts = written.replies.slice(0, replyCount).map((r) => clip(r, replyBudget));
     }
 
     const { data: saved, error } = await supabase

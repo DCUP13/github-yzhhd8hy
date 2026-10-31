@@ -38,6 +38,7 @@ export interface PlanSlot {
   prompt_id: string | null;
   thread_prompt: string;
   extra_instructions: string;
+  reply_count: number;
   topic_id: string | null;
   voice_sample_id: string | null;
   link_id: string | null;
@@ -76,6 +77,8 @@ export interface PublishResult {
   ok: boolean;
   media_id?: string;
   permalink?: string;
+  reply_ids?: string[];
+  reply_error?: string;
   error?: string;
   deleted?: boolean;
 }
@@ -92,6 +95,8 @@ export interface ScheduledPost {
   slot_date: string | null;
   scheduled_for: string | null;
   content_text: string;
+  reply_texts: string[];
+  reply_count: number;
   link_id: string | null;
   photo_mode: PhotoMode;
   photo_count: number;

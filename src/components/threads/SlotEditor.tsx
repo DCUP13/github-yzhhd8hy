@@ -8,6 +8,7 @@ import { InstagramCrossPost } from './AudiencePicker';
 import { LinkPicker } from './LinkPicker';
 import { PhotoPicker, type PhotoValue } from './PhotoPicker';
 import { PromptTextBox } from './PromptTextBox';
+import { ReplyCountSelect } from './ThreadReplies';
 import { THEME, type PlanSlot, type SavedLink, type ThreadsPrompt, type Topic, type VoiceSample } from './types';
 
 interface Props {
@@ -27,6 +28,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
   const [promptId, setPromptId] = useState(slot?.prompt_id || '');
   const [promptText, setPromptText] = useState(slot?.thread_prompt || '');
   const [extra, setExtra] = useState(slot?.extra_instructions || '');
+  const [replyCount, setReplyCount] = useState(slot?.reply_count ?? 0);
   const [topicId, setTopicId] = useState(slot?.topic_id || '');
   const [voiceId, setVoiceId] = useState(slot?.voice_sample_id || '');
   const [linkId, setLinkId] = useState(slot?.link_id || '');
@@ -55,6 +57,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       prompt_id: promptId || null,
       thread_prompt: promptText,
       extra_instructions: extra,
+      reply_count: replyCount,
       topic_id: topicId || null,
       voice_sample_id: voiceId || null,
       link_id: linkId || null,
@@ -126,6 +129,13 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
           <label className={labelClass}>Extra instructions (optional)</label>
           <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. Keep it under 300 characters" className={THEME.input} />
         </div>
+
+        <ReplyCountSelect
+          value={replyCount}
+          onChange={setReplyCount}
+          label="Thread follow-ups"
+          hint="The main post goes out first, then each follow-up is posted as a reply to keep people reading."
+        />
 
         <div>
           <label className={labelClass}>Link (optional)</label>

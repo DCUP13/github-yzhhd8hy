@@ -21,6 +21,7 @@ interface Post {
   also_instagram: boolean;
   instagram_account_ids: string[];
   instagram_post_id: string | null;
+  reply_texts: string[];
 }
 
 interface Account {
@@ -36,6 +37,8 @@ interface Result {
   ok: boolean;
   media_id?: string;
   permalink?: string;
+  reply_ids?: string[];
+  reply_error?: string;
   error?: string;
 }
 
@@ -83,7 +86,23 @@ async function publishWhenReady(uid: string, creationId: string, token: string) 
   }
 }
 
-async function publishTo(account: Account, text: string, urls: string[]): Promise<Result> {
+async function postReplies(uid: string, token: string, parentId: string, replies: string[]) {
+  const ids: string[] = [];
+  let prev = parentId;
+  for (const [i, text] of replies.entries()) {
+    try {
+      const container = (await graph(`${uid}/threads`, token, { media_type: "TEXT", text, reply_to_id: prev })).id;
+      await waitReady(container, token);
+      prev = String((await publishWhenReady(uid, container, token)).id);
+      ids.push(prev);
+    } catch (e) {
+      return { ids, error: `Follow-up ${i + 1} of ${replies.length} could not be posted: ${e instanceof Error ? e.message : "unknown error"}` };
+    }
+  }
+  return { ids };
+}
+
+async function publishTo(account: Account, text: string, urls: string[], replies: string[]): Promise<Result> {
   const base = { account_id: account.id, username: account.username };
   const token = account.access_token!;
   const uid = account.threads_user_id;
@@ -109,7 +128,8 @@ async function publishTo(account: Account, text: string, urls: string[]): Promis
     try {
       permalink = (await graph(published.id, token, { fields: "permalink" }, "GET")).permalink;
     } catch { /* permalink is optional */ }
-    return { ...base, ok: true, media_id: String(published.id), permalink };
+    const thread = replies.length ? await postReplies(uid, token, String(published.id), replies) : { ids: [] as string[] };
+    return { ...base, ok: true, media_id: String(published.id), permalink, reply_ids: thread.ids, reply_error: thread.error };
   } catch (e) {
     return { ...base, ok: false, error: e instanceof Error ? e.message : "Could not publish" };
   }
@@ -162,6 +182,9 @@ async function processPost(supabase: SupabaseClient, id: string) {
   const text = [post.content_text.trim(), link].filter(Boolean).join("\n\n");
   if (!text && !post.media_urls.length) return finish({ status: "failed", publish_error: "This post is empty" });
   if (text.length > MAX_CHARS) return finish({ status: "failed", publish_error: `Threads posts can be at most ${MAX_CHARS} characters (this one has ${text.length})` });
+  const replies = (post.reply_texts || []).map((r) => r.trim()).filter(Boolean);
+  const longReply = replies.findIndex((r) => r.length > MAX_CHARS);
+  if (longReply >= 0) return finish({ status: "failed", publish_error: `Follow-up ${longReply + 1} is over ${MAX_CHARS} characters` });
 
   let urls = [...(post.media_urls || [])];
   if (!urls.length && post.media_asset_ids?.length) {
@@ -178,7 +201,7 @@ async function processPost(supabase: SupabaseClient, id: string) {
   const accounts = ((accRows || []) as Account[]).filter((a) => a.access_token);
 
   const results: Result[] = [];
-  for (const a of accounts) results.push(await publishTo(a, text, urls));
+  for (const a of accounts) results.push(await publishTo(a, text, urls, replies));
   for (const r of results) {
     if (!r.ok && /session|token|OAuth|expired/i.test(r.error || "")) {
       await supabase.from("threads_accounts").update({ token_expired: true }).eq("id", r.account_id);
@@ -191,6 +214,7 @@ async function processPost(supabase: SupabaseClient, id: string) {
   const errors = [
     !accounts.length ? "No connected Threads profile was chosen for this post." : "",
     ...results.filter((r) => !r.ok).map((r) => `@${r.username ?? "profile"}: ${r.error}`),
+    ...results.filter((r) => r.ok && r.reply_error).map((r) => `@${r.username ?? "profile"}: ${r.reply_error}`),
     igNote ?? "",
   ].filter(Boolean);
 

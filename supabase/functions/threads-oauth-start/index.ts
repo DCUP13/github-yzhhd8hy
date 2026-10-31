@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const SCOPE = "threads_basic,threads_content_publish,threads_manage_insights,threads_delete";
+const SCOPE = "threads_basic,threads_content_publish,threads_manage_insights,threads_manage_replies,threads_delete";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
