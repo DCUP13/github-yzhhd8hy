@@ -791,6 +791,8 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
                       placeholder={formData.category === 'LinkedIn'
                         ? 'How should the post be written? e.g. Open with a contrarian hook about {{topic}}, share one personal story, end with a question.'
+                        : formData.category === 'Threads'
+                        ? 'How should the Threads post be written? e.g. Share one quick, practical tip about {{topic}} in a casual tone. Keep it short and end with a question.'
                         : formData.category === 'Instagram Image Text'
                         ? 'How should the text on each photo read? e.g. Photo 1: a bold hook about {{topic}}. Middle photos: one tip each. Last photo: a call to action.'
                         : 'Write your autoresponder prompt here. Use {{variable_name}} for dynamic content.'}
@@ -931,6 +933,10 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                   {formData.category === 'LinkedIn' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
                       <strong>LinkedIn placeholders:</strong> {`{{topic}}`} (the slot's topic), {`{{voice}}`} (the slot's voice sample), {`{{sample:Sample name}}`} (any voice sample by name). Import this prompt into a post slot from LinkedIn &gt; Prompt Plans.
+                    </p>
+                  ) : formData.category === 'Threads' ? (
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      <strong>Threads placeholders:</strong> {`{{topic}}`} (the post's topic), {`{{voice}}`} (the post's voice sample). Posts are kept under 500 characters automatically, and any saved link is added at the end. Pick this prompt in Threads &gt; Prompt Plans when editing a post slot, or in the new post window under Write with AI.
                     </p>
                   ) : formData.category === 'Instagram Image Text' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
