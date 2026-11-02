@@ -1,9 +1,10 @@
 import React from 'react';
 import { PublicLayout } from './PublicLayout';
+import { SocialStudioSection } from './SocialStudio';
 import {
   Search, Users, FileText, Zap, Bot, BarChart3,
   Send, Mail, Shield, ArrowRight, Database,
-  MessageSquare, Globe, Clock, CheckCircle2
+  MessageSquare, Instagram, Linkedin, AtSign, UsersRound
 } from 'lucide-react';
 import type { PublicRoute } from '../../lib/router';
 
@@ -59,15 +60,19 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
     { num: '4', icon: Send, title: 'Send', body: 'Launch campaigns with time-windowed, throttled sending through your connected email accounts. Atomic queue processing prevents duplicate sends. Daily limits enforced per sender.' },
     { num: '5', icon: BarChart3, title: 'Track', body: 'Monitor delivery, open, click, bounce, and reply rates. Per-sender breakdowns show which accounts perform best. Time-period filtering for trend analysis.' },
     { num: '6', icon: Bot, title: 'Respond', body: 'AI auto-responder handles inbound replies using your custom prompts. Two-step mode for complex scenarios. Drafts saved for review before sending.' },
+    { num: '7', icon: Instagram, title: 'Stay Top of Mind', body: 'Weekly prompt plans write and publish posts to Instagram, LinkedIn, and Threads, so your leads keep seeing your name between emails.' },
   ];
 
   const additionalFeatures = [
     { icon: Mail, title: 'Multi-Sender Routing', body: 'Send through multiple connected email accounts with automatic routing based on the from address. Connect several sender accounts for higher volume and better deliverability.', iconColor: 'text-om-gold' },
     { icon: BarChart3, title: 'Analytics Dashboard', body: 'Track total sent, delivered, opened, clicked, bounced, failed, and complained. Delivery rate, open rate, click rate, bounce rate, and reply rate. Per-sender performance comparison. 7-day, 30-day, and all-time views.', iconColor: 'text-om-forest' },
     { icon: Database, title: 'Data Quality System', body: 'Weighted field scoring with configurable required, important, and optional tiers. Campaigns blocked automatically if data quality falls below your threshold. Placeholder fallback system for missing values. Per-field missing statistics.', iconColor: 'text-om-mahogany' },
-    { icon: MessageSquare, title: 'Social Engagement Capture', body: 'Connect your social accounts to capture comments, direct messages, and mentions automatically. All engagement events stored with sender info, message text, and media references — nothing slips through the cracks.', iconColor: 'text-om-gold-dark' },
-    { icon: Bot, title: 'Custom AI Prompts', body: 'Define your own prompts for the autoresponder. Categorize by use case. Add business data context. Two-step mode for complex reply scenarios. AI-assisted prompt generation by category.', iconColor: 'text-om-forest' },
+    { icon: MessageSquare, title: 'Instagram Autoresponder', body: 'Reply to comments and DMs automatically with keyword rules and multi-step conversation flows. Response delays feel human, and loop prevention stops bots talking to bots.', iconColor: 'text-om-gold-dark' },
+    { icon: Bot, title: 'Custom AI Prompts', body: 'Define your own prompts for email, Instagram, LinkedIn, and Threads. Categorize by use case. Two-step mode for complex reply scenarios. Import a saved prompt into any post and tweak it just for that post.', iconColor: 'text-om-forest' },
     { icon: Shield, title: 'Reply Tracking', body: 'Inbound replies linked back to the original campaign email via reply tracking. See which campaigns generate responses. Reply rate calculated across all sent emails. Never lose track of a conversation.', iconColor: 'text-om-mahogany' },
+    { icon: Mail, title: 'Threaded Inbox', body: 'Replies are grouped into conversations with read status, open attribution, and link click tracking, so you see the full history with every lead.', iconColor: 'text-om-gold' },
+    { icon: UsersRound, title: 'Team Workspace', body: 'Invite team members with roles, chat in-app, and share templates, prompts, and Instagram settings across your organization.', iconColor: 'text-om-forest' },
+    { icon: Zap, title: 'Media Library', body: 'Upload photos and videos once. AI picks fresh images for each post and avoids repeating ones you used recently.', iconColor: 'text-om-mahogany' },
   ];
 
   const integrations = [
@@ -75,7 +80,9 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
     { name: 'Email Delivery', desc: 'Campaign sending', icon: Send },
     { name: 'Connected Mailboxes', desc: 'Send from your address', icon: Mail },
     { name: 'AI Content Engine', desc: 'Smart writing & replies', icon: Bot },
-    { name: 'Social Engagement', desc: 'Comments & messages', icon: MessageSquare },
+    { name: 'Instagram', desc: 'Posts, comments & DMs', icon: Instagram },
+    { name: 'LinkedIn', desc: 'Scheduled posts & analytics', icon: Linkedin },
+    { name: 'Threads', desc: 'Multi-post threads', icon: AtSign },
   ];
 
   return (
@@ -87,13 +94,13 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
             Features
           </p>
           <h1 className="text-3xl md:text-5xl lg:text-6xl font-display font-semibold text-om-forest-deep mb-6">
-            End-to-End Outreach Automation
+            End-to-End Outreach and Social Automation
           </h1>
           <p
             className="text-xl md:text-2xl text-om-mahogany max-w-3xl mx-auto"
             style={{ fontFamily: "'EB Garamond', serif" }}
           >
-            From finding leads to auto-responding to replies, every step of your real estate outreach pipeline in one platform.
+            From finding leads to auto-responding to replies to posting on social, every step of your real estate growth engine in one platform.
           </p>
         </div>
       </section>
@@ -145,7 +152,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
               From Lead to Reply
             </h2>
             <p className="text-lg text-om-mahogany max-w-2xl mx-auto" style={{ fontFamily: "'EB Garamond', serif" }}>
-              Six stages, fully automated. Each step feeds the next.
+              Seven stages, fully automated. Each step feeds the next.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -167,6 +174,9 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
           </div>
         </div>
       </section>
+
+      {/* Social Content Studio */}
+      <SocialStudioSection detailed onNavigate={onNavigate} />
 
       {/* Additional Features */}
       <section className="py-14 px-4 sm:px-6 bg-om-parchment">
@@ -207,7 +217,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
               Connect the tools and services you already use — all in one place.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {integrations.map((integration) => {
               const Icon = integration.icon;
               return (

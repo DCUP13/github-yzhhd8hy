@@ -50,7 +50,7 @@ export function Footer({ onNavigate }: FooterProps) {
               className="text-sm text-om-tan leading-relaxed max-w-xs"
               style={{ fontFamily: "'EB Garamond', serif" }}
             >
-              Transform your email management with AI-powered automation.
+              AI-powered email outreach and social posting for Instagram, LinkedIn, and Threads.
             </p>
           </div>
 
