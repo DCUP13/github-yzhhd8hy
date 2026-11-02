@@ -11,6 +11,7 @@ import { Contacts } from './components/Contacts';
 import { Analytics } from './components/Analytics';
 import { Instagram } from './components/Instagram';
 import { LinkedIn } from './components/LinkedIn';
+import { Threads } from './components/Threads';
 import { TeamView as TeamPage } from './components/TeamPage';
 import { SupportPage } from './components/SupportPage';
 import { useUnreadChatCount } from './lib/useUnreadChatCount';
@@ -50,11 +51,12 @@ export const TemplatesContext = createContext<{
   fetchTemplates: async () => {},
 });
 
-export type FeatureFlags = { instagram: boolean; linkedin: boolean };
+export type FeatureFlags = { instagram: boolean; linkedin: boolean; threads: boolean };
 
 export const FeatureFlagsContext = createContext<FeatureFlags>({
   instagram: false,
   linkedin: false,
+  threads: false,
 });
 
 function FeatureNotEnabled({ featureName }: { featureName: string }) {
@@ -84,7 +86,7 @@ export default function App() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({ instagram: false, linkedin: false });
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({ instagram: false, linkedin: false, threads: false });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const unreadChatCount = useUnreadChatCount();
@@ -104,12 +106,13 @@ export default function App() {
 
       if (data?.role === 'super_admin') {
         setIsSuperAdmin(true);
-        setFeatureFlags({ instagram: true, linkedin: true });
+        setFeatureFlags({ instagram: true, linkedin: true, threads: true });
       } else {
         const flags = data?.feature_flags as Record<string, boolean> | null;
         setFeatureFlags({
           instagram: !!flags?.instagram,
           linkedin: !!flags?.linkedin,
+          threads: !!flags?.threads,
         });
       }
     } catch (error) {
@@ -386,6 +389,13 @@ export default function App() {
                       <LinkedIn onSignOut={handleSignOut} currentView={appView} queryParams={queryParams} navigateToApp={navigateToApp} />
                     ) : (
                       <FeatureNotEnabled featureName="LinkedIn" />
+                    )
+                  )}
+                  {appView === 'threads' && (
+                    isSuperAdmin || featureFlags.threads ? (
+                      <Threads onSignOut={handleSignOut} currentView={appView} queryParams={queryParams} navigateToApp={navigateToApp} />
+                    ) : (
+                      <FeatureNotEnabled featureName="Threads" />
                     )
                   )}
                   {appView === 'team' && (

@@ -8,7 +8,7 @@ export type PublicRoute =
 
 export type AppView =
   | 'dashboard' | 'app' | 'settings' | 'templates' | 'emails' | 'addresses'
-  | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'linkedin' | 'team' | 'support';
+  | 'prompts' | 'contacts' | 'analytics' | 'instagram' | 'linkedin' | 'threads' | 'team' | 'support';
 
 const ROUTE_PATHS: Record<PublicRoute, string> = {
   home: '/',
@@ -38,6 +38,7 @@ const APP_PATHS: Record<AppView, string> = {
   analytics: '/app/analytics',
   instagram: '/app/instagram',
   linkedin: '/app/linkedin',
+  threads: '/app/threads',
   team: '/app/team',
   support: '/app/support',
 };

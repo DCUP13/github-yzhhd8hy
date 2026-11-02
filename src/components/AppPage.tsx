@@ -746,13 +746,13 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
       <div className="max-w-5xl mx-auto w-full min-w-0">
         {!currentCampaign ? (
           <>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <Layout className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Campaigns</h1>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                <div className="flex items-center justify-between min-[420px]:justify-start gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg flex-1 min-[420px]:flex-none">
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Test Mode
                   </span>
@@ -773,7 +773,7 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
                 </div>
                 <button
                   onClick={handleCreateCampaign}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center justify-center whitespace-nowrap px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Create Campaign
@@ -956,32 +956,32 @@ export function AppPage({ onSignOut, currentView }: AppPageProps) {
           </>
         ) : (
           <div className="space-y-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Layout className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <Layout className="w-6 h-6 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                 <input
                   type="text"
                   value={currentCampaign.name}
                   onChange={(e) => handleUpdateCampaign({ name: e.target.value })}
-                  className="text-2xl font-bold bg-transparent border-none focus:ring-0 text-gray-900 dark:text-white"
+                  className="min-w-0 w-full text-xl sm:text-2xl font-bold bg-transparent border-none focus:ring-0 text-gray-900 dark:text-white"
                   placeholder="Campaign Name"
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
                 <button
                   onClick={() => {
                     setCurrentCampaign(null);
                     setSelectedState('');
                     setSelectedCity('');
                   }}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                  className="inline-flex items-center justify-center whitespace-nowrap px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 sm:border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </button>
                 <button
                   onClick={() => handleSaveCampaign(currentCampaign.name)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center justify-center whitespace-nowrap px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   Save Campaign
