@@ -11,6 +11,8 @@ const REALTIME_TABLES = [
   'instagram_insights_snapshots',
   'linkedin_accounts',
   'linkedin_analytics_snapshots',
+  'threads_accounts',
+  'threads_posts',
 ];
 
 interface DashboardStats {
@@ -72,11 +74,30 @@ export interface LinkedInSummary {
   postCount: number;
 }
 
+export interface ThreadsAccountDetail {
+  username: string;
+  followersCount: number;
+}
+
+export interface ThreadsSummary {
+  accountCount: number;
+  totalFollowers: number;
+  totalViews: number;
+  totalLikes: number;
+  totalReplies: number;
+  totalReposts: number;
+  totalQuotes: number;
+  totalShares: number;
+  publishedCount: number;
+  accounts: ThreadsAccountDetail[];
+}
+
 interface DashboardContextType {
   stats: DashboardStats;
   emailAnalytics: EmailAnalytics | null;
   instagramSummary: InstagramSummary | null;
   linkedinSummary: LinkedInSummary | null;
+  threadsSummary: ThreadsSummary | null;
   refreshStats: () => Promise<void>;
 }
 
@@ -134,6 +155,19 @@ const emptyLinkedInSummary: LinkedInSummary = {
   postCount: 0,
 };
 
+const emptyThreadsSummary: ThreadsSummary = {
+  accountCount: 0,
+  totalFollowers: 0,
+  totalViews: 0,
+  totalLikes: 0,
+  totalReplies: 0,
+  totalReposts: 0,
+  totalQuotes: 0,
+  totalShares: 0,
+  publishedCount: 0,
+  accounts: [],
+};
+
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = useState<DashboardStats>({
     totalEmailsRemaining: 0,
@@ -146,6 +180,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [emailAnalytics, setEmailAnalytics] = useState<EmailAnalytics | null>(null);
   const [instagramSummary, setInstagramSummary] = useState<InstagramSummary | null>(null);
   const [linkedinSummary, setLinkedInSummary] = useState<LinkedInSummary | null>(null);
+  const [threadsSummary, setThreadsSummary] = useState<ThreadsSummary | null>(null);
 
   const fetchStats = async () => {
     try {
@@ -381,17 +416,65 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const fetchThreadsSummary = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: accounts } = await supabase
+        .from('threads_accounts')
+        .select('id, username, followers_count')
+        .eq('user_id', user.id)
+        .eq('connected', true);
+
+      if (!accounts || accounts.length === 0) {
+        setThreadsSummary(emptyThreadsSummary);
+        return;
+      }
+
+      const accountDetails: ThreadsAccountDetail[] = accounts.map(a => ({
+        username: a.username || 'Unknown',
+        followersCount: a.followers_count ?? 0,
+      }));
+
+      const { data: posts } = await supabase
+        .from('threads_posts')
+        .select('views, likes, replies, reposts, quotes, shares, status')
+        .in('account_ids', accounts.map(a => a.id))
+        .eq('status', 'published');
+
+      const publishedPosts = posts ?? [];
+
+      setThreadsSummary({
+        accountCount: accounts.length,
+        totalFollowers: accountDetails.reduce((sum, a) => sum + a.followersCount, 0),
+        totalViews: publishedPosts.reduce((sum, p) => sum + (p.views ?? 0), 0),
+        totalLikes: publishedPosts.reduce((sum, p) => sum + (p.likes ?? 0), 0),
+        totalReplies: publishedPosts.reduce((sum, p) => sum + (p.replies ?? 0), 0),
+        totalReposts: publishedPosts.reduce((sum, p) => sum + (p.reposts ?? 0), 0),
+        totalQuotes: publishedPosts.reduce((sum, p) => sum + (p.quotes ?? 0), 0),
+        totalShares: publishedPosts.reduce((sum, p) => sum + (p.shares ?? 0), 0),
+        publishedCount: publishedPosts.length,
+        accounts: accountDetails,
+      });
+    } catch (error) {
+      console.error('Error fetching Threads summary:', error);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
     fetchEmailAnalytics();
     fetchInstagramSummary();
     fetchLinkedInSummary();
+    fetchThreadsSummary();
   }, []);
 
   useRealtimeRefresh('dashboard_live', REALTIME_TABLES, (table) => {
     if (table === 'dashboard_statistics') fetchStats();
     else if (table.startsWith('instagram_')) fetchInstagramSummary();
     else if (table.startsWith('linkedin_')) fetchLinkedInSummary();
+    else if (table.startsWith('threads_')) fetchThreadsSummary();
     else fetchEmailAnalytics();
   });
 
@@ -400,11 +483,13 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     emailAnalytics,
     instagramSummary,
     linkedinSummary,
+    threadsSummary,
     refreshStats: async () => {
       await fetchStats();
       await fetchEmailAnalytics();
       await fetchInstagramSummary();
       await fetchLinkedInSummary();
+      await fetchThreadsSummary();
     }
   };
 
