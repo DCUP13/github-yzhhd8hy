@@ -35,6 +35,7 @@ interface WebhookEvent {
   recipient_id: string | null;
   reply_text: string | null;
   replied_at: string | null;
+  read_at: string | null;
 }
 
 interface AutoRule {
@@ -79,6 +80,7 @@ interface IgAccount {
   user_id: string;
   owner_profile_id?: string | null;
   page_scoped_id?: string | null;
+  last_incoming_at?: string | null;
 }
 
 interface Snapshot {
@@ -1502,8 +1504,10 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                                   )}
                                   <span className="text-[10px] text-gray-400">{formatTime(event.created_at)}</span>
                                   {isOutgoing && event.replied_at && (
-                                    <CheckCheck className="w-3 h-3 text-pink-400" />
-                                  )}
+                                    event.read_at
+                                      ? <span className="flex items-center gap-0.5 text-[10px] text-pink-400">Read <CheckCheck className="w-3 h-3" /></span>
+                                      : <CheckCheck className="w-3 h-3 text-gray-400" />
+                                  )
                                 </div>
                               </div>
                             </div>
@@ -1514,7 +1518,9 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
 
                 {/* 24-hour window warning */}
                 {selectedConversation.type === 'dm' && (() => {
-                  const lastIncoming = selectedConversation.lastIncomingAt;
+                  const lastIncoming = selectedConversation.lastIncomingAt
+                    ?? selectedAccount?.last_incoming_at
+                    ?? null;
                   if (!lastIncoming) return null;
                   const hoursSince = (Date.now() - new Date(lastIncoming).getTime()) / 3600000;
                   const windowClosed = hoursSince > 24;

@@ -90,7 +90,31 @@ Deno.serve(async (req: Request) => {
 
         const messaging: any[] = entry?.messaging ?? [];
         for (const msg of messaging) {
-          if (msg.read || msg.delivery || msg.reaction || msg.message_edit) continue;
+          // Process read receipts — mark outgoing messages as read
+          if (msg.read) {
+            const readWatermark = msg.read.watermark ?? null;
+            const readerId = msg?.sender?.id ?? null;
+            if (readWatermark && readerId && account) {
+              // The reader is the account owner (sender of the read event).
+              // Mark all outgoing messages to this recipient as read.
+              const recipientOfRead = msg?.recipient?.id ?? null;
+              if (recipientOfRead) {
+                await supabaseClient
+                  .from("instagram_webhook_events")
+                  .update({ read_at: new Date(Number(readWatermark)).toISOString() })
+                  .eq("ig_user_id", igUserId ?? "")
+                  .eq("direction", "outgoing")
+                  .eq("recipient_id", recipientOfRead)
+                  .is("read_at", null)
+                  .lte("created_at", new Date(Number(readWatermark)).toISOString());
+              }
+            }
+            continue;
+          }
+
+          // Skip delivery confirmations and reactions — we don't track these yet
+          if (msg.delivery || msg.reaction || msg.message_edit) continue;
+
           const messageText = msg?.message?.text ?? null;
           if (!messageText && !msg?.message?.attachment) continue;
           const isEcho = msg?.message?.is_echo === true;
@@ -107,6 +131,15 @@ Deno.serve(async (req: Request) => {
             direction: isSelfMessage ? "incoming" : (isEcho ? "outgoing" : "incoming"), recipient_id: recipientId,
             raw_event: msg, user_id: userId,
           }, accessToken, otherPartyId, true);
+
+          // Update last_incoming_at on the account when a real incoming DM
+          // arrives — this tracks the 24-hour messaging window.
+          if ((!isEcho || isSelfMessage) && account && storedEventId) {
+            await supabaseClient
+              .from("instagram_accounts")
+              .update({ last_incoming_at: new Date().toISOString() })
+              .eq("id", account.id);
+          }
 
           // For self-messages, the webhook entry.id is the recipient ID (e.g.
           // the page inbox ID), which may not match any stored account field.
