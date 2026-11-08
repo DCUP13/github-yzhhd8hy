@@ -24,13 +24,13 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
     {
       icon: Users,
       title: 'Contact Enrichment',
-      body: 'Fetch detailed profiles for individual prospects to extract email addresses, phone numbers (cell, business), and business names. Relevant details are automatically linked to each contact, giving you address, price, and listing URL for personalized outreach when available.',
+      body: 'Fetch detailed profiles for individual prospects to extract email addresses, phone numbers (cell, business), and business names. Relevant details are automatically linked to each contact for personalized outreach when available.',
       iconColor: 'text-om-forest',
     },
     {
       icon: FileText,
       title: 'Template Builder',
-      body: 'Create email and letter templates in HTML, DOCX, or PDF format. Drag-and-drop editor with rich text support. Merge variables organized into Contact Data, Listing Data, and Campaign/Sender Data sections. Conditional sections with {{#if}} logic. Import from HTML, DOCX, PDF, or JSON. Export back out when you need.',
+      body: 'Create email and letter templates in HTML, DOCX, or PDF format. Drag-and-drop editor with rich text support. Merge variables organized into Contact Data, Business Data, and Campaign/Sender Data sections. Conditional sections with {{#if}} logic. Import from HTML, DOCX, PDF, or JSON. Export back out when you need.',
       iconColor: 'text-om-mahogany',
     },
     {
@@ -56,7 +56,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
   const workflowSteps = [
     { num: '1', icon: Search, title: 'Discover', body: 'Pull prospect contacts from public data sources. Configure your scope, hit start, and watch contacts populate with names, profiles, and screen names.' },
     { num: '2', icon: Users, title: 'Enrich', body: 'Fetch detailed profiles to extract emails, phone numbers, and business info. Relevant details auto-linked to each contact for personalized merge fields.' },
-    { num: '3', icon: FileText, title: 'Template', body: 'Build templates with merge variables for contact data, listing details, and campaign terms. Use AI generation or the drag-and-drop editor. Preview in test mode.' },
+    { num: '3', icon: FileText, title: 'Template', body: 'Build templates with merge variables for contact data, business details, and campaign terms. Use AI generation or the drag-and-drop editor. Preview in test mode.' },
     { num: '4', icon: Send, title: 'Send', body: 'Launch campaigns with time-windowed, throttled sending through your connected email accounts. Atomic queue processing prevents duplicate sends. Daily limits enforced per sender.' },
     { num: '5', icon: BarChart3, title: 'Track', body: 'Monitor delivery, open, click, bounce, and reply rates. Per-sender breakdowns show which accounts perform best. Time-period filtering for trend analysis.' },
     { num: '6', icon: Bot, title: 'Respond', body: 'AI auto-responder handles inbound replies using your custom prompts. Two-step mode for complex scenarios. Drafts saved for review before sending.' },
@@ -76,7 +76,7 @@ export function FeaturesPage({ currentRoute, onNavigate }: FeaturesPageProps) {
   ];
 
   const integrations = [
-    { name: 'Public Listing Data', desc: 'Lead discovery', icon: Search },
+    { name: 'Public Data Sources', desc: 'Lead discovery', icon: Search },
     { name: 'Email Delivery', desc: 'Campaign sending', icon: Send },
     { name: 'Connected Mailboxes', desc: 'Send from your address', icon: Mail },
     { name: 'AI Content Engine', desc: 'Smart writing & replies', icon: Bot },

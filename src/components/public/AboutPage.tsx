@@ -80,7 +80,7 @@ export function AboutPage({ currentRoute, onNavigate }: AboutPageProps) {
         </div>
       </section>
 
-      {/* Built for Real Estate */}
+      {/* Built for Outreach */}
       <section className="py-14 px-4 sm:px-6 bg-om-parchment">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-10">

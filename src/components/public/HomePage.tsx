@@ -32,7 +32,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
   const features = [
     { icon: Search, title: 'Lead Discovery', body: 'Find prospect contacts from public data sources. Bulk-harvest names, profile URLs, and business info in minutes.' },
     { icon: Users, title: 'Contact Enrichment', body: 'Fetch detailed profiles to extract email addresses, phone numbers, and business names. Relevant details linked to each contact.' },
-    { icon: FileText, title: 'Template Builder', body: 'Create HTML, DOCX, or PDF templates with merge variables for contact data, listing details, and campaign terms. AI-generated templates available.' },
+    { icon: FileText, title: 'Template Builder', body: 'Create HTML, DOCX, or PDF templates with merge variables for contact data, business details, and campaign terms. AI-generated templates available.' },
     { icon: Zap, title: 'Campaign Scheduling', body: 'Set send time windows, per-campaign delays between emails, and test mode for preview drafts. Smart fallbacks for missing data.' },
     { icon: Bot, title: 'AI Autoresponder', body: 'AI generates contextually relevant replies to inbound emails. Single or two-step prompt modes. Per-domain enablement.' },
     { icon: BarChart3, title: 'Analytics Dashboard', body: 'Track delivery, open, click, bounce, and reply rates. Per-sender breakdowns. Time-period filtering for performance trends.' },
