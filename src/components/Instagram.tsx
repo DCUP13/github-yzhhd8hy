@@ -1504,10 +1504,12 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
                                   )}
                                   <span className="text-[10px] text-gray-400">{formatTime(event.created_at)}</span>
                                   {isOutgoing && event.replied_at && (
-                                    event.read_at
-                                      ? <span className="flex items-center gap-0.5 text-[10px] text-pink-400">Read <CheckCheck className="w-3 h-3" /></span>
-                                      : <CheckCheck className="w-3 h-3 text-gray-400" />
-                                  )
+                                    event.read_at ? (
+                                      <span className="flex items-center gap-0.5 text-[10px] text-pink-400">Read <CheckCheck className="w-3 h-3" /></span>
+                                    ) : (
+                                      <CheckCheck className="w-3 h-3 text-gray-400" />
+                                    )
+                                  )}
                                 </div>
                               </div>
                             </div>
