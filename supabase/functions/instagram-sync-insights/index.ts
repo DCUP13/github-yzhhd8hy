@@ -353,19 +353,22 @@ Deno.serve(async (req: Request) => {
     }
 
     // 5. Update account with latest profile data and clean token
+    const accountUpdate: Record<string, unknown> = {
+      profile_picture_url: profile.profile_picture_url ?? null,
+      followers_count: profile.followers_count ?? null,
+      follows_count: profile.follows_count ?? null,
+      media_count: profile.media_count ?? null,
+      access_token: accessToken,
+      token_expired: false,
+      connected: true,
+      updated_at: new Date().toISOString(),
+    };
+    if (profile.username && String(profile.username).trim()) {
+      accountUpdate.username = String(profile.username);
+    }
     await supabaseClient
       .from("instagram_accounts")
-      .update({
-        username: profile.username ?? account.username,
-        profile_picture_url: profile.profile_picture_url ?? null,
-        followers_count: profile.followers_count ?? null,
-        follows_count: profile.follows_count ?? null,
-        media_count: profile.media_count ?? null,
-        access_token: accessToken,
-        token_expired: false,
-        connected: true,
-        updated_at: new Date().toISOString(),
-      })
+      .update(accountUpdate)
       .eq("id", accountId);
 
     // 6. Update last_refresh_at in refresh settings

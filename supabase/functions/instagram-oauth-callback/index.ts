@@ -148,7 +148,7 @@ Deno.serve(async (req: Request) => {
     // Try the user_id first, then fall back to /me if it fails
     const profileFields = "fields=username,profile_picture_url,followers_count,follows_count,media_count";
     let profileRes = await fetch(
-      `https://graph.instagram.com/v26.0/${igUserId}?${profileFields}&access_token=${longLivedToken}`
+      `https://graph.instagram.com/v21.0/${igUserId}?${profileFields}&access_token=${longLivedToken}`
     );
 
     let profile: Record<string, unknown> = {};
@@ -160,7 +160,7 @@ Deno.serve(async (req: Request) => {
     } else {
       // Try /me as fallback — sometimes the user_id from token exchange differs
       const meRes = await fetch(
-        `https://graph.instagram.com/v26.0/me?${profileFields}&access_token=${longLivedToken}`
+        `https://graph.instagram.com/v21.0/me?${profileFields}&access_token=${longLivedToken}`
       );
       if (meRes.ok) {
         profileRawText = await meRes.text();
@@ -202,20 +202,24 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (existingAccount) {
+        const updatePayload: Record<string, unknown> = {
+          ig_user_id: igAccount.ig_user_id,
+          access_token: igAccount.access_token,
+          connected: true,
+          auth_method: "oauth",
+          profile_picture_url: igAccount.profile_picture_url,
+          followers_count: igAccount.followers_count,
+          media_count: igAccount.media_count,
+          token_expired: false,
+          updated_at: new Date().toISOString(),
+        };
+        // Only overwrite the username if we actually got one from the API
+        if (igAccount.username && igAccount.username.trim()) {
+          updatePayload.username = igAccount.username;
+        }
         await supabaseClient
           .from("instagram_accounts")
-          .update({
-            ig_user_id: igAccount.ig_user_id,
-            username: igAccount.username || existingAccount.username,
-            access_token: igAccount.access_token,
-            connected: true,
-            auth_method: "oauth",
-            profile_picture_url: igAccount.profile_picture_url,
-            followers_count: igAccount.followers_count,
-            media_count: igAccount.media_count,
-            token_expired: false,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("id", reconnectAccountId);
         return Response.redirect(settingsUrl(`oauth=success`), 302);
       }

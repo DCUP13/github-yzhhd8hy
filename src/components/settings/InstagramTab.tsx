@@ -265,6 +265,14 @@ export function InstagramTab() {
         return;
       }
 
+      // Update account name immediately from sync response
+      const data = await response.json().catch(() => ({}));
+      if (data.account?.username) {
+        setAccounts(prev => prev.map(a =>
+          a.id === accountId ? { ...a, username: data.account.username, followers_count: data.account.followers_count ?? a.followers_count, media_count: data.account.media_count ?? a.media_count, profile_picture_url: data.account.profile_picture_url ?? a.profile_picture_url } : a
+        ));
+      }
+
       await fetchAccounts();
     } catch (error) {
       console.error('Error syncing insights:', error);

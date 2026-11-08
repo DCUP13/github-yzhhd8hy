@@ -438,8 +438,15 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         return;
       }
 
-      // The realtime subscription will update the UI when the snapshot is saved
-      // But also refresh to be safe
+      // Update the account name immediately from the sync response
+      const data = await response.json().catch(() => ({}));
+      if (data.account?.username) {
+        setAccounts(prev => prev.map(a =>
+          a.id === selectedAccount.id ? { ...a, username: data.account.username } : a
+        ));
+      }
+
+      // Re-fetch everything to get the full updated state
       setTimeout(() => {
         fetchData();
         setIsRefreshing(false);
