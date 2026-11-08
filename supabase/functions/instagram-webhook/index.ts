@@ -245,18 +245,33 @@ async function resolveAccount(
     .maybeSingle();
   if (byPageId) return byPageId;
 
+  // Try matching by owner_profile_id — when a user messages their own account,
+  // the webhook entry.id can be the owner's page-scoped ID.
+  const { data: byOwner } = await supabaseClient
+    .from("instagram_accounts")
+    .select("id, user_id, access_token, page_scoped_id, ig_user_id, username")
+    .eq("owner_profile_id", igUserId)
+    .maybeSingle();
+  if (byOwner) {
+    if (!byOwner.page_scoped_id) {
+      await supabaseClient
+        .from("instagram_accounts")
+        .update({ page_scoped_id: igUserId })
+        .eq("id", byOwner.id);
+    }
+    return byOwner;
+  }
+
   // No fuzzy matching — substring checks on numeric IDs cause false positives
   // when one account's ID happens to contain another's as a substring.
 
-  // Last resort: if there's exactly one account in total with no page_scoped_id
-  // yet, assume this webhook is for that account and persist the mapping.
-  // This is only safe when there's truly one unmatched account — otherwise
-  // we'd assign events to the wrong account.
+  // Last resort: if there's exactly one account with no page_scoped_id yet,
+  // assume this webhook is for that account and persist the mapping.
   const { data: allAccounts } = await supabaseClient
     .from("instagram_accounts")
     .select("id, user_id, access_token, page_scoped_id, ig_user_id, username");
   const unmatched = (allAccounts ?? []).filter((a: any) => !a.page_scoped_id);
-  if (unmatched.length === 1 && (allAccounts ?? []).length === 1) {
+  if (unmatched.length === 1) {
     const acct = unmatched[0];
     await supabaseClient
       .from("instagram_accounts")
