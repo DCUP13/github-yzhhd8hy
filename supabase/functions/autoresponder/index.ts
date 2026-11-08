@@ -38,6 +38,23 @@ function fillPlaceholders(content: string, vars: Record<string, string>): string
 }
 
 /**
+ * Loads FAQs for a user and formats them as a single text block for the {{faq}} placeholder.
+ */
+async function loadFAQ(supabase: any, userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from("faqs")
+      .select("question, answer")
+      .eq("user_id", userId)
+      .order("sort_order", { ascending: true });
+    if (!data || data.length === 0) return "";
+    return data.map((f: { question: string; answer: string }) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Calls OpenAI's gpt-4o model to generate text from a prompt.
  * Uses the npm:openai package and the OPENAI_API_KEY edge function secret,
  * matching the pattern in the generate-template edge function.
@@ -76,6 +93,7 @@ async function runPrompt(
     email: string;
     conversation: string;
     customVariables?: Record<string, string>;
+    faq?: string;
   },
 ): Promise<string> {
   const businessData = prompt.use_business_data ? (prompt.business_data || '') : '';
@@ -83,6 +101,7 @@ async function runPrompt(
     business_data: businessData,
     email: context.email,
     conversation: context.conversation,
+    faq: context.faq || '',
     ...context.customVariables,
   };
 
@@ -216,10 +235,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const faqText = await loadFAQ(supabase, prompt.user_id);
+
     const generatedReply = await runPrompt(prompt, {
       email: email_content || '',
       conversation: conversation || '',
       customVariables: custom_variables,
+      faq: faqText,
     });
 
     // If an outbox email id was provided, store the generated reply as a draft reply

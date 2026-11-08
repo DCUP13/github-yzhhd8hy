@@ -99,8 +99,18 @@ function splitChunks(text: string, max: number): string[] {
   return out;
 }
 
-function fill(template: string, topic: string, voice: string): string {
-  return template.replaceAll("{{topic}}", topic || "a topic of your choice").replaceAll("{{voice}}", voice || "friendly and natural");
+function fill(template: string, topic: string, voice: string, faq = ""): string {
+  return template.replaceAll("{{topic}}", topic || "a topic of your choice").replaceAll("{{voice}}", voice || "friendly and natural").replaceAll("{{faq}}", faq);
+}
+
+async function loadFAQ(supabase: SupabaseClient, userId: string): Promise<string> {
+  try {
+    const { data } = await supabase.from("faqs").select("question, answer").eq("user_id", userId).order("sort_order", { ascending: true });
+    if (!data || data.length === 0) return "";
+    return (data as { question: string; answer: string }[]).map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
+  } catch {
+    return "";
+  }
 }
 
 async function pickPhotos(supabase: SupabaseClient, post: Post): Promise<{ ids: string[]; urls: string[] }> {
@@ -155,6 +165,7 @@ async function generatePost(supabase: SupabaseClient, id: string, parts: Parts, 
       ]);
       const topic = post.topic_name || "";
       const voiceText = (voice.data as { content?: string } | null)?.content?.trim() || "";
+      const faqText = await loadFAQ(supabase, post.user_id);
       const linkUrl = (link.data as { url?: string } | null)?.url || "";
       const budget = MAX_CHARS - (linkUrl ? linkUrl.length + 2 : 0) - 10;
       const base = post.thread_prompt?.trim()
@@ -192,7 +203,7 @@ async function generatePost(supabase: SupabaseClient, id: string, parts: Parts, 
         'Return JSON: {"text": "main post", "replies": ["follow-up 1", ...]}',
       ].filter(Boolean).join("\n");
       const user = [
-        fill(base, topic, voiceText),
+        fill(base, topic, voiceText, faqText),
         topic ? `Topic: ${topic}` : "",
         voiceText ? `Match the style of this writing sample:\n${voiceText.slice(0, 3000)}` : "",
         extra ? `Extra instructions: ${extra}` : "",

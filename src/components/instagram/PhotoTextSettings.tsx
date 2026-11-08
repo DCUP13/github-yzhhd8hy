@@ -103,7 +103,7 @@ export function PhotoTextSettings({
               ? 'Leave empty to use the built-in style: a hook on the first photo, one point per photo, a call to action on the last.'
               : 'Leave empty to use the built-in style: a short headline for the cover photo.'}
             rows={4}
-            tokens={['{{topic}}', '{{voice}}', '{{photo_count}}']}
+            tokens={['{{topic}}', '{{voice}}', '{{photo_count}}', '{{faq}}']}
             onChange={onPromptTextChange}
             onImport={onPromptImported}
           />

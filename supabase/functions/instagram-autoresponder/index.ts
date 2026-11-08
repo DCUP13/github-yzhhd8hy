@@ -28,6 +28,20 @@ function fillPlaceholders(content: string, vars: Record<string, string>): string
   return result;
 }
 
+async function loadFAQ(supabase: any, userId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from("faqs")
+      .select("question, answer")
+      .eq("user_id", userId)
+      .order("sort_order", { ascending: true });
+    if (!data || data.length === 0) return "";
+    return data.map((f: { question: string; answer: string }) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
+  } catch {
+    return "";
+  }
+}
+
 async function callAI(systemPrompt: string, userPrompt: string): Promise<string> {
   const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
 
@@ -51,6 +65,7 @@ async function runPrompt(
     message: string;
     conversation: string;
     senderUsername?: string;
+    faq?: string;
   },
 ): Promise<string> {
   const businessData = prompt.use_business_data ? (prompt.business_data || '') : '';
@@ -59,6 +74,7 @@ async function runPrompt(
     message: context.message,
     conversation: context.conversation,
     sender_username: context.senderUsername || '',
+    faq: context.faq || '',
   };
 
   if (prompt.reply_mode === 'two_step' && prompt.step1_content && prompt.step2_content) {
@@ -366,10 +382,12 @@ async function processQueueItem(supabase: any, queue_id: string): Promise<any> {
   }
 
   // Generate the AI reply with all pending messages as context
+  const faqText = await loadFAQ(supabase, prompt.user_id);
   const generatedReply = await runPrompt(prompt, {
     message: newMessagesText,
     conversation: conversationText,
     senderUsername: pendingMessages[0]?.sender_username || '',
+    faq: faqText,
   });
 
   // Send the reply via Instagram Graph API

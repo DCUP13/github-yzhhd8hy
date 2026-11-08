@@ -197,6 +197,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
           <Quote className="w-3 h-3" /> {s.name}
         </button>
       ))}
+      <button type="button" onClick={() => insertToken(target, '{{faq}}')} className="px-2 py-0.5 text-xs rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition-colors">FAQ</button>
       {samples.length === 0 && <span className="text-xs text-gray-400">Add voice samples to insert their text here</span>}
     </div>
   );

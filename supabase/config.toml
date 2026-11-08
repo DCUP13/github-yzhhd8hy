@@ -1,6 +1,9 @@
 [functions.generate-s3-upload-url]
 verify_jwt = true
 
+[functions.autoresponder]
+verify_jwt = false
+
 [functions.generate-post-variations]
 verify_jwt = true
 

@@ -932,23 +932,23 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
                   {formData.category === 'LinkedIn' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      <strong>LinkedIn placeholders:</strong> {`{{topic}}`} (the slot's topic), {`{{voice}}`} (the slot's voice sample), {`{{sample:Sample name}}`} (any voice sample by name). Import this prompt into a post slot from LinkedIn &gt; Prompt Plans.
+                      <strong>LinkedIn placeholders:</strong> {`{{topic}}`} (the slot's topic), {`{{voice}}`} (the slot's voice sample), {`{{sample:Sample name}}`} (any voice sample by name), {`{{faq}}`} (your FAQ entries from the FAQ page). Import this prompt into a post slot from LinkedIn &gt; Prompt Plans.
                     </p>
                   ) : formData.category === 'Threads' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      <strong>Threads placeholders:</strong> {`{{topic}}`} (the post's topic), {`{{voice}}`} (the post's voice sample). Posts are kept under 500 characters automatically, and any saved link is added at the end. Pick this prompt in Threads &gt; Prompt Plans when editing a post slot, or in the new post window under Write with AI.
+                      <strong>Threads placeholders:</strong> {`{{topic}}`} (the post's topic), {`{{voice}}`} (the post's voice sample), {`{{faq}}`} (your FAQ entries from the FAQ page). Posts are kept under 500 characters automatically, and any saved link is added at the end. Pick this prompt in Threads &gt; Prompt Plans when editing a post slot, or in the new post window under Write with AI.
                     </p>
                   ) : formData.category === 'Instagram Image Text' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      <strong>Image text placeholders:</strong> {`{{topic}}`} (the post's topic), {`{{voice}}`} (the post's voice sample), {`{{photo_count}}`} (how many photos the post has). The AI sees every photo in order and writes one short line per photo. Just describe what each photo should say (e.g. photo 1 a hook, the last photo a call to action); the app handles the answer format. Pick this prompt in Instagram &gt; Posts &gt; Plans.
+                      <strong>Image text placeholders:</strong> {`{{topic}}`} (the post's topic), {`{{voice}}`} (the post's voice sample), {`{{photo_count}}`} (how many photos the post has), {`{{faq}}`} (your FAQ entries from the FAQ page). The AI sees every photo in order and writes one short line per photo. Just describe what each photo should say (e.g. photo 1 a hook, the last photo a call to action); the app handles the answer format. Pick this prompt in Instagram &gt; Posts &gt; Plans.
                     </p>
                   ) : formData.category === 'Instagram' ? (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      <strong>Instagram placeholders:</strong> {`{{message}}`} (incoming DM text), {`{{conversation}}`} (full DM history), {`{{sender_username}}`} (sender's IG username), {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, plus your custom variables.
+                      <strong>Instagram placeholders:</strong> {`{{message}}`} (incoming DM text), {`{{conversation}}`} (full DM history), {`{{sender_username}}`} (sender's IG username), {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, {`{{faq}}`} (your FAQ entries), plus your custom variables.
                     </p>
                   ) : (
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      <strong>Available placeholders:</strong> {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, {`{{email}}`} (incoming email), {`{{conversation}}`} (full thread), plus your custom variables.
+                      <strong>Available placeholders:</strong> {`{{step1_result}}`} (Step 2 only), {`{{business_data}}`}, {`{{email}}`} (incoming email), {`{{conversation}}`} (full thread), {`{{faq}}`} (your FAQ entries), plus your custom variables.
                     </p>
                   )}
                 </div>
@@ -1048,6 +1048,10 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                     <li>
                       <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-blue-600 dark:text-blue-400">{`{{conversation}}`}</code>
                       <span className="ml-2">— The full conversation history. For email, this is the thread. For Instagram, this is the DM history with the sender.</span>
+                    </li>
+                    <li>
+                      <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-blue-600 dark:text-blue-400">{`{{faq}}`}</code>
+                      <span className="ml-2">— Your FAQ entries from the FAQ page, formatted as Q&A pairs. Available in all prompt types. Add or manage FAQs from the FAQ tab in the sidebar.</span>
                     </li>
                     <li>
                       <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-blue-600 dark:text-blue-400">{`{{your_variable}}`}</code>
