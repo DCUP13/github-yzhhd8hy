@@ -125,6 +125,10 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
   const [threadsAccounts, setThreadsAccounts] = useState<ThreadsAccountRow[]>([]);
   const [threadsPosts, setThreadsPosts] = useState<ThreadsPostRow[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(true);
+  const [threadsSyncing, setThreadsSyncing] = useState(false);
+  const [threadsLastSync, setThreadsLastSync] = useState<string | null>(null);
+  const [threadsSortKey, setThreadsSortKey] = useState<keyof ThreadsPostRow | 'published_at'>('published_at');
+  const [threadsSortDir, setThreadsSortDir] = useState<'asc' | 'desc'>('desc');
 
   const fetchAnalytics = async () => {
     try {
@@ -281,6 +285,63 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
       setThreadsLoading(false);
     }
   }, []);
+
+  const handleSyncThreads = async () => {
+    try {
+      setThreadsSyncing(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/threads-actions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'sync_insights' }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to sync Threads analytics');
+      }
+
+      await fetchThreadsAnalytics();
+      setThreadsLastSync(new Date().toISOString());
+    } catch (error) {
+      console.error('Threads sync error:', error);
+    } finally {
+      setThreadsSyncing(false);
+    }
+  };
+
+  const sortedThreadsPosts = useMemo(() => {
+    const sorted = [...threadsPosts];
+    sorted.sort((a, b) => {
+      let aVal: number | string;
+      let bVal: number | string;
+      if (threadsSortKey === 'published_at') {
+        aVal = a.published_at ? new Date(a.published_at).getTime() : 0;
+        bVal = b.published_at ? new Date(b.published_at).getTime() : 0;
+      } else {
+        aVal = (a[threadsSortKey] as number) ?? 0;
+        bVal = (b[threadsSortKey] as number) ?? 0;
+      }
+      if (aVal < bVal) return threadsSortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return threadsSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [threadsPosts, threadsSortKey, threadsSortDir]);
+
+  const toggleThreadsSort = (key: keyof ThreadsPostRow | 'published_at') => {
+    if (threadsSortKey === key) {
+      setThreadsSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setThreadsSortKey(key);
+      setThreadsSortDir('desc');
+    }
+  };
 
   useEffect(() => {
     fetchAnalytics();
@@ -1094,6 +1155,21 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
               <AtSign className="w-6 h-6 text-gray-700 dark:text-gray-300" />
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Threads Analytics</h1>
             </div>
+            {threadsAccounts.length > 0 && (
+              <div className="flex items-center gap-3">
+                {threadsLastSync && (
+                  <span className="text-xs text-gray-400">Last sync: {new Date(threadsLastSync).toLocaleString()}</span>
+                )}
+                <button
+                  onClick={handleSyncThreads}
+                  disabled={threadsSyncing}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors disabled:opacity-50"
+                >
+                  {threadsSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  Sync Analytics
+                </button>
+              </div>
+            )}
           </div>
 
           {threadsLoading ? (
@@ -1173,23 +1249,37 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                   <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Post Performance</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Click a column header to sort</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 dark:bg-gray-700/50">
                       <tr>
                         <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Post</th>
-                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Views</th>
-                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Likes</th>
-                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Replies</th>
-                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Reposts</th>
-                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Quotes</th>
-                        <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Shares</th>
-                        <th className="text-right px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Published</th>
+                        {([
+                          { key: 'views', label: 'Views' },
+                          { key: 'likes', label: 'Likes' },
+                          { key: 'replies', label: 'Replies' },
+                          { key: 'reposts', label: 'Reposts' },
+                          { key: 'quotes', label: 'Quotes' },
+                          { key: 'shares', label: 'Shares' },
+                          { key: 'published_at', label: 'Published' },
+                        ] as { key: keyof ThreadsPostRow | 'published_at'; label: string }[]).map(col => (
+                          <th
+                            key={col.key}
+                            onClick={() => toggleThreadsSort(col.key)}
+                            className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none whitespace-nowrap"
+                          >
+                            <span className="inline-flex items-center gap-1">
+                              {col.label}
+                              <ChevronDown className={`w-3 h-3 transition-transform ${threadsSortKey === col.key ? (threadsSortDir === 'asc' ? 'rotate-180' : '') : 'opacity-30'}`} />
+                            </span>
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {threadsPosts.slice(0, 15).map((post, i) => {
+                      {sortedThreadsPosts.slice(0, 15).map((post, i) => {
                         const permalink = (Array.isArray(post.publish_results) ? post.publish_results : []).find((r: any) => r.permalink)?.permalink;
                         return (
                           <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
