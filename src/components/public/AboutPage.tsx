@@ -10,7 +10,7 @@ interface AboutPageProps {
 
 export function AboutPage({ currentRoute, onNavigate }: AboutPageProps) {
   const values = [
-    { icon: Search, title: 'Every Lead Matters', body: 'Every agent on Zillow is a potential relationship. We make it possible to reach all of them, not just the ones you have time for.' },
+    { icon: Search, title: 'Every Lead Matters', body: 'Every prospect is a potential relationship. We make it possible to reach all of them, not just the ones you have time for.' },
     { icon: Target, title: 'Data Quality First', body: 'Sending to incomplete contacts wastes your sender reputation. Our quality scoring system blocks campaigns when data isn\'t good enough.' },
     { icon: Heart, title: 'Personal at Scale', body: 'Merge fields, conditional sections, and smart fallbacks ensure every email feels hand-written — even when you\'re sending thousands.' },
     { icon: Shield, title: 'Your Data Is Yours', body: 'Row-level security means your contacts, campaigns, and emails are never visible to anyone else. Bank-level encryption on everything.' },
@@ -25,7 +25,7 @@ export function AboutPage({ currentRoute, onNavigate }: AboutPageProps) {
             Our Story
           </p>
           <h1 className="text-3xl md:text-5xl lg:text-6xl font-display font-semibold text-om-forest-deep mb-6">
-            Built for Real Estate,
+            Built for Outreach,
             <br />
             One Lead at a Time
           </h1>
@@ -33,7 +33,7 @@ export function AboutPage({ currentRoute, onNavigate }: AboutPageProps) {
             className="text-xl md:text-2xl text-om-mahogany max-w-3xl mx-auto"
             style={{ fontFamily: "'EB Garamond', serif" }}
           >
-            We saw real estate professionals drowning in manual outreach — finding leads, writing emails, following up, and still missing opportunities. So we built the platform we wished existed: one that scrapes, enriches, sends, and responds automatically.
+            We saw professionals drowning in manual outreach — finding leads, writing emails, following up, and still missing opportunities. So we built the platform we wished existed: one that scrapes, enriches, sends, and responds automatically.
           </p>
         </div>
       </section>
@@ -52,7 +52,7 @@ export function AboutPage({ currentRoute, onNavigate }: AboutPageProps) {
               className="text-om-tan text-lg md:text-xl"
               style={{ fontFamily: "'EB Garamond', serif" }}
             >
-              We're committed to helping you reach every agent, send every email, and respond to every reply — without spending your evenings doing it.
+              We're committed to helping you reach every prospect, send every email, and respond to every reply — without spending your evenings doing it.
             </p>
           </div>
         </div>
@@ -74,7 +74,7 @@ export function AboutPage({ currentRoute, onNavigate }: AboutPageProps) {
               className="text-lg md:text-xl text-om-mahogany leading-relaxed text-center"
               style={{ fontFamily: "'EB Garamond', serif" }}
             >
-              Real estate is a relationship business, but building relationships takes time — time you don't have when you're manually searching Zillow for agent contacts, copying email addresses into templates, and hoping you remember to follow up. We built LoiBlast to automate the entire pipeline: finding leads, enriching their data, sending personalized campaigns through your existing email accounts, tracking every open and click, and letting AI handle the replies. Our mission is to give you your time back while making every outreach more personal, not less. Because the best way to grow your business isn't to work harder — it's to let technology handle the repetitive work so you can focus on closing deals.
+              Outreach is a relationship business, but building relationships takes time — time you don't have when you're manually searching for prospect contacts, copying email addresses into templates, and hoping you remember to follow up. We built LoiBlast to automate the entire pipeline: finding leads, enriching their data, sending personalized campaigns through your existing email accounts, tracking every open and click, and letting AI handle the replies. Our mission is to give you your time back while making every outreach more personal, not less. Because the best way to grow your business isn't to work harder — it's to let technology handle the repetitive work so you can focus on what matters.
             </p>
           </div>
         </div>
@@ -85,17 +85,17 @@ export function AboutPage({ currentRoute, onNavigate }: AboutPageProps) {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-10">
             <h2 className="text-2xl md:text-4xl font-display font-semibold text-om-forest-deep mb-4">
-              Built for Real Estate
+              Built for Outreach
             </h2>
             <p className="text-lg text-om-mahogany max-w-2xl mx-auto" style={{ fontFamily: "'EB Garamond', serif" }}>
-              Not a generic email tool with real estate bolted on. Purpose-built from the ground up.
+              Not a generic email tool with your industry bolted on. Purpose-built from the ground up.
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { icon: Search, title: 'Zillow-Native', body: 'Scraping built around Zillow\'s API. Agent profiles, property listings, and brokerage data all structured for outreach.' },
-              { icon: Users, title: 'Agent-Centric Contacts', body: 'Contacts store screen names, profile URLs, cell/business/brokerage phones, and full agent data from the API.' },
-              { icon: TrendingUp, title: 'Outreach Pipeline', body: 'From scrape to send to auto-respond, the entire workflow is designed for real estate cold outreach at scale.' },
+              { icon: Search, title: 'Data-Driven Discovery', body: 'Lead discovery built around public data sources. Prospect profiles, business details, and contact data all structured for outreach.' },
+              { icon: Users, title: 'Contact-Centric Records', body: 'Contacts store screen names, profile URLs, cell/business phones, and full profile data from the source.' },
+              { icon: TrendingUp, title: 'Outreach Pipeline', body: 'From discovery to send to auto-respond, the entire workflow is designed for cold outreach at scale.' },
             ].map((item) => {
               const Icon = item.icon;
               return (

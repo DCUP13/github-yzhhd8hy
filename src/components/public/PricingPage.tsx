@@ -14,7 +14,7 @@ const individualFeatures = [
   { title: 'Email Draft Generation', desc: 'AI generates drafts for your review' },
   { title: 'Prompt Library', desc: 'Create and save unlimited AI prompts' },
   { title: 'Client CRM', desc: 'Manage contacts and track interactions' },
-  { title: 'Zillow Lead Scraping', desc: 'Pull real estate agent contacts via RapidAPI' },
+  { title: 'Lead Discovery', desc: 'Pull prospect contacts via public data sources' },
   { title: 'Reply Tracking', desc: 'Monitor email responses and engagement' },
   { title: 'Analytics Dashboard', desc: 'Track email performance and metrics' },
   { title: 'Campaign Automation', desc: 'Schedule and automate outreach campaigns' },

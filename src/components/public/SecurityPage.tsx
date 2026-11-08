@@ -62,8 +62,8 @@ export function SecurityPage({ currentRoute, onNavigate }: SecurityPageProps) {
       security: 'Your AI access key is stored as an encrypted server secret. Email content is sent for processing only when you use AI features, solely to complete your request, and is never used to train external models.',
     },
     {
-      label: 'Lead & Listing Data Sources',
-      what: 'Provides public agent and listing information for lead building',
+      label: 'Lead & Contact Data Sources',
+      what: 'Provides public prospect and contact information for lead building',
       security: 'Access keys are stored as encrypted server secrets and used only server-side to fetch publicly available data. Keys are never sent to your browser or logged.',
     },
     {

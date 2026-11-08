@@ -15,14 +15,14 @@ interface HomePageProps {
 
 export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
   const platformPreview = [
-    { icon: Search, label: 'Lead Scraping', sub: 'Scrape agent contacts from Zillow', iconColor: 'text-om-gold' },
+    { icon: Search, label: 'Lead Discovery', sub: 'Find and enrich prospects at scale', iconColor: 'text-om-gold' },
     { icon: Send, label: 'Campaign Automation', sub: 'Time-windowed, throttled email sending', iconColor: 'text-om-forest' },
     { icon: Bot, label: 'AI Autoresponder', sub: 'GPT-4o powered email and Instagram replies', iconColor: 'text-om-mahogany' },
     { icon: CalendarClock, label: 'Social Content Studio', sub: 'Auto-posting to Instagram, LinkedIn, and Threads', iconColor: 'text-om-gold-dark', isNew: true },
   ];
 
   const stats = [
-    { title: '500+ Leads Per Scrape', body: 'Pull real estate agent contacts directly from Zillow with one click. Names, emails, phone numbers, and brokerage details.' },
+    { title: '500+ Leads Per Scrape', body: 'Pull prospect contacts directly from public data sources with one click. Names, emails, phone numbers, and business details.' },
     { title: '5000+ Emails Per Day', body: 'Send emails confidently with per-sender daily limits. Talk to the team regarding higher volume.' },
     { title: '85% Reply Automation', body: 'AI auto-responder handles inbound replies using your custom prompts. Two-step mode for complex responses.' },
     { title: 'Full Pipeline Tracking', body: 'Delivery, open, click, bounce, and reply rates tracked per sender. Know exactly what works.' },
@@ -30,8 +30,8 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
   ];
 
   const features = [
-    { icon: Search, title: 'Zillow Lead Scraping', body: 'Scrape real estate agent listings from Zillow\'s API. Bulk-harvest contacts with names, profile URLs, and brokerage info in minutes.' },
-    { icon: Users, title: 'Contact Enrichment', body: 'Fetch detailed agent profiles to extract email addresses, phone numbers, and business names. Property listings linked to each contact.' },
+    { icon: Search, title: 'Lead Discovery', body: 'Find prospect contacts from public data sources. Bulk-harvest names, profile URLs, and business info in minutes.' },
+    { icon: Users, title: 'Contact Enrichment', body: 'Fetch detailed profiles to extract email addresses, phone numbers, and business names. Relevant details linked to each contact.' },
     { icon: FileText, title: 'Template Builder', body: 'Create HTML, DOCX, or PDF templates with merge variables for contact data, listing details, and campaign terms. AI-generated templates available.' },
     { icon: Zap, title: 'Campaign Scheduling', body: 'Set send time windows, per-campaign delays between emails, and test mode for preview drafts. Smart fallbacks for missing data.' },
     { icon: Bot, title: 'AI Autoresponder', body: 'AI generates contextually relevant replies to inbound emails. Single or two-step prompt modes. Per-domain enablement.' },
@@ -48,16 +48,16 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
         <div className="max-w-7xl mx-auto w-full min-w-0 grid lg:grid-cols-2 gap-12 items-center">
           <div className="text-center lg:text-left">
             <p className="text-om-gold text-sm md:text-base font-medium tracking-widest uppercase mb-4">
-              AI-Powered Real Estate Outreach
+              AI-Powered Outreach Automation
             </p>
             <h1 className="text-3xl md:text-5xl lg:text-6xl font-display font-semibold text-om-forest-deep leading-tight mb-6">
-              Automate Your Agent Outreach
+              Automate Your Outreach Pipeline
             </h1>
             <p
               className="text-xl md:text-2xl text-om-mahogany mb-10 leading-relaxed"
               style={{ fontFamily: "'EB Garamond', serif" }}
             >
-              Scrape leads from Zillow, run personalized email campaigns, and let AI handle the replies. Then keep your name in front of them with AI-written posts for Instagram, LinkedIn, and Threads.
+              Find leads, run personalized email campaigns, and let AI handle the replies. Then keep your name in front of them with AI-written posts for Instagram, LinkedIn, and Threads.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
               <button
@@ -193,7 +193,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
           </div>
           <div className="grid sm:grid-cols-2 md:grid-cols-5 gap-6 gap-y-10">
             {[
-              { num: '1', icon: Search, title: 'Scrape Leads', body: 'Pull agent contacts from Zillow with one click.' },
+              { num: '1', icon: Search, title: 'Find Leads', body: 'Pull prospect contacts from public data sources with one click.' },
               { num: '2', icon: FileText, title: 'Build Campaign', body: 'Create templates with merge fields. Preview in test mode.' },
               { num: '3', icon: Send, title: 'Send Emails', body: 'Throttled email sending. Time-windowed delivery.' },
               { num: '4', icon: Bot, title: 'Auto-Respond', body: 'AI handles replies. Track opens, clicks, and responses.' },
@@ -225,7 +225,7 @@ export function HomePage({ currentRoute, onNavigate }: HomePageProps) {
             className="text-lg md:text-xl text-om-tan mb-8"
             style={{ fontFamily: "'EB Garamond', serif" }}
           >
-            Join real estate professionals who've automated their lead pipeline with LoiBlast.
+            Join professionals who've automated their outreach pipeline with LoiBlast.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
