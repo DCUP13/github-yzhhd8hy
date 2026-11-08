@@ -24,9 +24,10 @@ const TOKEN_LABELS: Record<string, string> = {
   '{{topic}}': 'Topic',
   '{{voice}}': 'Voice',
   '{{photo_count}}': 'Photo count',
+  '{{faq}}': 'FAQ',
 };
 
-export function PromptTextBox({ label, value, groups, placeholder, rows = 5, tokens = ['{{topic}}', '{{voice}}'], onChange, onImport }: PromptTextBoxProps) {
+export function PromptTextBox({ label, value, groups, placeholder, rows = 5, tokens = ['{{topic}}', '{{voice}}', '{{faq}}'], onChange, onImport }: PromptTextBoxProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const all = groups.flatMap((g) => g.prompts);
   const visibleGroups = groups.filter((g) => g.prompts.length > 0);
@@ -93,6 +94,8 @@ export function PromptTextBox({ label, value, groups, placeholder, rows = 5, tok
             onClick={() => insertToken(t)}
             className={t === '{{voice}}'
               ? 'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-pink-50 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 hover:bg-pink-100 transition-colors'
+              : t === '{{faq}}'
+              ? 'px-2 py-0.5 text-xs rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition-colors'
               : 'px-2 py-0.5 text-xs rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors'}
           >
             {t === '{{voice}}' && <Mic className="w-3 h-3" />}{TOKEN_LABELS[t] || t}

@@ -51,18 +51,21 @@ export function FeedView({ userId, commentEvents, selectedAccount, snapshots, on
 
   const fetchPublishedPosts = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('instagram_post_variations')
         .select('id, ig_media_id, permalink, caption, cloudfront_url, carousel_urls, account_id, created_at, is_test_post, media_image_url, media_type')
         .eq('user_id', userId)
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
+        .eq('status', 'published');
+      if (selectedAccount?.id) {
+        query = query.eq('account_id', selectedAccount.id);
+      }
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       setPublishedPosts(data || []);
     } catch (error) {
       console.error('Error fetching published posts:', error);
     }
-  }, [userId]);
+  }, [userId, selectedAccount?.id]);
 
   useEffect(() => { fetchPublishedPosts(); }, [fetchPublishedPosts]);
 

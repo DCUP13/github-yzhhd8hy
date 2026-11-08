@@ -90,7 +90,31 @@ Deno.serve(async (req: Request) => {
 
         const messaging: any[] = entry?.messaging ?? [];
         for (const msg of messaging) {
-          if (msg.read || msg.delivery || msg.reaction || msg.message_edit) continue;
+          // Process read receipts — mark outgoing messages as read
+          if (msg.read) {
+            const readWatermark = msg.read.watermark ?? null;
+            const readerId = msg?.sender?.id ?? null;
+            if (readWatermark && readerId && account) {
+              // The reader is the account owner (sender of the read event).
+              // Mark all outgoing messages to this recipient as read.
+              const recipientOfRead = msg?.recipient?.id ?? null;
+              if (recipientOfRead) {
+                await supabaseClient
+                  .from("instagram_webhook_events")
+                  .update({ read_at: new Date(Number(readWatermark)).toISOString() })
+                  .eq("ig_user_id", igUserId ?? "")
+                  .eq("direction", "outgoing")
+                  .eq("recipient_id", recipientOfRead)
+                  .is("read_at", null)
+                  .lte("created_at", new Date(Number(readWatermark)).toISOString());
+              }
+            }
+            continue;
+          }
+
+          // Skip delivery confirmations and reactions — we don't track these yet
+          if (msg.delivery || msg.reaction || msg.message_edit) continue;
+
           const messageText = msg?.message?.text ?? null;
           if (!messageText && !msg?.message?.attachment) continue;
           const isEcho = msg?.message?.is_echo === true;
@@ -107,6 +131,15 @@ Deno.serve(async (req: Request) => {
             direction: isSelfMessage ? "incoming" : (isEcho ? "outgoing" : "incoming"), recipient_id: recipientId,
             raw_event: msg, user_id: userId,
           }, accessToken, otherPartyId, true);
+
+          // Update last_incoming_at on the account when a real incoming DM
+          // arrives — this tracks the 24-hour messaging window.
+          if ((!isEcho || isSelfMessage) && account && storedEventId) {
+            await supabaseClient
+              .from("instagram_accounts")
+              .update({ last_incoming_at: new Date().toISOString() })
+              .eq("id", account.id);
+          }
 
           // For self-messages, the webhook entry.id is the recipient ID (e.g.
           // the page inbox ID), which may not match any stored account field.
@@ -245,18 +278,33 @@ async function resolveAccount(
     .maybeSingle();
   if (byPageId) return byPageId;
 
+  // Try matching by owner_profile_id — when a user messages their own account,
+  // the webhook entry.id can be the owner's page-scoped ID.
+  const { data: byOwner } = await supabaseClient
+    .from("instagram_accounts")
+    .select("id, user_id, access_token, page_scoped_id, ig_user_id, username")
+    .eq("owner_profile_id", igUserId)
+    .maybeSingle();
+  if (byOwner) {
+    if (!byOwner.page_scoped_id) {
+      await supabaseClient
+        .from("instagram_accounts")
+        .update({ page_scoped_id: igUserId })
+        .eq("id", byOwner.id);
+    }
+    return byOwner;
+  }
+
   // No fuzzy matching — substring checks on numeric IDs cause false positives
   // when one account's ID happens to contain another's as a substring.
 
-  // Last resort: if there's exactly one account in total with no page_scoped_id
-  // yet, assume this webhook is for that account and persist the mapping.
-  // This is only safe when there's truly one unmatched account — otherwise
-  // we'd assign events to the wrong account.
+  // Last resort: if there's exactly one account with no page_scoped_id yet,
+  // assume this webhook is for that account and persist the mapping.
   const { data: allAccounts } = await supabaseClient
     .from("instagram_accounts")
     .select("id, user_id, access_token, page_scoped_id, ig_user_id, username");
   const unmatched = (allAccounts ?? []).filter((a: any) => !a.page_scoped_id);
-  if (unmatched.length === 1 && (allAccounts ?? []).length === 1) {
+  if (unmatched.length === 1) {
     const acct = unmatched[0];
     await supabaseClient
       .from("instagram_accounts")

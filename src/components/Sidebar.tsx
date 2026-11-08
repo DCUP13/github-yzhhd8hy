@@ -1,4 +1,4 @@
-import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram, Linkedin, AtSign, Headphones, X } from 'lucide-react';
+import { Home, LayoutGrid as Layout, Settings as SettingsIcon, LogOut, FileText, Mail, Inbox, MessageSquare, Users, BarChart3, Instagram, Linkedin, AtSign, Headphones, HelpCircle, X } from 'lucide-react';
 import type { FeatureFlags } from '../App';
 import type { AppView } from '../lib/router';
 
@@ -55,6 +55,9 @@ export function Sidebar({
         </button>
         <button onClick={() => onNavigate('prompts')} className={navButtonClass(currentView === 'prompts')}>
           <MessageSquare className="w-4 h-4 flex-shrink-0" /> Prompts
+        </button>
+        <button onClick={() => onNavigate('faq')} className={navButtonClass(currentView === 'faq')}>
+          <HelpCircle className="w-4 h-4 flex-shrink-0" /> FAQ
         </button>
         <button onClick={() => onNavigate('contacts')} className={navButtonClass(currentView === 'contacts')}>
           <Users className="w-4 h-4 flex-shrink-0" /> Contacts

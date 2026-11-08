@@ -23,7 +23,7 @@ export function PrivacyPolicy({ currentRoute, onNavigate }: LegalPagesProps) {
           <P><strong>1.2 Email Data</strong></P>
           <P>With your explicit consent, we access and process emails through your connected email accounts (Gmail SMTP and Amazon SES). This includes email content, metadata (sender, recipient, subject, date), and attachments. We only access emails necessary to provide our services.</P>
           <P><strong>1.3 Contact Information</strong></P>
-          <P>We store contact information you scrape from Zillow or add manually, including names, email addresses, phone numbers (cell, business, brokerage), business names, screen names, profile URLs, and full agent data from the Zillow API. We also store property listing data linked to contacts, including addresses, prices, and property details.</P>
+          <P>We store contact information you discover from public data sources or add manually, including names, email addresses, phone numbers (cell, business), business names, screen names, profile URLs, and full prospect data from the source API. We also store relevant business data linked to contacts, including addresses, prices, and business details.</P>
           <P><strong>1.4 Campaign and Template Data</strong></P>
           <P>We store email templates (HTML, DOCX, PDF), campaign configurations (send windows, delays, test mode settings), AI prompts, and generated draft emails. This data helps you manage and automate your outreach.</P>
           <P><strong>1.5 Instagram Data</strong></P>
@@ -35,9 +35,9 @@ export function PrivacyPolicy({ currentRoute, onNavigate }: LegalPagesProps) {
           <P>We use the collected information for the following purposes:</P>
           <P><strong>Service Delivery:</strong> To provide and maintain the platform, including lead scraping, contact management, email campaign automation, and analytics.</P>
           <P><strong>Email Processing:</strong> To send emails through your connected Gmail and Amazon SES accounts, track delivery, opens, clicks, bounces, and replies, and generate AI-powered auto-responses.</P>
-          <P><strong>Contact Management:</strong> To store, enrich, and organize contact data scraped from Zillow, and to score data quality for campaign readiness.</P>
+          <P><strong>Contact Management:</strong> To store, enrich, and organize contact data discovered from public sources, and to score data quality for campaign readiness.</P>
           <P><strong>AI Processing:</strong> To generate email templates, auto-responses, and draft replies using OpenAI's GPT-4o API.</P>
-          <P><strong>Personalization:</strong> To merge contact and listing data into templates with smart fallbacks and conditional sections.</P>
+          <P><strong>Personalization:</strong> To merge contact and business data into templates with smart fallbacks and conditional sections.</P>
           <P><strong>Communication:</strong> To send you service-related communications, updates, and security notifications.</P>
           <P><strong>Security:</strong> To monitor for fraud, abuse, and unauthorized access, and to enforce row-level security policies.</P>
           <P><strong>Analytics:</strong> To track email performance metrics and provide you with actionable insights about your outreach campaigns.</P>
@@ -59,7 +59,7 @@ export function PrivacyPolicy({ currentRoute, onNavigate }: LegalPagesProps) {
           <P><strong>Amazon SES:</strong> Email delivery infrastructure with TLS encryption.</P>
           <P><strong>Gmail SMTP:</strong> Email sending through your Gmail accounts using app-specific passwords.</P>
           <P><strong>OpenAI API:</strong> AI processing for template generation and auto-responses.</P>
-          <P><strong>RapidAPI / Zillow:</strong> Lead scraping data source.</P>
+          <P><strong>RapidAPI / Public Data Sources:</strong> Lead discovery data source.</P>
           <P><strong>AWS S3:</strong> Email attachment storage with presigned download URLs.</P>
           <P><strong>Instagram / Meta Graph API:</strong> Social engagement webhook events.</P>
         </> },
@@ -114,10 +114,10 @@ export function TermsOfService({ currentRoute, onNavigate }: LegalPagesProps) {
       sections={[
         { heading: '1. Acceptance of Terms', body: <P>By accessing or using this email management and outreach automation platform (the "Service"), you accept and agree to be bound by the terms and provisions of this agreement. If you do not agree to these Terms of Service, please do not use the Service.</P> },
         { heading: '2. Description of Service', body: <>
-          <P>The Service provides tools for real estate lead scraping, email campaign automation, AI-powered auto-responding, and outreach analytics. Specifically, the Service includes:</P>
-          <P>Zillow agent lead scraping via RapidAPI</P>
+          <P>The Service provides tools for lead discovery, email campaign automation, AI-powered auto-responding, and outreach analytics. Specifically, the Service includes:</P>
+          <P>Prospect lead discovery via public data sources</P>
           <P>Contact enrichment with email and phone number extraction</P>
-          <P>Contact management with property listing data</P>
+          <P>Contact management with linked business data</P>
           <P>Email template creation and management (HTML, DOCX, PDF)</P>
           <P>AI-powered email template generation</P>
           <P>Campaign automation with test mode, scheduling, and throttled sending</P>
@@ -162,8 +162,8 @@ export function TermsOfService({ currentRoute, onNavigate }: LegalPagesProps) {
           <P>The Service processes emails through Amazon SES. You authorize us to send and receive emails on your behalf as configured in your settings. You are responsible for maintaining valid SES credentials and verified sender addresses.</P>
           <P><strong>5.3 AI Processing</strong></P>
           <P>The Service uses artificial intelligence (OpenAI GPT-4o) to process emails, generate responses, create templates, and categorize content. By using these features, you acknowledge that your email content may be processed by third-party AI services in accordance with our Privacy Policy.</P>
-          <P><strong>5.4 Zillow / RapidAPI Integration</strong></P>
-          <P>The Service scrapes agent listing data from Zillow via the RapidAPI US Housing Market Data API. You are responsible for maintaining a valid RapidAPI subscription and complying with Zillow's and RapidAPI's terms of service.</P>
+          <P><strong>5.4 Public Data / RapidAPI Integration</strong></P>
+          <P>The Service discovers prospect contact data from public data sources via the RapidAPI API. You are responsible for maintaining a valid RapidAPI subscription and complying with the respective data sources' and RapidAPI's terms of service.</P>
           <P><strong>5.5 Instagram Integration</strong></P>
           <P>The Service integrates with Instagram via Meta's Graph API to capture webhook events. You are responsible for maintaining a valid Instagram Business or Creator account and Meta App configuration.</P>
           <P><strong>5.6 Third-Party Terms</strong></P>
@@ -273,7 +273,7 @@ export function DataProcessingAgreement({ currentRoute, onNavigate }: LegalPages
       sections={[
         { heading: '1. Purpose and Scope', body: <P>This Data Processing Agreement ("DPA") forms part of the Terms of Service and governs LoiBlast's processing of personal data on behalf of its users ("Controllers"). LoiBlast acts as a Data Processor, and the user acts as a Data Controller.</P> },
         { heading: '2. Processing Details', body: <>
-          <P><strong>Categories of data:</strong> Contact names, email addresses, phone numbers, business information, property listing data, email engagement data (opens, clicks, bounces, replies), and message content.</P>
+          <P><strong>Categories of data:</strong> Contact names, email addresses, phone numbers, business information, linked business data, email engagement data (opens, clicks, bounces, replies), and message content.</P>
           <P><strong>Purpose of processing:</strong> To provide lead scraping, email campaign automation, contact management, AI auto-responding, analytics, and Instagram engagement tracking services as described in the Terms of Service.</P>
           <P><strong>Duration:</strong> Data is processed for the duration of the user's subscription and retained according to the retention policy in the Privacy Policy.</P>
         </> },
@@ -324,7 +324,7 @@ export function AcceptableUsePolicy({ currentRoute, onNavigate }: LegalPagesProp
           <P>You must not use the Service to:</P>
           <P>1. Send unsolicited commercial email (spam) in violation of the CAN-SPAM Act, GDPR, or other applicable anti-spam laws.</P>
           <P>2. Send emails with false or misleading header information, deceptive subject lines, or without a valid postal address and unsubscribe mechanism.</P>
-          <P>3. Scrape or collect contact data in a manner that violates the terms of service of any third-party website or platform, including Zillow's terms of service.</P>
+          <P>3. Scrape or collect contact data in a manner that violates the terms of service of any third-party website or platform, including the respective data source's terms of service.</P>
           <P>4. Send content that is illegal, harassing, defamatory, or that infringes on the intellectual property rights of others.</P>
           <P>5. Distribute malware, viruses, or any other malicious code.</P>
           <P>6. Attempt to gain unauthorized access to the Service, other users' accounts, or our systems.</P>

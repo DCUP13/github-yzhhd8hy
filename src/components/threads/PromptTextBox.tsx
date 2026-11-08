@@ -25,9 +25,10 @@ const TOKEN_LABELS: Record<string, string> = {
   '{{topic}}': 'Topic',
   '{{voice}}': 'Voice',
   '{{photo_count}}': 'Photo count',
+  '{{faq}}': 'FAQ',
 };
 
-export function PromptTextBox({ label, value, groups, placeholder, rows = 5, tokens = ['{{topic}}', '{{voice}}'], note = 'Edits here are saved to this plan only. Your saved prompt on the Prompts page is not changed.', onChange, onImport }: PromptTextBoxProps) {
+export function PromptTextBox({ label, value, groups, placeholder, rows = 5, tokens = ['{{topic}}', '{{voice}}', '{{faq}}'], note = 'Edits here are saved to this plan only. Your saved prompt on the Prompts page is not changed.', onChange, onImport }: PromptTextBoxProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const usable = groups.map((g) => ({ ...g, prompts: g.prompts.filter((p) => p.content?.trim()) }));
   const all = usable.flatMap((g) => g.prompts);
@@ -100,6 +101,8 @@ export function PromptTextBox({ label, value, groups, placeholder, rows = 5, tok
             onClick={() => insertToken(t)}
             className={t === '{{voice}}'
               ? 'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition-colors'
+              : t === '{{faq}}'
+              ? 'px-2 py-0.5 text-xs rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition-colors'
               : 'px-2 py-0.5 text-xs rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors'}
           >
             {t === '{{voice}}' && <Mic className="w-3 h-3" />}{TOKEN_LABELS[t] || t}

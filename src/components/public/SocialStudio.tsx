@@ -76,15 +76,15 @@ const SHARED_TOOLS: { icon: LucideIcon; title: string; body: string }[] = [
   { icon: Mic, title: 'Voice Library', body: 'Save samples of your writing so AI matches your tone instead of sounding like a robot.' },
   { icon: Tags, title: 'Topic Rotation', body: 'Keep a list of topics and let each post rotate through them, or lock a slot to one subject.' },
   { icon: CalendarClock, title: 'Content Calendar', body: 'See every scheduled post across the month, drag to reschedule, and open any day to edit.' },
-  { icon: Link2, title: 'Saved Links', body: 'Store your booking page, listings, or lead magnet once and attach it to any post in a click.' },
+  { icon: Link2, title: 'Saved Links', body: 'Store your booking page, portfolio, or lead magnet once and attach it to any post in a click.' },
   { icon: BarChart3, title: 'Post Insights', body: 'Engagement for every published post, refreshed automatically so you know what to post more of.' },
 ];
 
 const THREAD_DEMO = [
-  { text: 'Most agents lose listings in the first 5 minutes of a call. Not because of price.', note: 'The hook' },
-  { text: 'They lose them because they talk about themselves. Sellers want to hear about their home:\n\u2022 What makes it stand out\n\u2022 Who is buying nearby', note: 'Follow-up 1' },
-  { text: '\u2022 How long similar homes sat\n\u2022 What you would fix first\n\nSpecifics build trust faster than a résumé.', note: 'Follow-up 2' },
-  { text: 'Next listing call, ask 3 questions before you mention yourself once. What is your go-to opener?', note: 'The wrap-up' },
+  { text: 'Most people lose a prospect\'s attention in the first 5 minutes of a conversation. Not because of price.', note: 'The hook' },
+  { text: 'They lose them because they talk about themselves. Prospects want to hear about their own needs:\n\u2022 What makes their situation unique\n\u2022 Who else is in their space', note: 'Follow-up 1' },
+  { text: '\u2022 How long similar opportunities take\n\u2022 What you would address first\n\nSpecifics build trust faster than a résumé.', note: 'Follow-up 2' },
+  { text: 'Next conversation, ask 3 questions before you mention yourself once. What is your go-to opener?', note: 'The wrap-up' },
 ];
 
 function ThreadMock() {

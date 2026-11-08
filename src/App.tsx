@@ -14,6 +14,7 @@ import { LinkedIn } from './components/LinkedIn';
 import { Threads } from './components/Threads';
 import { TeamView as TeamPage } from './components/TeamPage';
 import { SupportPage } from './components/SupportPage';
+import { FAQPage } from './components/FAQPage';
 import { useUnreadChatCount } from './lib/useUnreadChatCount';
 import { EmailProvider } from './contexts/EmailContext';
 import { OrganizationProvider } from './contexts/OrganizationContext';
@@ -370,6 +371,9 @@ export default function App() {
                   )}
                   {appView === 'prompts' && (
                     <Prompts onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'faq' && (
+                    <FAQPage onSignOut={handleSignOut} currentView={appView} />
                   )}
                   {appView === 'contacts' && (
                     <Contacts onSignOut={handleSignOut} currentView={appView} />

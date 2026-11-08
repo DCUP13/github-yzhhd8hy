@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { BarChart3, Send, CheckCircle, Eye, MousePointer, MessageSquare, AlertCircle, TrendingUp, Calendar, Filter, Instagram as InstagramIcon, Linkedin as LinkedinIcon, Users, Image as ImageIcon, Heart, Bookmark, Play, ChevronDown, ThumbsUp, Share2, Link2, RefreshCw, Loader2 } from 'lucide-react';
+import { BarChart3, Send, CheckCircle, Eye, MousePointer, MessageSquare, AlertCircle, TrendingUp, Calendar, Filter, Instagram as InstagramIcon, Linkedin as LinkedinIcon, AtSign, Users, Image as ImageIcon, Heart, Bookmark, Play, ChevronDown, ThumbsUp, Share2, Link2, RefreshCw, Loader2, Repeat2, Quote, Send as ShareIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { AppView } from '../lib/router';
 
@@ -77,6 +77,28 @@ interface LinkedInSnapshot {
   created_at: string;
 }
 
+interface ThreadsAccountRow {
+  id: string;
+  username: string | null;
+  followers_count: number | null;
+  connected: boolean;
+}
+
+interface ThreadsPostRow {
+  id: string;
+  content_text: string;
+  status: string;
+  views: number;
+  likes: number;
+  replies: number;
+  reposts: number;
+  quotes: number;
+  shares: number;
+  published_at: string | null;
+  insights_synced_at: string | null;
+  publish_results: any[];
+}
+
 type Period = 'today' | '7d' | '30d';
 
 export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }: AnalyticsProps) {
@@ -98,6 +120,15 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
   const [liLoading, setLiLoading] = useState(true);
   const [liSyncing, setLiSyncing] = useState(false);
   const [liLastSync, setLiLastSync] = useState<string | null>(null);
+
+  // Threads analytics state
+  const [threadsAccounts, setThreadsAccounts] = useState<ThreadsAccountRow[]>([]);
+  const [threadsPosts, setThreadsPosts] = useState<ThreadsPostRow[]>([]);
+  const [threadsLoading, setThreadsLoading] = useState(true);
+  const [threadsSyncing, setThreadsSyncing] = useState(false);
+  const [threadsLastSync, setThreadsLastSync] = useState<string | null>(null);
+  const [threadsSortKey, setThreadsSortKey] = useState<keyof ThreadsPostRow | 'published_at'>('published_at');
+  const [threadsSortDir, setThreadsSortDir] = useState<'asc' | 'desc'>('desc');
 
   const fetchAnalytics = async () => {
     try {
@@ -223,11 +254,101 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
     }
   };
 
+  const fetchThreadsAnalytics = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: accounts } = await supabase
+        .from('threads_accounts')
+        .select('id, username, followers_count, connected')
+        .eq('user_id', user.id)
+        .eq('connected', true)
+        .order('created_at', { ascending: true });
+
+      setThreadsAccounts(accounts || []);
+
+      if (accounts && accounts.length > 0) {
+        const { data: posts } = await supabase
+          .from('threads_posts')
+          .select('id, content_text, status, views, likes, replies, reposts, quotes, shares, published_at, insights_synced_at, publish_results')
+          .eq('user_id', user.id)
+          .in('status', ['published', 'partial'])
+          .order('published_at', { ascending: false })
+          .limit(200);
+
+        setThreadsPosts(posts || []);
+      }
+    } catch (error) {
+      console.error('Error fetching Threads analytics:', error);
+    } finally {
+      setThreadsLoading(false);
+    }
+  }, []);
+
+  const handleSyncThreads = async () => {
+    try {
+      setThreadsSyncing(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/threads-actions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'sync_insights' }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to sync Threads analytics');
+      }
+
+      await fetchThreadsAnalytics();
+      setThreadsLastSync(new Date().toISOString());
+    } catch (error) {
+      console.error('Threads sync error:', error);
+    } finally {
+      setThreadsSyncing(false);
+    }
+  };
+
+  const sortedThreadsPosts = useMemo(() => {
+    const sorted = [...threadsPosts];
+    sorted.sort((a, b) => {
+      let aVal: number | string;
+      let bVal: number | string;
+      if (threadsSortKey === 'published_at') {
+        aVal = a.published_at ? new Date(a.published_at).getTime() : 0;
+        bVal = b.published_at ? new Date(b.published_at).getTime() : 0;
+      } else {
+        aVal = (a[threadsSortKey] as number) ?? 0;
+        bVal = (b[threadsSortKey] as number) ?? 0;
+      }
+      if (aVal < bVal) return threadsSortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return threadsSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [threadsPosts, threadsSortKey, threadsSortDir]);
+
+  const toggleThreadsSort = (key: keyof ThreadsPostRow | 'published_at') => {
+    if (threadsSortKey === key) {
+      setThreadsSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setThreadsSortKey(key);
+      setThreadsSortDir('desc');
+    }
+  };
+
   useEffect(() => {
     fetchAnalytics();
     fetchInstagramAnalytics();
     fetchLinkedInAnalytics();
-  }, [fetchInstagramAnalytics, fetchLinkedInAnalytics]);
+    fetchThreadsAnalytics();
+  }, [fetchInstagramAnalytics, fetchLinkedInAnalytics, fetchThreadsAnalytics]);
 
   // Filter snapshots by selected account
   const filteredIgSnapshots = useMemo(() => {
@@ -408,6 +529,23 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
     return Object.entries(days).map(([date, data]) => ({ date, ...data }));
   }, [liSnapshots, period]);
 
+  // Threads combined metrics
+  const threadsCombinedMetrics = useMemo(() => {
+    const totalViews = threadsPosts.reduce((sum, p) => sum + (p.views ?? 0), 0);
+    const totalEngagement = threadsPosts.reduce((sum, p) => sum + (p.likes ?? 0) + (p.replies ?? 0) + (p.reposts ?? 0) + (p.quotes ?? 0) + (p.shares ?? 0), 0);
+    return {
+      totalFollowers: threadsAccounts.reduce((sum, a) => sum + (a.followers_count ?? 0), 0),
+      totalViews,
+      totalLikes: threadsPosts.reduce((sum, p) => sum + (p.likes ?? 0), 0),
+      totalReplies: threadsPosts.reduce((sum, p) => sum + (p.replies ?? 0), 0),
+      totalReposts: threadsPosts.reduce((sum, p) => sum + (p.reposts ?? 0), 0),
+      totalQuotes: threadsPosts.reduce((sum, p) => sum + (p.quotes ?? 0), 0),
+      totalShares: threadsPosts.reduce((sum, p) => sum + (p.shares ?? 0), 0),
+      publishedCount: threadsPosts.length,
+      avgEngagement: totalViews > 0 ? (totalEngagement / totalViews) * 100 : 0,
+    };
+  }, [threadsAccounts, threadsPosts]);
+
   if (isLoading) {
     return (
       <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-gray-900 min-h-screen flex items-center justify-center">
@@ -456,6 +594,17 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
     { title: 'Clicks', value: fmt(liCombinedMetrics.totalClicks), icon: MousePointer, color: 'text-cyan-500', bg: 'bg-cyan-100 dark:bg-cyan-900/20' },
     { title: 'Video Views', value: fmt(liCombinedMetrics.totalVideoViews), icon: Play, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/20' },
     { title: 'Engagement Rate', value: pct(liCombinedMetrics.avgEngagement), icon: TrendingUp, color: 'text-[#0A66C2]', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+  ];
+
+  const threadsStatCards = [
+    { title: 'Followers', value: fmt(threadsCombinedMetrics.totalFollowers), icon: Users, color: 'text-gray-700 dark:text-gray-300', bg: 'bg-gray-100 dark:bg-gray-700/20' },
+    { title: 'Views', value: fmt(threadsCombinedMetrics.totalViews), icon: Eye, color: 'text-cyan-500', bg: 'bg-cyan-100 dark:bg-cyan-900/20' },
+    { title: 'Likes', value: fmt(threadsCombinedMetrics.totalLikes), icon: Heart, color: 'text-rose-500', bg: 'bg-rose-100 dark:bg-rose-900/20' },
+    { title: 'Replies', value: fmt(threadsCombinedMetrics.totalReplies), icon: MessageSquare, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/20' },
+    { title: 'Reposts', value: fmt(threadsCombinedMetrics.totalReposts), icon: Repeat2, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/20' },
+    { title: 'Quotes', value: fmt(threadsCombinedMetrics.totalQuotes), icon: Quote, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/20' },
+    { title: 'Shares', value: fmt(threadsCombinedMetrics.totalShares), icon: ShareIcon, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+    { title: 'Published Posts', value: fmt(threadsCombinedMetrics.publishedCount), icon: BarChart3, color: 'text-gray-700 dark:text-gray-300', bg: 'bg-gray-100 dark:bg-gray-700/20' },
   ];
 
   return (
@@ -995,6 +1144,168 @@ export function Analytics({ onSignOut, currentView, queryParams, navigateToApp }
                   </div>
                 );
               })()}
+            </>
+          )}
+        </div>
+
+        {/* Threads Analytics Section */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-8 mb-6">
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <AtSign className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Threads Analytics</h1>
+            </div>
+            {threadsAccounts.length > 0 && (
+              <div className="flex items-center gap-3">
+                {threadsLastSync && (
+                  <span className="text-xs text-gray-400">Last sync: {new Date(threadsLastSync).toLocaleString()}</span>
+                )}
+                <button
+                  onClick={handleSyncThreads}
+                  disabled={threadsSyncing}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors disabled:opacity-50"
+                >
+                  {threadsSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  Sync Analytics
+                </button>
+              </div>
+            )}
+          </div>
+
+          {threadsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : threadsAccounts.length === 0 ? (
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-12 text-center">
+              <AtSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Threads Accounts Connected</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">Connect a Threads account to see analytics here.</p>
+              <button
+                onClick={() => navigateToApp('threads')}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-700 hover:bg-gray-800 rounded-lg"
+              >
+                Go to Threads
+              </button>
+            </div>
+          ) : threadsPosts.length === 0 ? (
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-12 text-center">
+              <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Threads Posts Published Yet</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">Publish some Threads posts to see engagement data here.</p>
+              <button
+                onClick={() => navigateToApp('threads')}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-700 hover:bg-gray-800 rounded-lg"
+              >
+                Go to Threads
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Threads stat cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                {threadsStatCards.map((card, i) => {
+                  const Icon = card.icon;
+                  return (
+                    <div key={i} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+                      <div className={`inline-flex p-2 rounded-lg ${card.bg} mb-3`}>
+                        <Icon className={`w-5 h-5 ${card.color}`} />
+                      </div>
+                      <p className="text-2xl font-semibold text-gray-900 dark:text-white">{card.value}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{card.title}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Threads account comparison */}
+              {threadsAccounts.length > 1 && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden mb-6">
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Account Comparison</h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-gray-700/50">
+                        <tr>
+                          <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Account</th>
+                          <th className="text-right px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Followers</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {threadsAccounts.map((acct, i) => (
+                          <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                            <td className="px-6 py-3 text-gray-900 dark:text-white font-medium">@{acct.username || 'unknown'}</td>
+                            <td className="px-6 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(acct.followers_count ?? 0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Threads post performance table */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                  <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Post Performance</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Click a column header to sort</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                      <tr>
+                        <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Post</th>
+                        {([
+                          { key: 'views', label: 'Views' },
+                          { key: 'likes', label: 'Likes' },
+                          { key: 'replies', label: 'Replies' },
+                          { key: 'reposts', label: 'Reposts' },
+                          { key: 'quotes', label: 'Quotes' },
+                          { key: 'shares', label: 'Shares' },
+                          { key: 'published_at', label: 'Published' },
+                        ] as { key: keyof ThreadsPostRow | 'published_at'; label: string }[]).map(col => (
+                          <th
+                            key={col.key}
+                            onClick={() => toggleThreadsSort(col.key)}
+                            className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none whitespace-nowrap"
+                          >
+                            <span className="inline-flex items-center gap-1">
+                              {col.label}
+                              <ChevronDown className={`w-3 h-3 transition-transform ${threadsSortKey === col.key ? (threadsSortDir === 'asc' ? 'rotate-180' : '') : 'opacity-30'}`} />
+                            </span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {sortedThreadsPosts.slice(0, 15).map((post, i) => {
+                        const permalink = (Array.isArray(post.publish_results) ? post.publish_results : []).find((r: any) => r.permalink)?.permalink;
+                        return (
+                          <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                            <td className="px-6 py-3 text-gray-900 dark:text-white max-w-xs truncate">
+                              {permalink ? (
+                                <a href={permalink} target="_blank" rel="noopener noreferrer" className="text-gray-700 dark:text-gray-300 hover:underline">
+                                  {post.content_text || '(no text)'}
+                                </a>
+                              ) : (
+                                post.content_text || '(no text)'
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(post.views ?? 0)}</td>
+                            <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(post.likes ?? 0)}</td>
+                            <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(post.replies ?? 0)}</td>
+                            <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(post.reposts ?? 0)}</td>
+                            <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(post.quotes ?? 0)}</td>
+                            <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{fmt(post.shares ?? 0)}</td>
+                            <td className="px-6 py-3 text-right text-gray-400 text-xs">{post.published_at ? new Date(post.published_at).toLocaleDateString() : '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </>
           )}
         </div>
