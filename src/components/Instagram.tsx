@@ -270,7 +270,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
         .eq('user_id', account.user_id)
         .eq('ig_user_id', eventFilterId)
         .order('created_at', { ascending: false })
-        .limit(100),
+        .limit(500),
       supabase.from('instagram_auto_rules')
         .select('*')
         .eq('user_id', account.user_id)
@@ -360,7 +360,7 @@ export function Instagram({ onSignOut, currentView, queryParams, navigateToApp }
           const newEvent = payload.new as WebhookEvent;
           // Only show events for the selected account (ig_user_id = page_scoped_id)
           if (newEvent.ig_user_id !== (selectedAccount.page_scoped_id ?? selectedAccount.ig_user_id)) return;
-          setEvents(prev => [newEvent, ...prev].slice(0, 100));
+          setEvents(prev => [newEvent, ...prev].slice(0, 500));
           if (activeTab !== 'inbox') {
             setNewEventCount(prev => prev + 1);
             setToast(`New ${newEvent.event_type} from @${newEvent.sender_username || 'unknown'}`);

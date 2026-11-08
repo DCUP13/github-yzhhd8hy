@@ -607,6 +607,93 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // 9. Sync DM conversations from Instagram Graph API
+    // The /conversations endpoint pulls recent DM threads so messages that
+    // arrived while the webhook was down (or before the app was connected)
+    // still appear in the inbox.
+    let messagesSynced = 0;
+    try {
+      const igPageScopedId = account.page_scoped_id ?? effectiveUserId;
+      const senderIdForMessages = igPageScopedId || effectiveUserId;
+
+      // List conversations (DM threads). platform_version is required for
+      // instagram / graph.facebook.com calls.
+      let conversationsUrl: string;
+      if (isInstagramToken(accessToken)) {
+        conversationsUrl = `${baseUrl}/v21.0/${senderIdForMessages}/conversations?platform_version=instagram&access_token=${accessToken}`;
+      } else {
+        conversationsUrl = `${baseUrl}/v21.0/${senderIdForMessages}/conversations?platform_version=instagram&access_token=${accessToken}`;
+      }
+      const convRes = await fetch(conversationsUrl, { headers: authHeaders(accessToken) });
+      if (convRes.ok) {
+        const convBody = await convRes.json();
+        const conversations: any[] = convBody.data ?? [];
+
+        for (const conv of conversations) {
+          const convId = conv.id;
+          if (!convId) continue;
+
+          // Fetch messages in this conversation
+          let msgsUrl: string;
+          if (isInstagramToken(accessToken)) {
+            msgsUrl = `${baseUrl}/v21.0/${convId}?fields=messages{message,from,created_time,id}&limit=50`;
+          } else {
+            msgsUrl = `${baseUrl}/v21.0/${convId}?fields=messages{message,from,created_time,id}&limit=50&access_token=${accessToken}`;
+          }
+          const msgsRes = await fetch(msgsUrl, { headers: authHeaders(accessToken) });
+          if (!msgsRes.ok) continue;
+          const msgsBody = await msgsRes.json();
+          const messages: any[] = msgsBody.messages?.data ?? [];
+
+          for (const msg of messages) {
+            const msgId = msg.id;
+            if (!msgId) continue;
+
+            // Check if already stored
+            const { data: existing } = await supabaseClient
+              .from("instagram_webhook_events")
+              .select("id")
+              .eq("event_id", msgId)
+              .maybeSingle();
+            if (existing) continue;
+
+            const fromId = msg.from?.id ?? null;
+            const fromName = msg.from?.name ?? msg.from?.username ?? null;
+            const messageText = typeof msg.message === "string" ? msg.message : (msg.message?.text ?? null);
+            if (!messageText) continue;
+
+            const isOutgoing = fromId === senderIdForMessages || fromId === igUserId;
+
+            await supabaseClient.from("instagram_webhook_events").insert({
+              user_id: account.user_id,
+              event_id: msgId,
+              event_type: "message",
+              ig_user_id: igPageScopedId,
+              sender_id: fromId,
+              sender_username: fromName,
+              sender_name: fromName,
+              sender_profile_url: null,
+              media_id: null,
+              media_type: null,
+              media_permalink: null,
+              media_caption: null,
+              media_image_url: null,
+              comment_id: null,
+              message_text: messageText,
+              direction: isOutgoing ? "outgoing" : "incoming",
+              recipient_id: isOutgoing ? (fromId === senderIdForMessages ? null : senderIdForMessages) : senderIdForMessages,
+              raw_event: { synced_from_conversations: true, conversation_id: convId, message: msg },
+            });
+            messagesSynced++;
+          }
+        }
+      } else {
+        console.error("Conversations fetch failed:", convRes.status, await convRes.text());
+      }
+    } catch (dmSyncError) {
+      console.error("DM sync error (non-fatal):", dmSyncError);
+    }
+
     return new Response(JSON.stringify({
       success: true,
       account: {
@@ -628,6 +715,7 @@ Deno.serve(async (req: Request) => {
         removed: toDelete.length,
         comments_synced: commentsSynced,
         comments_removed: commentsRemoved,
+        messages_synced: messagesSynced,
       },
     }), {
       status: 200,
