@@ -440,8 +440,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       const { data: posts } = await supabase
         .from('threads_posts')
         .select('views, likes, replies, reposts, quotes, shares, status')
-        .in('account_ids', accounts.map(a => a.id))
-        .eq('status', 'published');
+        .eq('user_id', user.id)
+        .in('status', ['published', 'partial']);
 
       const publishedPosts = posts ?? [];
 
