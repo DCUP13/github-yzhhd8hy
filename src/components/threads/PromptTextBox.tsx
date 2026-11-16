@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Download, Mic } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { showConfirm } from '../../lib/confirm';
+import { HooksDropdown } from '../HooksDropdown';
 import { THEME, type ThreadsPrompt } from './types';
 
 interface PromptGroup {
@@ -108,6 +109,7 @@ export function PromptTextBox({ label, value, groups, placeholder, rows = 5, tok
             {t === '{{voice}}' && <Mic className="w-3 h-3" />}{TOKEN_LABELS[t] || t}
           </button>
         ))}
+        <HooksDropdown onInsert={insertToken} themeColor="sky" />
       </div>
       <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{note}</p>
     </div>

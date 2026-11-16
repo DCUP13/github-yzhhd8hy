@@ -3,6 +3,7 @@ import { Loader2, Plus, Upload, FileText, Sparkles, Ban, Quote, Mic, Download } 
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
 import { showConfirm } from '../../lib/confirm';
+import { HooksDropdown } from '../HooksDropdown';
 import { uploadFile } from './api';
 import { Modal, inputClass, labelClass, primaryBtn, secondaryBtn } from './Modal';
 import { CATEGORIES, CATEGORY_STYLES, GUIDE_LENGTHS, WEEK_DAYS, type Category, type GuideLength, type GuideMode, type PlanSlot, type Topic, type VoiceSample } from './types';
@@ -198,6 +199,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
         </button>
       ))}
       <button type="button" onClick={() => insertToken(target, '{{faq}}')} className="px-2 py-0.5 text-xs rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition-colors">FAQ</button>
+      <HooksDropdown onInsert={(token) => insertToken(target, token)} themeColor="blue" />
       {samples.length === 0 && <span className="text-xs text-gray-400">Add voice samples to insert their text here</span>}
     </div>
   );

@@ -238,8 +238,24 @@ const GUIDE_SIZES: Record<string, { sections: number; words: number }> = {
   long: { sections: 11, words: 450 },
 };
 
-function fillSamples(text: string, samples: Sample[], topic: string, primary: Sample | null, faq = ""): string {
+type Hook = { title: string; content: string };
+
+async function loadHooks(supabase: SupabaseClient, userId: string): Promise<Hook[]> {
+  try {
+    const { data } = await supabase.from("hooks").select("title, content").eq("user_id", userId).order("sort_order", { ascending: true });
+    return (data || []) as Hook[];
+  } catch {
+    return [];
+  }
+}
+
+function fillSamples(text: string, samples: Sample[], topic: string, primary: Sample | null, faq = "", hooks: Hook[] = []): string {
   return (text || "")
+    .replace(/\{\{\s*hooks\s*:\s*([^}]+?)\s*\}\}/gi, (_m, name: string) => {
+      const h = hooks.find((x) => x.title.trim().toLowerCase() === name.trim().toLowerCase());
+      return h ? h.content : "";
+    })
+    .replace(/\{\{\s*hooks\s*\}\}/gi, hooks.length ? hooks.map((h) => `${h.title}: ${h.content}`).join("\n\n") : "")
     .replace(/\{\{\s*sample\s*:\s*([^}]+?)\s*\}\}/gi, (_m, name: string) => {
       const s = samples.find((x) => x.name.trim().toLowerCase() === name.trim().toLowerCase());
       return s ? `"""\n${s.content}\n"""` : "";
@@ -469,8 +485,9 @@ async function generatePost(supabase: SupabaseClient, postId: string, parts: Par
     const topic: string = post.topic_name || topicRes.data?.name || "a timely topic in AI, business and marketing";
     const category: string = post.category || "topical";
     const faqText = await loadFAQ(supabase, post.user_id);
-    const prompt = fillSamples(post.generation_prompt || "", samples, topic, primary, faqText);
-    const guidePrompt = fillSamples(post.guide_prompt || "", samples, topic, primary, faqText);
+    const hooks = await loadHooks(supabase, post.user_id);
+    const prompt = fillSamples(post.generation_prompt || "", samples, topic, primary, faqText, hooks);
+    const guidePrompt = fillSamples(post.guide_prompt || "", samples, topic, primary, faqText, hooks);
     const update: Row = {};
 
     let sources: Source[] = Array.isArray(post.research_sources) ? post.research_sources : [];

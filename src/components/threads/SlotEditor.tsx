@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
+import { HooksDropdown } from '../HooksDropdown';
 import { Modal, labelClass, secondaryBtn } from '../linkedin/Modal';
 import { WEEK_DAYS } from '../linkedin/types';
 import { InstagramCrossPost } from './AudiencePicker';
@@ -40,6 +41,18 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
   });
   const [alsoIg, setAlsoIg] = useState(slot?.also_instagram || false);
   const [saving, setSaving] = useState(false);
+  const extraRef = useRef<HTMLInputElement>(null);
+
+  const insertExtraToken = (token: string) => {
+    const el = extraRef.current;
+    const start = el?.selectionStart ?? extra.length;
+    const end = el?.selectionEnd ?? extra.length;
+    setExtra(extra.slice(0, start) + token + extra.slice(end));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
 
   const day = WEEK_DAYS.find((d) => d.value === dayOfWeek)?.long || '';
   const hasPhotos = photo.mode === 'library' || (photo.mode === 'upload' && photo.urls.length > 0);
@@ -127,7 +140,10 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
 
         <div>
           <label className={labelClass}>Extra instructions (optional)</label>
-          <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. Keep it under 300 characters" className={THEME.input} />
+          <input ref={extraRef} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. Keep it under 300 characters" className={THEME.input} />
+          <div className="flex items-center gap-1.5 mt-2">
+            <HooksDropdown onInsert={insertExtraToken} themeColor="sky" />
+          </div>
         </div>
 
         <ReplyCountSelect

@@ -7,6 +7,7 @@ import { TemplatesPage } from './features/templates/TemplatesPage';
 import { Addresses } from './components/Emails';
 import { EmailsInbox } from './components/EmailsInbox';
 import { Prompts } from './components/Prompts';
+import { HooksPage } from './components/HooksPage';
 import { Contacts } from './components/Contacts';
 import { Analytics } from './components/Analytics';
 import { Instagram } from './components/Instagram';
@@ -371,6 +372,9 @@ export default function App() {
                   )}
                   {appView === 'prompts' && (
                     <Prompts onSignOut={handleSignOut} currentView={appView} />
+                  )}
+                  {appView === 'hooks' && (
+                    <HooksPage />
                   )}
                   {appView === 'faq' && (
                     <FAQPage onSignOut={handleSignOut} currentView={appView} />
