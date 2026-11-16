@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
+import { showConfirm } from '../../lib/confirm';
 import { HooksDropdown } from '../HooksDropdown';
 import { Modal, labelClass, secondaryBtn } from '../linkedin/Modal';
 import { WEEK_DAYS } from '../linkedin/types';
@@ -92,6 +93,29 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
     onClose();
   };
 
+  const applyPromptToAll = async () => {
+    const ok = await showConfirm({
+      message: `Copy this post prompt, extra instructions, and follow-up count to ALL slots in this plan? Each slot's prompt will be replaced.`,
+      confirmText: 'Apply to all',
+    });
+    if (!ok) return;
+    setSaving(true);
+    const promptFields = {
+      thread_prompt: promptText,
+      extra_instructions: extra,
+      prompt_id: promptId || null,
+      reply_count: replyCount,
+    };
+    const { error } = await supabase
+      .from('threads_plan_slots')
+      .update(promptFields)
+      .eq('plan_id', planId)
+      .neq('id', slot?.id || '00000000-0000-0000-0000-000000000000');
+    setSaving(false);
+    if (error) toast.error('Could not apply to all slots');
+    else { toast.success('Prompt applied to all slots'); onSaved(); onClose(); }
+  };
+
   return (
     <Modal
       title={slot ? 'Edit post slot' : 'Add post slot'}
@@ -101,6 +125,9 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       footer={
         <>
           <button onClick={onClose} className={secondaryBtn}>Cancel</button>
+          <button onClick={applyPromptToAll} disabled={saving || !slot} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-sky-300 text-sky-600 dark:text-sky-400 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/20 disabled:opacity-40">
+            <Copy className="w-4 h-4" /> Apply prompt to all
+          </button>
           <button onClick={save} disabled={saving} className={THEME.primary}>
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} Save
           </button>

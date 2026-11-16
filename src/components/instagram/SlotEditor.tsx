@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Loader2, Plus, Mic, Image as ImageIcon, Images } from 'lucide-react';
+import { Loader2, Plus, Mic, Image as ImageIcon, Images, Copy } from 'lucide-react';
 import { PromptTextBox } from './PromptTextBox';
 import { HooksDropdown } from '../HooksDropdown';
 import { supabase } from '../../lib/supabase';
@@ -130,6 +130,35 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
     onClose();
   };
 
+  const applyPromptToAll = async () => {
+    const ok = await showConfirm({
+      message: `Copy this caption prompt and extra instructions to ALL slots in this plan? Each slot's prompt will be replaced.`,
+      confirmText: 'Apply to all',
+    });
+    if (!ok) return;
+    setSaving(true);
+    const promptFields = {
+      caption_prompt: captionPrompt.trim(),
+      extra_instructions: extra,
+      prompt_id: promptId || null,
+      overlay_mode: overlayMode,
+      overlay_text: overlayMode === 'fixed' ? overlayText.trim() : '',
+      overlay_scope: mediaType === 'carousel' && overlayMode !== 'none' ? overlayScope : 'first',
+      overlay_font_size: fontSize,
+      overlay_prompt_id: overlayMode === 'ai' && overlayPromptId ? overlayPromptId : null,
+      overlay_prompt: overlayMode === 'ai' ? overlayPrompt.trim() : '',
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from('instagram_plan_slots')
+      .update(promptFields)
+      .eq('plan_id', planId)
+      .neq('id', slot?.id || '00000000-0000-0000-0000-000000000000');
+    setSaving(false);
+    if (error) toast.error('Could not apply to all slots');
+    else { toast.success('Prompt applied to all slots'); onSaved(); onClose(); }
+  };
+
   return (
     <Modal
       title={slot ? 'Edit post slot' : 'New post slot'}
@@ -139,6 +168,9 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       footer={
         <>
           <button onClick={onClose} className={secondaryBtn}>Cancel</button>
+          <button onClick={applyPromptToAll} disabled={saving || !slot} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-pink-300 text-pink-600 dark:text-pink-400 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20 disabled:opacity-40">
+            <Copy className="w-4 h-4" /> Apply prompt to all
+          </button>
           <button onClick={save} disabled={saving} className={PINK.primary}>
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} Save slot
           </button>
