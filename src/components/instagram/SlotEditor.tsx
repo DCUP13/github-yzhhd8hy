@@ -132,7 +132,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
 
   const applyPromptToAll = async () => {
     const ok = await showConfirm({
-      message: `Copy this caption prompt and extra instructions to ALL slots in this plan? Each slot's prompt will be replaced.`,
+      message: `Copy this caption prompt and extra instructions to ALL slots in this plan? Each slot's prompt will be replaced. Time, topic, voice, photo format, overlay, and links stay the same.`,
       confirmText: 'Apply to all',
     });
     if (!ok) return;
@@ -141,12 +141,6 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       caption_prompt: captionPrompt.trim(),
       extra_instructions: extra,
       prompt_id: promptId || null,
-      overlay_mode: overlayMode,
-      overlay_text: overlayMode === 'fixed' ? overlayText.trim() : '',
-      overlay_scope: mediaType === 'carousel' && overlayMode !== 'none' ? overlayScope : 'first',
-      overlay_font_size: fontSize,
-      overlay_prompt_id: overlayMode === 'ai' && overlayPromptId ? overlayPromptId : null,
-      overlay_prompt: overlayMode === 'ai' ? overlayPrompt.trim() : '',
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase

@@ -163,7 +163,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
 
   const applyPromptToAll = async () => {
     const ok = await showConfirm({
-      message: `Copy this writing prompt, guide settings, and category to ALL slots in this plan? Each slot's prompt will be replaced.`,
+      message: `Copy this writing prompt and guide structure prompt to ALL slots in this plan? Each slot's prompt will be replaced. Time, category, topic, voice, and documents stay the same.`,
       confirmText: 'Apply to all',
     });
     if (!ok) return;
@@ -171,11 +171,6 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
     const promptFields = {
       prompt,
       guide_prompt: guidePrompt,
-      guide_mode: guideMode,
-      guide_length: guideLength,
-      category,
-      upload_document_url: guideMode === 'upload' ? docUrl : null,
-      upload_document_name: guideMode === 'upload' ? docName : null,
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase

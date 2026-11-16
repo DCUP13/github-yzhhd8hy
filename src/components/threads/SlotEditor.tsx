@@ -95,7 +95,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
 
   const applyPromptToAll = async () => {
     const ok = await showConfirm({
-      message: `Copy this post prompt, extra instructions, and follow-up count to ALL slots in this plan? Each slot's prompt will be replaced.`,
+      message: `Copy this post prompt and extra instructions to ALL slots in this plan? Each slot's prompt will be replaced. Time, topic, voice, and follow-up count stay the same.`,
       confirmText: 'Apply to all',
     });
     if (!ok) return;
@@ -104,7 +104,6 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       thread_prompt: promptText,
       extra_instructions: extra,
       prompt_id: promptId || null,
-      reply_count: replyCount,
     };
     const { error } = await supabase
       .from('threads_plan_slots')
