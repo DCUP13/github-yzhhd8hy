@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Loader2, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
+import { showConfirm } from '../../lib/confirm';
+import { HooksDropdown } from '../HooksDropdown';
 import { Modal, labelClass, secondaryBtn } from '../linkedin/Modal';
 import { WEEK_DAYS } from '../linkedin/types';
 import { InstagramCrossPost } from './AudiencePicker';
@@ -40,6 +42,18 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
   });
   const [alsoIg, setAlsoIg] = useState(slot?.also_instagram || false);
   const [saving, setSaving] = useState(false);
+  const extraRef = useRef<HTMLInputElement>(null);
+
+  const insertExtraToken = (token: string) => {
+    const el = extraRef.current;
+    const start = el?.selectionStart ?? extra.length;
+    const end = el?.selectionEnd ?? extra.length;
+    setExtra(extra.slice(0, start) + token + extra.slice(end));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
 
   const day = WEEK_DAYS.find((d) => d.value === dayOfWeek)?.long || '';
   const hasPhotos = photo.mode === 'library' || (photo.mode === 'upload' && photo.urls.length > 0);
@@ -79,6 +93,28 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
     onClose();
   };
 
+  const applyPromptToAll = async () => {
+    const ok = await showConfirm({
+      message: `Copy this post prompt and extra instructions to ALL slots in this plan? Each slot's prompt will be replaced. Time, topic, voice, and follow-up count stay the same.`,
+      confirmText: 'Apply to all',
+    });
+    if (!ok) return;
+    setSaving(true);
+    const promptFields = {
+      thread_prompt: promptText,
+      extra_instructions: extra,
+      prompt_id: promptId || null,
+    };
+    const { error } = await supabase
+      .from('threads_plan_slots')
+      .update(promptFields)
+      .eq('plan_id', planId)
+      .neq('id', slot?.id || '00000000-0000-0000-0000-000000000000');
+    setSaving(false);
+    if (error) toast.error('Could not apply to all slots');
+    else { toast.success('Prompt applied to all slots'); onSaved(); onClose(); }
+  };
+
   return (
     <Modal
       title={slot ? 'Edit post slot' : 'Add post slot'}
@@ -88,6 +124,9 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
       footer={
         <>
           <button onClick={onClose} className={secondaryBtn}>Cancel</button>
+          <button onClick={applyPromptToAll} disabled={saving || !slot} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-sky-300 text-sky-600 dark:text-sky-400 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/20 disabled:opacity-40">
+            <Copy className="w-4 h-4" /> Apply prompt to all
+          </button>
           <button onClick={save} disabled={saving} className={THEME.primary}>
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} Save
           </button>
@@ -127,7 +166,10 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, prompts, 
 
         <div>
           <label className={labelClass}>Extra instructions (optional)</label>
-          <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. Keep it under 300 characters" className={THEME.input} />
+          <input ref={extraRef} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="e.g. Keep it under 300 characters" className={THEME.input} />
+          <div className="flex items-center gap-1.5 mt-2">
+            <HooksDropdown onInsert={insertExtraToken} themeColor="sky" />
+          </div>
         </div>
 
         <ReplyCountSelect

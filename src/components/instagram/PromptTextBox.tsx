@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Mic } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { showConfirm } from '../../lib/confirm';
+import { HooksDropdown } from '../HooksDropdown';
 import { PINK, type InstagramPrompt } from './types';
 
 interface PromptGroup {
@@ -101,6 +102,7 @@ export function PromptTextBox({ label, value, groups, placeholder, rows = 5, tok
             {t === '{{voice}}' && <Mic className="w-3 h-3" />}{TOKEN_LABELS[t] || t}
           </button>
         ))}
+        <HooksDropdown onInsert={insertToken} themeColor="pink" />
       </div>
       <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Edits here are saved to this plan only. Your saved prompt on the Prompts page is not changed.</p>
     </div>

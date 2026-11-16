@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FileText, Plus, CreditCard as Edit, Trash2, Search, Info, Repeat, Zap, Copy, Share2, Globe, Building2, Users, X, Loader2, CheckCircle2, AlertCircle, ArrowUpDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { ShareDialog } from './ShareDialog';
+import { HooksDropdown } from './HooksDropdown';
 
 interface PromptsProps {
   onSignOut: () => void;
@@ -81,6 +82,22 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
   const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const step1Ref = useRef<HTMLTextAreaElement>(null);
+  const step2Ref = useRef<HTMLTextAreaElement>(null);
+
+  const insertHook = (field: 'content' | 'step1' | 'step2', token: string) => {
+    const ref = field === 'content' ? contentRef.current : field === 'step1' ? step1Ref.current : step2Ref.current;
+    const key = field === 'content' ? 'content' : field === 'step1' ? 'step1Content' : 'step2Content';
+    const current = formData[key];
+    const start = ref?.selectionStart ?? current.length;
+    const end = ref?.selectionEnd ?? current.length;
+    setFormData(prev => ({ ...prev, [key]: current.slice(0, start) + token + current.slice(end) }));
+    requestAnimationFrame(() => {
+      ref?.focus();
+      ref?.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
 
   const [formData, setFormData] = useState({
     title: '',
@@ -785,6 +802,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                       Prompt Content
                     </label>
                     <textarea
+                      ref={contentRef}
                       value={formData.content}
                       onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
                       rows={8}
@@ -798,6 +816,9 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                         : 'Write your autoresponder prompt here. Use {{variable_name}} for dynamic content.'}
                       required
                     />
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <HooksDropdown onInsert={(token) => insertHook('content', token)} />
+                    </div>
                   </div>
                 ) : (
                   <>
@@ -806,6 +827,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                         Step 1 — First AI Call
                       </label>
                       <textarea
+                        ref={step1Ref}
                         value={formData.step1Content}
                         onChange={(e) => setFormData(prev => ({ ...prev, step1Content: e.target.value }))}
                         rows={6}
@@ -813,6 +835,9 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                         placeholder="Write the Step 1 prompt here. Specify the output format — this result will be inserted into Step 2."
                         required
                       />
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <HooksDropdown onInsert={(token) => insertHook('step1', token)} />
+                      </div>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         The full output of this step is inserted into Step 2 at the <code className="px-1 bg-gray-100 dark:bg-gray-700 rounded">{`{{step1_result}}`}</code> placeholder.
                       </p>
@@ -823,6 +848,7 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                         Step 2 — Second AI Call
                       </label>
                       <textarea
+                        ref={step2Ref}
                         value={formData.step2Content}
                         onChange={(e) => setFormData(prev => ({ ...prev, step2Content: e.target.value }))}
                         rows={6}
@@ -830,6 +856,9 @@ export function Prompts({ onSignOut, currentView }: PromptsProps) {
                         placeholder="Write the Step 2 prompt here. Use {{step1_result}} where you want Step 1's output inserted."
                         required
                       />
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <HooksDropdown onInsert={(token) => insertHook('step2', token)} />
+                      </div>
                     </div>
                   </>
                 )}

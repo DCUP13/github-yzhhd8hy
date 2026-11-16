@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Loader2, Plus, Upload, FileText, Sparkles, Ban, Quote, Mic, Download } from 'lucide-react';
+import { Loader2, Plus, Upload, FileText, Sparkles, Ban, Quote, Mic, Download, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/toast';
 import { showConfirm } from '../../lib/confirm';
+import { HooksDropdown } from '../HooksDropdown';
 import { uploadFile } from './api';
 import { Modal, inputClass, labelClass, primaryBtn, secondaryBtn } from './Modal';
 import { CATEGORIES, CATEGORY_STYLES, GUIDE_LENGTHS, WEEK_DAYS, type Category, type GuideLength, type GuideMode, type PlanSlot, type Topic, type VoiceSample } from './types';
@@ -160,6 +161,28 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
     onClose();
   };
 
+  const applyPromptToAll = async () => {
+    const ok = await showConfirm({
+      message: `Copy this writing prompt and guide structure prompt to ALL slots in this plan? Each slot's prompt will be replaced. Time, category, topic, voice, and documents stay the same.`,
+      confirmText: 'Apply to all',
+    });
+    if (!ok) return;
+    setSaving(true);
+    const promptFields = {
+      prompt,
+      guide_prompt: guidePrompt,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from('linkedin_plan_slots')
+      .update(promptFields)
+      .eq('plan_id', planId)
+      .neq('id', slot?.id || '00000000-0000-0000-0000-000000000000');
+    setSaving(false);
+    if (error) toast.error('Could not apply to all slots');
+    else { toast.success('Prompt applied to all slots'); onSaved(); onClose(); }
+  };
+
   const ImportSelect = ({ target }: { target: 'prompt' | 'guide' }) => (
     <div className="relative w-full sm:w-64">
       <Download className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
@@ -198,6 +221,7 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
         </button>
       ))}
       <button type="button" onClick={() => insertToken(target, '{{faq}}')} className="px-2 py-0.5 text-xs rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition-colors">FAQ</button>
+      <HooksDropdown onInsert={(token) => insertToken(target, token)} themeColor="blue" />
       {samples.length === 0 && <span className="text-xs text-gray-400">Add voice samples to insert their text here</span>}
     </div>
   );
@@ -217,6 +241,9 @@ export function SlotEditor({ planId, slot, dayOfWeek, topics, samples, onClose, 
       footer={
         <>
           <button onClick={onClose} className={secondaryBtn}>Cancel</button>
+          <button onClick={applyPromptToAll} disabled={saving || uploading || !slot} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-[#0A66C2]/30 text-[#0A66C2] dark:text-sky-400 rounded-lg hover:bg-[#0A66C2]/5 disabled:opacity-40">
+            <Copy className="w-4 h-4" /> Apply prompt to all
+          </button>
           <button onClick={save} disabled={saving || uploading} className={primaryBtn}>
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} Save slot
           </button>

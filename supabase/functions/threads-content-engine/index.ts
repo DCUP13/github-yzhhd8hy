@@ -99,8 +99,26 @@ function splitChunks(text: string, max: number): string[] {
   return out;
 }
 
-function fill(template: string, topic: string, voice: string, faq = ""): string {
-  return template.replaceAll("{{topic}}", topic || "a topic of your choice").replaceAll("{{voice}}", voice || "friendly and natural").replaceAll("{{faq}}", faq);
+type Hook = { title: string; content: string };
+
+async function loadHooks(supabase: SupabaseClient, userId: string): Promise<Hook[]> {
+  try {
+    const { data } = await supabase.from("hooks").select("title, content").eq("user_id", userId).order("sort_order", { ascending: true });
+    return (data || []) as Hook[];
+  } catch {
+    return [];
+  }
+}
+
+function fill(template: string, topic: string, voice: string, faq = "", hooks: Hook[] = []): string {
+  let out = template;
+  const specificHookRegex = /\{\{\s*hooks\s*:\s*([^}]+?)\s*\}\}/gi;
+  out = out.replace(specificHookRegex, (_m, name: string) => {
+    const h = hooks.find((x) => x.title.trim().toLowerCase() === name.trim().toLowerCase());
+    return h ? h.content : "";
+  });
+  out = out.replace(/\{\{\s*hooks\s*\}\}/gi, hooks.length ? hooks.map((h) => `${h.title}: ${h.content}`).join("\n\n") : "");
+  return out.replaceAll("{{topic}}", topic || "a topic of your choice").replaceAll("{{voice}}", voice || "friendly and natural").replaceAll("{{faq}}", faq);
 }
 
 async function loadFAQ(supabase: SupabaseClient, userId: string): Promise<string> {
@@ -166,6 +184,7 @@ async function generatePost(supabase: SupabaseClient, id: string, parts: Parts, 
       const topic = post.topic_name || "";
       const voiceText = (voice.data as { content?: string } | null)?.content?.trim() || "";
       const faqText = await loadFAQ(supabase, post.user_id);
+      const hooks = await loadHooks(supabase, post.user_id);
       const linkUrl = (link.data as { url?: string } | null)?.url || "";
       const budget = MAX_CHARS - (linkUrl ? linkUrl.length + 2 : 0) - 10;
       const base = post.thread_prompt?.trim()
@@ -203,7 +222,7 @@ async function generatePost(supabase: SupabaseClient, id: string, parts: Parts, 
         'Return JSON: {"text": "main post", "replies": ["follow-up 1", ...]}',
       ].filter(Boolean).join("\n");
       const user = [
-        fill(base, topic, voiceText, faqText),
+        fill(base, topic, voiceText, faqText, hooks),
         topic ? `Topic: ${topic}` : "",
         voiceText ? `Match the style of this writing sample:\n${voiceText.slice(0, 3000)}` : "",
         extra ? `Extra instructions: ${extra}` : "",

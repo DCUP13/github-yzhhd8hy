@@ -113,8 +113,27 @@ async function pickMedia(supabase: SupabaseClient, post: Post, avoidCurrent: boo
   return scored.slice(0, want).map((s) => s.a);
 }
 
-function fill(template: string, topic: string, voice: string, faq = "") {
-  return template.replace(/\{\{\s*topic\s*\}\}/gi, topic || "(no topic)").replace(/\{\{\s*voice\s*\}\}/gi, voice || "(default voice)").replace(/\{\{\s*faq\s*\}\}/gi, faq);
+function fill(template: string, topic: string, voice: string, faq = "", hooks: Hook[] = []): string {
+  return template
+    .replace(/\{\{\s*hooks\s*:\s*([^}]+?)\s*\}\}/gi, (_m, name: string) => {
+      const h = hooks.find((x) => x.title.trim().toLowerCase() === name.trim().toLowerCase());
+      return h ? h.content : "";
+    })
+    .replace(/\{\{\s*hooks\s*\}\}/gi, hooks.length ? hooks.map((h) => `${h.title}: ${h.content}`).join("\n\n") : "")
+    .replace(/\{\{\s*topic\s*\}\}/gi, topic || "(no topic)")
+    .replace(/\{\{\s*voice\s*\}\}/gi, voice || "(default voice)")
+    .replace(/\{\{\s*faq\s*\}\}/gi, faq);
+}
+
+type Hook = { title: string; content: string };
+
+async function loadHooks(supabase: SupabaseClient, userId: string): Promise<Hook[]> {
+  try {
+    const { data } = await supabase.from("hooks").select("title, content").eq("user_id", userId).order("sort_order", { ascending: true });
+    return (data || []) as Hook[];
+  } catch {
+    return [];
+  }
 }
 
 async function loadFAQ(supabase: SupabaseClient, userId: string): Promise<string> {
@@ -162,6 +181,7 @@ async function writeCaption(
   const promptText = slot?.caption_prompt?.trim() || (await loadPromptText(supabase, post, post.prompt_id));
   const topic = post.topic_name || "";
   const faqText = await loadFAQ(supabase, post.user_id);
+  const hooks = await loadHooks(supabase, post.user_id);
 
   const system = [
     "You are an expert Instagram copywriter. Write one Instagram caption.",
@@ -176,8 +196,8 @@ async function writeCaption(
     `Topic: ${topic || "(choose something fitting the photos)"}`,
     `Planned posting date: ${new Date(post.scheduled_for).toDateString()}`,
     post.media_type === "carousel" ? `This is a carousel of ${imageUrls.length} photos.` : "This is a single photo post.",
-    promptText ? `Writing instructions:\n${fill(promptText, topic, voiceText, faqText)}` : "",
-    slot?.extra_instructions?.trim() ? `Extra instructions:\n${fill(slot.extra_instructions, topic, voiceText, faqText)}` : "",
+    promptText ? `Writing instructions:\n${fill(promptText, topic, voiceText, faqText, hooks)}` : "",
+    slot?.extra_instructions?.trim() ? `Extra instructions:\n${fill(slot.extra_instructions, topic, voiceText, faqText, hooks)}` : "",
     voiceText ? `Match the tone, rhythm and vocabulary of this writing sample (do not copy it):\n"""${voiceText.slice(0, 4000)}"""` : "",
     instructions.trim() ? `Revision request from the author:\n${instructions.trim()}\n\nCurrent caption:\n${post.caption}` : "",
     imageUrls.length ? "The attached photos will be posted with this caption; reference what is shown when it helps." : "",
@@ -271,8 +291,9 @@ async function writeOverlays(supabase: SupabaseClient, post: Post, imageUrls: st
   const custom = slot ? slot.overlay_prompt.trim() : await loadPromptText(supabase, post, post.overlay_prompt_id);
   const topic = post.topic_name || "";
   const faqText = await loadFAQ(supabase, post.user_id);
+  const hooks = await loadHooks(supabase, post.user_id);
   const guide = custom
-    ? fill(custom, topic, voiceText, faqText).replace(/\{\{\s*photo_count\s*\}\}/gi, String(count))
+    ? fill(custom, topic, voiceText, faqText, hooks).replace(/\{\{\s*photo_count\s*\}\}/gi, String(count))
     : count > 1 ? DEFAULT_OVERLAY_CAROUSEL : DEFAULT_OVERLAY_SINGLE;
 
   const photoWord = count > 1 ? `${count} photos` : "1 photo";
